@@ -4,9 +4,15 @@
 
 Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte un código y conversa mientras juegan. En la espera de una partida pueden abrir Reflejos o Memoria sin salir de la sala.
 
-**[Descargar Squadlink Preview 9 para Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45143112209/artifacts/14803625793)** · [Ver capturas reales de Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45143112209/artifacts/14803012755)
+**[Descargar Squadlink Moderno para Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45158949110/artifacts/14810775040)** · [Capturas del escritorio](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45158949110/artifacts/14808664864)
 
-Inicia sesión en GitHub para descargar los archivos. Descomprime el ZIP del instalador y ejecuta `Squadlink-Setup-x64.exe`.
+Inicia sesión en GitHub, extrae el ZIP y ejecuta `Squadlink-Moderno-Setup-x64.exe`.
+
+![Inicio de Squadlink Moderno en Windows, con salas y accesos directos](docs/media/inicio-moderno.png)
+
+**[Descargar Squadlink ligero (Preview 9) para Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45143112209/artifacts/14803625793)** · [Ver capturas reales de Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45143112209/artifacts/14803012755)
+
+Para instalar la edición ligera, extrae su ZIP y ejecuta `Squadlink-Setup-x64.exe`.
 
 **[Descargar la versión estable de Windows x64](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/Squadlink-Setup-x64.exe)** · **[Abrir el lobby web](https://squadlink-lobby.onrender.com/)** · [Versiones y SHA-256](https://github.com/reyzongian2026-creator/squadlink/releases/latest)
 
