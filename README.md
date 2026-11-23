@@ -4,7 +4,11 @@
 
 Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte un código y conversa mientras juegan. En la espera de una partida pueden abrir Reflejos o Memoria sin salir de la sala.
 
-**[Descargar el instalador de Windows x64](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/Squadlink-Setup-x64.exe)** · **[Abrir el lobby web](https://squadlink-lobby.onrender.com/)** · [Versiones y SHA-256](https://github.com/reyzongian2026-creator/squadlink/releases/latest)
+**[Descargar Squadlink Preview 9 para Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45143112209/artifacts/14803625793)** · [Ver capturas reales de Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45143112209/artifacts/14803012755)
+
+Inicia sesión en GitHub para descargar los archivos. Descomprime el ZIP del instalador y ejecuta `Squadlink-Setup-x64.exe`.
+
+**[Descargar la versión estable de Windows x64](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/Squadlink-Setup-x64.exe)** · **[Abrir el lobby web](https://squadlink-lobby.onrender.com/)** · [Versiones y SHA-256](https://github.com/reyzongian2026-creator/squadlink/releases/latest)
 
 El instalador es público y se puede descargar sin iniciar sesión en GitHub. Tus amigos también pueden entrar desde el enlace web. El cliente de Windows se instala para el usuario actual, utiliza Microsoft Edge WebView2 Runtime y abre el lobby compartido. Los jugadores de Windows y del navegador pueden estar en la misma sala.
 
