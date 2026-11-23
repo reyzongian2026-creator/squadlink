@@ -56,28 +56,45 @@ function Set-Mode($root, $name) {
   }
 }
 function Get-ClientProcesses([int]$rootId) {
-  $tree = Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId
-  $ids = [Collections.Generic.HashSet[int]]::new()
-  [void]$ids.Add($rootId)
+  if ($rootId -le 0) { throw 'Identificador de proceso de Squadlink inválido.' }
+  $tree = @(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,Name,CreationDate,WorkingSetSize,KernelModeTime,UserModeTime)
+  $rootProcess = $tree | Where-Object { $_.ProcessId -eq $rootId }
+  if (!$rootProcess -or $rootProcess.Name -ne 'Squadlink.exe') { throw 'El muestreo requiere el proceso activo de Squadlink.' }
+  $family = @{}
+  $family[$rootId] = $rootProcess
   do {
-    $before=$ids.Count
-    foreach($p in $tree) { if($ids.Contains([int]$p.ParentProcessId)){ [void]$ids.Add([int]$p.ProcessId) } }
-  } while($before -ne $ids.Count)
-  Get-Process -Id ([int[]]$ids) -ErrorAction SilentlyContinue
+    $before = $family.Count
+    foreach ($process in $tree) {
+      $parent = $family[[int]$process.ParentProcessId]
+      if ($null -ne $parent -and $process.CreationDate -ge $parent.CreationDate) {
+        $family[[int]$process.ProcessId] = $process
+      }
+    }
+  } while ($before -ne $family.Count)
+  foreach ($process in $family.Values) {
+    [PSCustomObject]@{
+      Id = $process.ProcessId
+      ProcessName = $process.Name
+      CPU = ([double]$process.KernelModeTime + [double]$process.UserModeTime) / 10000000
+      WorkingSet64 = [long]$process.WorkingSetSize
+    }
+  }
 }
 function Measure-Idle($label) {
   Start-Sleep -Seconds 2
-  $first = @(Get-ClientProcesses $app.Id | Select-Object Id, CPU)
+  $first = @(Get-ClientProcesses -rootId ($app.Id))
   $timer = [Diagnostics.Stopwatch]::StartNew()
   Start-Sleep -Seconds 8
-  $last = @(Get-ClientProcesses $app.Id | Select-Object Id, CPU, WorkingSet64, ProcessName)
+  $last = @(Get-ClientProcesses -rootId ($app.Id))
   $timer.Stop()
   $startCpu = ($first | Measure-Object CPU -Sum).Sum
   $endCpu = ($last | Measure-Object CPU -Sum).Sum
   $cpuPercent = [Math]::Round(100*($endCpu-$startCpu)/$timer.Elapsed.TotalSeconds/[Environment]::ProcessorCount,2)
   if (Compare-Object @($first.Id | Sort-Object) @($last.Id | Sort-Object)) { $cpuPercent = 'N/D (cambio de procesos)' }
   $mib = [Math]::Round(($last | Measure-Object WorkingSet64 -Sum).Sum/1MB,1)
-  $children = @($last | Where-Object ProcessName -eq 'msedgewebview2').Count
+  $children = @($last | Where-Object ProcessName -eq 'msedgewebview2.exe').Count
+  $breakdown = ($last | ForEach-Object { '{0}={1:N1}MiB' -f $_.ProcessName,($_.WorkingSet64/1MB) }) -join ', '
+  Write-Output "Procesos medidos ($label): $breakdown"
   Write-Output "METRICA $label | RAM_MiB=$mib CPU_pct=$cpuPercent WebView2=$children Cores=$([Environment]::ProcessorCount)"
   if (($label.StartsWith('directorio-') -or $label -eq 'amigos-invitado-bajo') -and $children -ne 0) { throw 'El directorio inició WebView2.' }
 }
@@ -193,7 +210,10 @@ try {
     Invoke-Control $root 'Reintentar sección'
     Find-Control $root 'Abriendo sección…' | Out-Null
     Find-Control $root 'Reintentar sección' | Out-Null
-  } finally { Move-Item $held $testClient -Force }
+  } finally {
+    if (Test-Path $testClient) { Remove-Item -LiteralPath $testClient }
+    Move-Item -LiteralPath $held -Destination $testClient
+  }
   Invoke-Control $root 'Reintentar sección'
   Find-Control $root 'Tu apodo' | Out-Null
   Write-Output 'La ventana nativa recuperó la sección tras restaurar el recurso local.'
