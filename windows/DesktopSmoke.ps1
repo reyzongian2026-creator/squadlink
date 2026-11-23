@@ -35,8 +35,16 @@ function Find-TypedControl($root, $name, $type) {
   do {
     $candidates = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $criteria)
     foreach ($element in $candidates) { if ($element.Current.IsEnabled -and !$element.Current.IsOffscreen) {return $element} }
+    foreach ($element in $candidates) {
+      if (!$element.Current.IsEnabled) {continue}
+      $scroll = $null
+      if ($element.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$scroll)) {$scroll.ScrollIntoView()}
+      return $element
+    }
     Start-Sleep -Milliseconds 150
   } while ([DateTime]::UtcNow -lt $until)
+  $labels = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { "$($_.Current.ControlType.ProgrammaticName):$($_.Current.Name)" } | Select-Object -Last 85
+  Write-Host ($labels -join ' | ')
   throw "No se encontró $type con nombre '$name'."
 }
 function Get-ClientProcesses([int]$rootId) {
@@ -135,10 +143,12 @@ try {
   Find-Control $root 'Reflejos' $true | Out-Null
   Invoke-Control $root 'Voz'
   Invoke-Control $root 'Crear sala'
+  Write-Host 'Formulario de creación abierto'
   $nick = Find-TypedControl $root 'Tu apodo' ([System.Windows.Automation.ControlType]::Edit)
   $nick.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Prueba')
   $name = Find-TypedControl $root 'Nombre de la sala' ([System.Windows.Automation.ControlType]::Edit)
   $name.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Canal de prueba')
+  Write-Host 'Apodo y nombre de sala ingresados'
   $submit = Find-TypedControl $root 'Crear sala' ([System.Windows.Automation.ControlType]::Button)
   $submit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
   Find-Control $root 'Participantes' | Out-Null
