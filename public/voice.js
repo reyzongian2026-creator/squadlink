@@ -1,5 +1,8 @@
 import { readAudioSettings, saveAudioSettings } from './audio-settings.js';
 
+const restartStepMs = 4000;
+const maxRestartDelayMs = 30000;
+
 // One audio transceiver per pair. Listening does not require microphone access.
 export class VoiceRoom {
   constructor({ selfId, iceServers = [], sendSignal, onStatus = () => {}, onPeerState = () => {}, onMicrophoneEnded = () => {} }) {
@@ -35,7 +38,7 @@ export class VoiceRoom {
       })
       : Promise.resolve();
     const peer = { id, pc, audio, transceiver: null, incoming: Promise.resolve(), candidates: [],
-      offerer: this.selfId < id, restartTimer: null, attempts: 0, dropped: false };
+      offerer: this.selfId < id, restartTimer: null, restartDelay: restartStepMs, dropped: false };
     this.peers.set(id, peer);
     pc.onicecandidate = ({ candidate }) => {
       if (candidate && !peer.dropped) this.relay(peer, { candidate: candidate.toJSON() });
@@ -52,7 +55,7 @@ export class VoiceRoom {
       if (state === 'connected') {
         clearTimeout(peer.restartTimer);
         peer.restartTimer = null;
-        peer.attempts = 0;
+        peer.restartDelay = restartStepMs;
       } else if (state === 'disconnected' || state === 'failed') {
         if (peer.offerer) this.scheduleRestart(peer);
         if (state === 'failed') this.onStatus('La conexión de voz se interrumpió. Comprueba tu red.');
@@ -67,10 +70,11 @@ export class VoiceRoom {
   }
 
   scheduleRestart(peer) {
-    if (peer.restartTimer || peer.attempts >= 3 || peer.dropped) return;
+    if (peer.restartTimer !== null || peer.dropped || peer.pc.connectionState === 'connected') return;
     peer.restartTimer = setTimeout(() => {
       peer.restartTimer = null;
-      peer.attempts++;
+      // A long outage must not strand a participant who is still in the room.
+      peer.restartDelay = Math.min(peer.restartDelay + restartStepMs, maxRestartDelayMs);
       this.queue(peer, async () => {
         if (peer.pc.connectionState === 'connected') return;
         // An unanswered offer may have been lost with the event stream.
@@ -80,7 +84,7 @@ export class VoiceRoom {
         await this.offer(peer, true);
         this.scheduleRestart(peer);
       });
-    }, 4000 * (peer.attempts + 1));
+    }, peer.restartDelay);
   }
 
   queue(peer, operation) {

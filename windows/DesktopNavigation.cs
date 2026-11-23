@@ -16,6 +16,7 @@ internal sealed class DesktopNavigation : UserControl
     private readonly Label groupName = Caption("", 14, FontStyle.Bold);
     private readonly Label voiceName = Caption("Sin sala", 10, FontStyle.Bold);
     private readonly Button mic = ActionButton("Activar micrófono"), leave = ActionButton("Salir de sala");
+    private const string MicShortcut = "Ctrl+Mayús+M";
     private readonly ToolTip tips = new();
     private readonly List<Button> groupButtons = new();
     private readonly Dictionary<string, Button> pageButtons = new();
@@ -42,8 +43,12 @@ internal sealed class DesktopNavigation : UserControl
             groupButtons.Add(button); Row(rail, button, 50);
         }
         groupName.Height = 62; groupName.Dock = DockStyle.Top;
-        var call = Stack(Surface); call.Dock = DockStyle.Bottom; call.Height = 130;
-        Row(call, voiceName, 38); Row(call, mic, 38); Row(call, leave, 38);
+        var call = Stack(Surface); call.Dock = DockStyle.Bottom; call.Height = 150;
+        var shortcutHint = Caption(MicShortcut, 9);
+        shortcutHint.ForeColor = Muted; shortcutHint.Padding = new Padding(9, 0, 0, 0);
+        mic.AccessibleDescription = $"Atajo en los controles de Windows: {MicShortcut}.";
+        tips.SetToolTip(mic, mic.AccessibleDescription);
+        Row(call, voiceName, 38); Row(call, mic, 38); Row(call, shortcutHint, 20); Row(call, leave, 38);
         mic.Click += (_, _) => ActionRequested?.Invoke("mic"); leave.Click += (_, _) => ActionRequested?.Invoke("leave");
         context.Controls.Add(channels); context.Controls.Add(groupName); context.Controls.Add(call);
         Controls.Add(context); Controls.Add(strip);
@@ -126,6 +131,16 @@ internal sealed class DesktopNavigation : UserControl
         buttons[next].Focus();
         e.Handled = true;
         e.SuppressKeyPress = true;
+    }
+
+    internal bool TryMicrophoneShortcut(Keys keyData, IntPtr keyFlags)
+    {
+        if (keyData != (Keys.Control | Keys.Shift | Keys.M) || !Joined || !mic.Enabled || !mic.Visible)
+            return false;
+        // Windows sets bit 30 for repeats after the initial key-down.
+        if ((keyFlags.ToInt64() & (1L << 30)) == 0)
+            mic.PerformClick();
+        return true;
     }
 
     public void ResetState()

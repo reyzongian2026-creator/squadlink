@@ -48,7 +48,7 @@ function line(tag, value, className) {
   return element;
 }
 
-export function createSocial({ api, tell, copy, enterRoom, getRoom }) {
+export function createSocial({ api, tell, copy, enterRoom, getRoom, onUnauthorized = () => {} }) {
   let snapshot,
     connecting,
     timer,
@@ -224,6 +224,19 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom }) {
       tell(s.notice);
     }
   }
+  function clearSession() {
+    $("social-login").hidden = false;
+    $("social-intro").hidden = false;
+    $("social-content").hidden = true;
+    snapshot = null;
+    $("friend-id").textContent = "";
+    $("self-activity").textContent = "";
+    $("player-game").value = "";
+    $("room-requests").hidden = true;
+    for (const id of roots) $(id).replaceChildren();
+    signatures.clear();
+    window.clearInterval(timer);
+  }
   async function refresh() {
     if (!snapshot || pulsePending) return;
     pulsePending = true;
@@ -246,17 +259,8 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom }) {
       status(error.message);
       $("social-retry").hidden = false;
       if (error.status === 401 || error.status === 403) {
-        $("social-login").hidden = false;
-        $("social-intro").hidden = false;
-        $("social-content").hidden = true;
-        snapshot = null;
-        $("friend-id").textContent = "";
-        $("self-activity").textContent = "";
-        $("player-game").value = "";
-        $("room-requests").hidden = true;
-        for (const id of roots) $(id).replaceChildren();
-        signatures.clear();
-        window.clearInterval(timer);
+        clearSession();
+        onUnauthorized();
       }
     } finally {
       pulsePending = false;
@@ -402,5 +406,5 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom }) {
       bridge.postMessage({ type: "squadlink:game:set", enabled: !autoEnabled });
   }
   window.addEventListener("focus", refresh);
-  return { connect, roomChanged: draw };
+  return { connect, clearSession, roomChanged: draw };
 }

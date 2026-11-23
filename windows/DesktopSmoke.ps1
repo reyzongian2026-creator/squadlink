@@ -141,6 +141,8 @@ try {
   [IO.File]::WriteAllText($testClient, $fixture + [Environment]::NewLine + $original)
   $installedExe = $Executable
   $Executable = Join-Path $fixtureDir 'Squadlink.exe'
+  $marker = Join-Path $profileDir 'presence-server.txt'
+  [IO.File]::WriteAllText($marker, 'http://127.0.0.1:4179/')
   $app = Start-Process $Executable -PassThru
   if (!$app.WaitForInputIdle(20000)) { throw 'La ventana no inició.' }
   $deadline = [DateTime]::UtcNow.AddSeconds(30)
@@ -153,6 +155,9 @@ try {
   $root = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
   Find-Control $root 'Andes Five' | Out-Null
   Find-Control $root 'Crear sala' | Out-Null
+  $until = [DateTime]::UtcNow.AddSeconds(30)
+  while ((Test-Path $marker) -and [DateTime]::UtcNow -lt $until) { Start-Sleep -Milliseconds 150 }
+  if (Test-Path $marker) { throw 'La confirmación de invitado conservó una sesión obsoleta.' }
   Invoke-Control $root 'Ajustes'
   Invoke-Control $root 'Actualizaciones'
   Find-Control $root 'Buscar actualizaciones' | Out-Null
@@ -263,11 +268,20 @@ try {
   $sync = Join-Path $env:RUNNER_TEMP 'squadlink-voice-bench'
   New-Item -ItemType Directory -Force $sync | Out-Null
   $voicePeer = Start-Process node -ArgumentList ('test/windows/live-voice.mjs ' + $roomCode + ' "' + $sync + '"') -PassThru -RedirectStandardOutput (Join-Path $sync 'peer.log') -RedirectStandardError (Join-Path $sync 'peer.err')
-  Invoke-Control $root 'Activar micrófono'
+  $participants = Find-TypedControl $root 'Participantes' ([System.Windows.Automation.ControlType]::List)
+  $listItems = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ListItem)
+  $owner = $participants.FindAll([System.Windows.Automation.TreeScope]::Descendants, $listItems) | Where-Object { $_.Current.Name -like '*Anfitrión*En sala desde*' } | Select-Object -First 1
+  if (!$owner) { throw 'Faltan el rol y la hora de entrada en el panel nativo.' }
+  $owner.GetCurrentPattern($selectionPattern).Select()
+  $participants.SetFocus()
+  Add-Type -AssemblyName System.Windows.Forms
+  [System.Windows.Forms.SendKeys]::SendWait('^+m')
   Find-Control $root 'Silenciar micrófono' | Out-Null
   $deadline = [DateTime]::UtcNow.AddSeconds(80)
   while (!(Test-Path (Join-Path $sync 'connected')) -and !$voicePeer.HasExited -and [DateTime]::UtcNow -lt $deadline) {Start-Sleep -Milliseconds 200}
   if (!(Test-Path (Join-Path $sync 'connected'))) {Get-Content (Join-Path $sync 'peer.err'); throw 'No llegó audio al segundo cliente.'}
+  $selectedOwner = $participants.FindAll([System.Windows.Automation.TreeScope]::Descendants, $listItems) | Where-Object { $_.Current.Name -like '*Anfitrión*' } | Select-Object -First 1
+  if (!$selectedOwner -or !$selectedOwner.GetCurrentPattern($selectionPattern).Current.IsSelected) { throw 'El cambio de micrófono perdió la selección del anfitrión.' }
   Measure-Idle 'voz-activa-bajo'
   Set-Mode $root 'Experiencia completa'
   Invoke-Control $root 'Voz'

@@ -1,4 +1,4 @@
-import { canReleaseGuestWorkspace, openDesktopProgress } from './app.js';
+import { onConfirmedGuest, canReleaseGuestWorkspace, openDesktopProgress } from './app.js';
 const byId = id => document.getElementById(id);
 const bridge = window.chrome.webview;
 byId('hero-title').textContent = 'Mi sala';
@@ -62,21 +62,43 @@ function sameRows(current, next) {
   return current.length === next.length && current.every((text, index) => text === next[index]);
 }
 
+// The host accepts 32 KiB of JSON. Bound each of the 25 contact and five member
+// lines even when the serializer escapes every non-ASCII UTF-16 code unit.
+function rosterLine(parts) {
+  const text = parts.filter(Boolean).join(' · ');
+  let budget = 960;
+  let end = 0;
+  for (const character of text) {
+    const code = character.charCodeAt(0);
+    const cost = code < 32 || code > 126 ? 6 * character.length : character === '"' || character === '\\' ? 2 : 1;
+    if (cost > budget) return text.slice(0, end) + '…';
+    budget -= cost;
+    end += character.length;
+  }
+  return text;
+}
+
 let previous;
 let contacts = [];
 let members = [];
+let hasMoreContacts = false;
 let requests = 0;
 let inRoom = !byId('room').hidden;
 function sync(records = observer.takeRecords()) {
   if (!previous || records.some(record => friendRows.contains(record.target))) {
-    const next = [...friendRows.querySelectorAll('.social-row')].slice(0,25).map(row =>
-      (row.querySelector('strong')?.textContent || '') + ' · ' +
-      (row.querySelector('.dot.online') ? 'En línea' : 'Desconectado'));
+    const rows = friendRows.querySelectorAll('.social-row');
+    hasMoreContacts = rows.length > 25;
+    const next = Array.prototype.slice.call(rows, 0, 25).map(row => rosterLine([
+      row.querySelector('strong')?.textContent,
+      row.querySelector('p.status')?.textContent || (row.querySelector('.dot.online') ? 'En línea' : 'Desconectado')
+    ]));
     if (!sameRows(contacts, next)) contacts = next;
   }
   if (!previous || records.some(record => memberRows.contains(record.target))) {
-    const next = [...memberRows.querySelectorAll('li')].map(row =>
-      (row.querySelector('strong')?.textContent || '') + ' · ' + (row.querySelector('small')?.textContent || ''));
+    const next = Array.prototype.slice.call(memberRows.querySelectorAll('li'), 0, 5).map(row => rosterLine([
+      row.querySelector('strong')?.textContent,
+      ...Array.from(row.querySelectorAll('small'), detail => detail.textContent)
+    ]));
     if (!sameRows(members, next)) members = next;
   }
   if (!previous || records.some(record => requestRows.contains(record.target))) {
@@ -92,7 +114,7 @@ function sync(records = observer.takeRecords()) {
     requests,
     code: joined ? byId('room-code').textContent : '',
     voiceStatus: joined ? byId('voice-status').textContent.slice(0,140) : '',
-    contacts, members,
+    contacts, members, hasMoreContacts,
     name: joined ? byId('room-name').textContent : '',
     mic: byId('mic').getAttribute('aria-pressed') === 'true',
     canMic: joined && !byId('mic').disabled,
@@ -143,3 +165,4 @@ bridge.addEventListener('message', ({data}) => {
 });
 show('lobby');
 sync();
+onConfirmedGuest(() => bridge.postMessage({type: 'desktop:session', status: 'guest'}));

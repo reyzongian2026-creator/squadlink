@@ -18,9 +18,11 @@ export async function domSmoke(Window) {
       Object.defineProperty(globalThis, key, { configurable: true, value: key === 'window' ? win : win[key] });
     }
     let offline = false;
-    let expiredSocialSession = false;
+    let expiredSocialSession = false, expiredSession = false;
     globalThis.fetch = async (url, options) => {
       if (offline) throw new TypeError("sin conexión simulada");
+      if (expiredSession && url === '/api/session' && !options?.method)
+        return Response.json({error: 'Sesión caducada'}, {status: 401});
       if (expiredSocialSession && url === '/api/social/pulse')
         return Response.json({error: 'Sesión caducada'}, {status: 401});
       const res = await player.request(url, options?.body && JSON.parse(options.body));
@@ -30,7 +32,9 @@ export async function domSmoke(Window) {
     };
     // Server-Sent Events delivery is exercised separately by the HTTP suite.
     globalThis.EventSource = class extends win.EventTarget { close() {} };
-    await import('../public/app.js');
+    const {onConfirmedGuest} = await import('../public/app.js');
+    let guestSignals = 0;
+    onConfirmedGuest(() => guestSignals++);
     const el = id => win.document.getElementById(id);
     async function until(check, timeout = 3000) {
       const end = performance.now() + timeout;
@@ -146,6 +150,7 @@ export async function domSmoke(Window) {
     assert.match(el('members').textContent, /Ana/);
     assert.match(el('members').textContent, /Prueba/);
     const savedContacts = localStorage.getItem('squadlink.contacts.v1');
+    const signalsBeforeExpiry = guestSignals;
     expiredSocialSession = true;
     win.dispatchEvent(new win.Event('focus'));
     await until(() => el('social-content').hidden && !el('social-login').hidden);
@@ -156,6 +161,12 @@ export async function domSmoke(Window) {
     expiredSocialSession = false;
     el('social-retry').click();
     await until(() => el('friend-id').textContent === ownerId && el('friends').textContent.includes('Luz'));
+    assert.equal(guestSignals, signalsBeforeExpiry);
+    assert.equal(el('room').hidden, false);
+    expiredSession = expiredSocialSession = true;
+    win.dispatchEvent(new win.Event('focus'));
+    await until(() => guestSignals === signalsBeforeExpiry + 1 && el('room').hidden);
+    assert.equal(localStorage.getItem('squadlink.nick'), 'Prueba');
     console.log('DOM y HTTP: personaje, XP, ranking, publicación y retiro de sala, privacidad del código, amistad, actividad, admisión a sala protegida, código manual, arcade, preferencias de apodo y reintento de salida verificados.');
   } finally {
     for (const dispose of disposals) dispose();

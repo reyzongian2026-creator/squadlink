@@ -131,10 +131,31 @@ internal sealed class LobbyWindow : Form
         await directoryLoad;
     }
 
+    private void RememberProfile(bool present)
+    {
+        if (origin == null || hasProfile == present) return;
+        hasProfile = present;
+        var remembered = Path.Combine(dataDir, "presence-server.txt");
+        try
+        {
+            if (present) File.WriteAllText(remembered, origin.AbsoluteUri);
+            else if (File.Exists(remembered) && File.ReadAllText(remembered) == origin.AbsoluteUri)
+                File.Delete(remembered);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
     private static Uri? ParseServer(string value) =>
         Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri)
         && (uri.Scheme == "https" || (uri.Scheme == "http" && uri.IsLoopback))
         && uri.UserInfo.Length == 0 && uri.PathAndQuery == "/" && uri.Fragment.Length == 0 ? uri : null;
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (!view.ContainsFocus && Control.FromHandle(msg.HWnd) is not (TextBoxBase or ComboBox) &&
+            navigation.TryMicrophoneShortcut(keyData, msg.LParam)) return true;
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
 
     private void Present(Control selected)
     {
@@ -305,6 +326,13 @@ internal sealed class LobbyWindow : Form
         if (msg.ValueKind != JsonValueKind.Object || !msg.TryGetProperty("type", out var kind) ||
             kind.ValueKind != JsonValueKind.String) return;
         var type = kind.GetString();
+        if (type == "desktop:session" && msg.TryGetProperty("status", out var sessionStatus)
+            && sessionStatus.ValueKind == JsonValueKind.String && sessionStatus.GetString() == "guest")
+        {
+            RememberProfile(false);
+            if (ready && nativePage && performance.Low && !navigation.Joined) Post("background");
+            return;
+        }
         if (type == "desktop:release" && msg.TryGetProperty("visit", out var token) && token.TryGetInt32(out int expected))
         {
             var releasing = view;
@@ -317,11 +345,8 @@ internal sealed class LobbyWindow : Form
         }
         if (type == "desktop:state")
         {
-            if (!hasProfile && origin != null && msg.TryGetProperty("identified", out var identified) && identified.ValueKind == JsonValueKind.True)
-            {
-                try { File.WriteAllText(Path.Combine(dataDir,"presence-server.txt"), origin.AbsoluteUri); hasProfile = true; }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-            }
+            if (msg.TryGetProperty("identified", out var identified) && identified.ValueKind == JsonValueKind.True)
+                RememberProfile(true);
             bool wasJoined = navigation.Joined;
             navigation.UpdateState(msg);
             lite.UpdateSnapshot(msg);

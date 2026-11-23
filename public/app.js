@@ -95,6 +95,7 @@ async function setupSocial() {
           tell,
           copy,
           enterRoom,
+          onUnauthorized: checkExpiredSession,
           getRoom: () => room,
         });
         return social;
@@ -144,7 +145,31 @@ function showGuest(nick) {
   $("profile").textContent = nick || "Invitado";
   $("avatar").textContent = [...(nick || "S")][0].toUpperCase();
 }
+let confirmedGuest = false;
+let guestListener;
+export function onConfirmedGuest(listener) {
+  guestListener = listener;
+  if (confirmedGuest) listener();
+}
+function markGuest() {
+  if (confirmedGuest && !self && !room) return;
+  if (room) resetRoom();
+  self = null;
+  social?.clearSession();
+  showGuest(readNick());
+  confirmedGuest = true;
+  guestListener?.();
+}
+async function checkExpiredSession() {
+  const player = self;
+  if (!player) return;
+  try { await api("session"); }
+  catch (error) {
+    if (error.status === 401 && self === player) markGuest();
+  }
+}
 function applySession(result) {
+  confirmedGuest = false;
   self = result.self;
   showGuest(self.nick);
   try {
@@ -455,7 +480,7 @@ async function enterRoom(snapshot) {
       }
     } catch (error) {
       if (attempt === generation && error.status === 401) {
-        resetRoom();
+        markGuest();
         tell("La sesión terminó. Vuelve a entrar.");
       }
     }
@@ -614,6 +639,7 @@ async function restoreIdentity() {
   } catch (error) {
     if (error.status !== 401) throw error;
     if (nick) result = await api("session", { nick });
+    else if (!self && !room) markGuest();
   }
   if (!result) return;
   applySession(result);

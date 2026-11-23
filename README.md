@@ -6,7 +6,7 @@ Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte
 
 ## Edición de escritorio en pruebas
 
-**Squadlink Preview 0.4.0-preview.6** abre con un directorio de salas nativo de Windows. La primera columna cambia de espacio y la segunda muestra las opciones del espacio elegido. El directorio permite buscar salas, consultar el juego y los cupos, crear una sala o entrar con código. Un perfil nuevo puede usar el directorio sin iniciar WebView2. Al entrar en una llamada se conserva una sola sesión de voz entre secciones.
+**Squadlink Preview 0.4.0-preview.7** abre con un directorio de salas nativo de Windows. La primera columna cambia de espacio y la segunda muestra las opciones del espacio elegido. El directorio permite buscar salas, consultar el juego y los cupos, crear una sala o entrar con código. Un perfil nuevo puede usar el directorio sin iniciar WebView2. Al entrar en una llamada se conserva una sola sesión de voz entre secciones.
 
 Para probarla, abre una [compilación correcta de Windows en la rama de prueba](https://github.com/reyzongian2026-creator/squadlink/actions/workflows/windows.yml?query=branch%3Apreview%2Fwindows-escritorio) y descarga **Squadlink-Windows-x64** en *Artifacts* con tu sesión de GitHub. Descomprime el ZIP y ejecuta `Squadlink-Setup-x64.exe`. El archivo `SHA256.txt` permite verificar el instalador. La edición Preview tiene su propio acceso directo, directorio de instalación y perfil de jugador. Puede convivir con la versión estable.
 
@@ -31,6 +31,18 @@ En **Ajustes → Actualizaciones**, pulsa **Buscar actualizaciones**. La app com
 | Llamada con audio bidireccional | 396,9 MiB | 414,5 MiB |
 
 El directorio inicial ocupó 70,0 MiB. Son muestras de la suma de memoria residente de los procesos del cliente en un equipo Windows de cuatro procesadores lógicos. Para la llamada se usaron dos clientes y audio sintético en lugar de micrófono físico. Durante la prueba aumentaron tanto los paquetes como la energía del audio recibido en ambos sentidos al cambiar de perfil. Queda pendiente medir FPS con un juego abierto en hardware de gama baja. [Ver ejecución y resultados](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45124762306).
+
+### Medir FPS de VALORANT en tu PC
+
+El ZIP de Windows incluye `Comparar-FPS.ps1`. Para medir tu equipo, usa la [consola de PresentMon](https://github.com/GameTechDev/PresentMon/releases) y el formato CSV v2. En el campo de práctica, mantén el mismo recorrido, resolución y límite de FPS. Tras calentar el juego, captura primero con Squadlink cerrado. Repite con Squadlink en llamada y el mismo número de participantes. Estos ejemplos usan el nombre `PresentMon.exe`; sustitúyelo por el de tu consola descargada.
+
+```powershell
+.\PresentMon.exe --process_name VALORANT-Win64-Shipping.exe --v2_metrics --delay 5 --timed 60 --terminate_after_timed --output_file base.csv
+.\PresentMon.exe --process_name VALORANT-Win64-Shipping.exe --v2_metrics --delay 5 --timed 60 --terminate_after_timed --output_file llamada.csv
+.\Comparar-FPS.ps1 -Base .\base.csv -ConLlamada .\llamada.csv
+```
+
+El informe muestra FPS medios y el percentil 99 del tiempo de fotograma (ms). Un P99 mayor indica fotogramas lentos más largos. Repite la comparación alternando el orden para evaluar la variación entre pasadas. Las capturas permanecen en tu PC. [Opciones de captura de PresentMon](https://github.com/GameTechDev/PresentMon/blob/main/README-ConsoleApplication.md)
 
 ## La primera partida
 

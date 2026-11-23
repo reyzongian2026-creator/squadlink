@@ -23,6 +23,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Check Valorant FPS report calculations
+        shell: powershell
+        run: ./test/windows/FpsCheck.ps1
       - name: Check the Windows update channel
         run: dotnet run --project test/update-check/UpdateCheck.csproj -c Release
       - name: Check Windows process detection
@@ -34,7 +37,7 @@ jobs:
       - name: Check out the previous desktop version for the upgrade test
         uses: actions/checkout@v4
         with:
-          ref: 74cb13bd8330810e6699de14aacfd159f174d80f
+          ref: 7f3611e55e4de96ef071107ab505c6c38b3552cf
           path: upgrade-baseline
           persist-credentials: false
       - name: Build the previous installer
@@ -84,7 +87,8 @@ jobs:
           foreach ($pref in $preferences) {
             if ($savedHashes[$pref] -ne (Get-FileHash (Join-Path $profileDir $pref)).Hash) { throw "La desinstalación alteró $pref." }
           }
-          Write-Host 'Prueba de actualización de Preview 5 y conservación de preferencias completada.'
+          Write-Host 'Prueba de actualización de Preview 6 y conservación de preferencias completada.'
+          Copy-Item windows/tools/Comparar-FPS.ps1 artifacts/installer/
           (Get-FileHash $setup -Algorithm SHA256).Hash + '  Squadlink-Setup-x64.exe' | Set-Content artifacts/installer/SHA256.txt -Encoding ascii
       - uses: actions/upload-artifact@v4
         with:
