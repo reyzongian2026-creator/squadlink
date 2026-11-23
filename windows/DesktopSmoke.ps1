@@ -283,16 +283,17 @@ try {
   $roomCode = $Matches[1]
   $sync = Join-Path $env:RUNNER_TEMP 'squadlink-voice-bench'
   New-Item -ItemType Directory -Force $sync | Out-Null
-  $voicePeer = Start-Process node -ArgumentList ('test/windows/live-voice.mjs ' + $roomCode + ' "' + $sync + '"') -PassThru -RedirectStandardOutput (Join-Path $sync 'peer.log') -RedirectStandardError (Join-Path $sync 'peer.err')
   $participants = Find-TypedControl $root 'Participantes' ([System.Windows.Automation.ControlType]::List)
   $listItems = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::ListItem)
   $owner = $participants.FindAll([System.Windows.Automation.TreeScope]::Descendants, $listItems) | Where-Object { $_.Current.Name -like '*Anfitrión*En sala desde*' } | Select-Object -First 1
   if (!$owner) { throw 'Faltan el rol y la hora de entrada en el panel nativo.' }
   $owner.GetCurrentPattern($selectionPattern).Select()
+  [void](New-Object -ComObject WScript.Shell).AppActivate($app.Id)
   $participants.SetFocus()
   Add-Type -AssemblyName System.Windows.Forms
   [System.Windows.Forms.SendKeys]::SendWait('^+m')
   Find-Control $root 'Silenciar micrófono' | Out-Null
+  $voicePeer = Start-Process node -ArgumentList ('test/windows/live-voice.mjs ' + $roomCode + ' "' + $sync + '"') -PassThru -RedirectStandardOutput (Join-Path $sync 'peer.log') -RedirectStandardError (Join-Path $sync 'peer.err')
   $deadline = [DateTime]::UtcNow.AddSeconds(80)
   while (!(Test-Path (Join-Path $sync 'connected')) -and !$voicePeer.HasExited -and [DateTime]::UtcNow -lt $deadline) {Start-Sleep -Milliseconds 200}
   if (!(Test-Path (Join-Path $sync 'connected'))) {Get-Content (Join-Path $sync 'peer.err'); throw 'No llegó audio al segundo cliente.'}
