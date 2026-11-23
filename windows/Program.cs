@@ -18,6 +18,7 @@ internal sealed class LobbyWindow : Form
     private readonly TextBox server = new() { Width = 340, PlaceholderText = "https://lobby.tudominio.com" };
     private readonly Button connect = new() { Text = "Conectar", AutoSize = true };
     private readonly WebView2 view = new() { Dock = DockStyle.Fill };
+    private const string SharedLobby = "https://squadlink-lobby.onrender.com";
     private Uri? origin;
 
     public LobbyWindow()
@@ -38,7 +39,9 @@ internal sealed class LobbyWindow : Form
             try
             {
                 var file = Path.Combine(dataDir, "server.txt");
-                if (File.Exists(file)) { server.Text = File.ReadAllText(file).Trim(); await Connect(); }
+                server.Text = File.Exists(file) ? File.ReadAllText(file).Trim() : SharedLobby;
+                if (string.IsNullOrWhiteSpace(server.Text)) server.Text = SharedLobby;
+                await Connect();
             }
             catch (IOException) { server.Focus(); }
         };
