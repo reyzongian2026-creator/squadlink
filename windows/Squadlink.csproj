@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Version>0.3.0</Version>
+    <ApplicationIcon>Squadlink.ico</ApplicationIcon>
     <AssemblyName>Squadlink</AssemblyName>
   </PropertyGroup>
   <ItemGroup>

@@ -12,6 +12,7 @@ OutputBaseFilename=Squadlink-Setup-x64
 Compression=lzma2/fast
 SolidCompression=yes
 UninstallDisplayIcon={app}\Squadlink.exe
+SetupIconFile=Squadlink.ico
 WizardStyle=modern
 
 [Languages]

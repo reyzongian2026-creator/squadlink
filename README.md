@@ -1,73 +1,57 @@
+![Squadlink. Tres jugadores en una sala de voz con Santiago al fondo](docs/media/portada.webp)
+
 # Squadlink
 
-Sala de voz para hasta cinco amigos, con acceso por apodo, código compartible, clave opcional y dos minijuegos para la espera (Reflejos y Memoria). Cada grupo se conecta a una misma instancia de Squadlink. El código identifica la sala dentro de esa instancia.
+Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte un código y conversa mientras juegan. En la espera de una partida pueden abrir Reflejos o Memoria sin salir de la sala.
 
-## Descargar para Windows x64
+**[Descargar el instalador de Windows x64](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/Squadlink-Setup-x64.exe)** · **[Abrir el lobby web](https://squadlink-lobby.onrender.com/)** · [Versiones y SHA-256](https://github.com/reyzongian2026-creator/squadlink/releases/latest)
 
-Entra con una cuenta que tenga acceso al repositorio privado y descarga [Squadlink-Setup-x64.exe](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/Squadlink-Setup-x64.exe). [SHA256.txt](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/SHA256.txt) contiene su huella. El instalador configura el cliente para tu usuario. Al abrir la app se conecta al lobby compartido de Squadlink en https://squadlink-lobby.onrender.com. El código de sala solo funciona dentro de ese servidor.
+La descarga requiere una cuenta de GitHub con acceso a este repositorio privado. Tus amigos también pueden entrar desde el enlace web. El cliente de Windows se instala para el usuario actual, utiliza Microsoft Edge WebView2 Runtime y abre el lobby compartido. Los jugadores de Windows y del navegador pueden estar en la misma sala.
 
-## Amigos y actividad
+## La primera partida
 
-Comparte tu código de amigo y acepta la solicitud. Tus amigos pueden ver si estás en línea, tu juego y desde cuándo estás en la sala. Pueden pedir entrar y el anfitrión decide si acepta. También se puede compartir el código de sala y su clave opcional. El perfil y los contactos se conservan en el dispositivo. Borrar los datos de la app elimina esa identidad.
+1. Abre Squadlink y elige tu apodo. El dispositivo lo recuerda para la próxima sesión.
+2. Pulsa **Crear sala**, escribe un nombre y añade una clave si la quieres privada. Puedes indicar juego, nivel y descripción. Activa **Mostrar sala en el directorio** si quieres que otros la encuentren.
+3. Comparte el **código de sala** de seis caracteres. Tu amigo abre **Unirme con código** en el mismo lobby e introduce el código y la clave, si la configuraste.
+4. Cada jugador pulsa **Activar micrófono** y concede el permiso. En los ajustes de voz puede elegir micrófono y salida, activar reducción de ruido y consultar el diagnóstico cuando el dispositivo lo admite.
 
-En el cliente de Windows puedes activar la detección de juegos compatibles. En el navegador puedes indicar el juego manualmente. Dentro de la sala, los ajustes de voz permiten elegir micrófono y salida, y activar la reducción de ruido según el dispositivo. El diagnóstico de conexión muestra la ruta y el tiempo de ida y vuelta cuando WebRTC los reporta.
+![Lobby de Squadlink con los accesos para crear sala y unirse](docs/media/lobby.webp)
 
-## Directorio, personaje y clasificación
+| Crear la sala | Entrar con el código |
+| --- | --- |
+| ![Formulario de creación con juego, nivel, descripción y clave opcional](docs/media/crear.webp) | ![Formulario de ingreso con código de sala y clave opcional](docs/media/unirse.webp) |
 
-Un anfitrión puede publicar su sala en el directorio con una descripción, el juego y el nivel que busca. Puede retirar la publicación en cualquier momento. La clave de entrada sigue siendo obligatoria para salas protegidas. El código de partida del juego se comparte con quienes ya están dentro.
+## Qué puede hacer el grupo
 
-El apodo y la identidad del jugador se recuperan en el mismo navegador o perfil de Windows. Cada personaje admite personalización de piel, ropa y accesorios. Las partidas clasificadas de Reflejos y Memoria otorgan XP y tienen tablas de posiciones independientes. Se sube un nivel cada 100 XP. El servidor valida las rondas y el cliente guarda un respaldo firmado del progreso.
+| Función | Cómo se usa |
+| --- | --- |
+| Amigos y presencia | Intercambien códigos de amigo y acepten la solicitud. Pueden ver quién está conectado, a qué juega y desde cuándo está en la sala. Un amigo puede pedir entrar y el anfitrión decide. |
+| Directorio | Explora las salas publicadas por sus anfitriones. El código de partida del videojuego se comparte dentro de la sala. Es distinto del código de Squadlink. |
+| Detección de juegos | El cliente de Windows permite activar la detección de VALORANT, Counter-Strike 2, Rocket League, Fortnite, League of Legends, Dota 2 y Overwatch 2. En la web puedes indicar el juego a mano. |
+| Personaje y arcade | Personaliza piel, ropa y accesorios. Cada 100 XP subes un nivel. Reflejos premia los tiempos más cortos y Memoria las secuencias más largas. Cada juego tiene su propia clasificación. |
+| Modo partida | Reduce el lobby a los controles de voz mientras juegas. |
 
-El piloto usa PostgreSQL en la red privada de Render. El plan gratuito de esta base expira el 22 de diciembre de 2026. Para conservar la clasificación completa, migrar la base antes de esa fecha y mantener el secreto de firma. Ver [persistencia y migración](docs/architecture/progreso.md) y [relay en Santiago](ops/santiago/README.md).
+La identidad de invitado y los contactos se recuperan desde el mismo perfil del dispositivo. Borrar los datos de la app puede hacerte perder acceso a esa identidad. Un reinicio del lobby cierra las salas y sus códigos. El progreso del piloto compartido se guarda en PostgreSQL.
 
-## Probar en este equipo
+## Estado del piloto
 
-Descomprime la carpeta. Con Node.js 22 o superior instalado, abre **Iniciar-Squadlink.cmd** en Windows o **Squadlink.command** en macOS. El lanzador inicia el servidor local y abre el navegador. Mantén la consola abierta mientras pruebas.
+**El 23 de noviembre de 2026** se verificó audio sintético en ambos sentidos entre dos clientes a través del relay de Santiago por UDP y TCP. El piloto regional tiene apagado programado para el **24 de noviembre a las 00:14, hora de Perú**. Las conexiones directas pueden seguir funcionando después del apagado. Las redes que requieren un relay volverán a necesitar uno activo. [Resultado de la prueba de voz](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45117399894)
 
-También puedes iniciar el servidor desde la carpeta de Squadlink con este comando.
+Para uso permanente quedan por definir el alojamiento continuo del relay y la continuidad de PostgreSQL antes del **22 de diciembre de 2026**, cuando vence la base gratuita del piloto. Falta medir CPU, RAM, FPS y calidad de voz en partidas reales desde Perú, Chile y Argentina en PCs de gama baja. La [corrección del micrófono al cambiar de entrada](https://github.com/reyzongian2026-creator/squadlink/pull/1) se sigue por separado.
 
-```sh
-npm start
-```
+## Si algo falla
 
-Abre `http://localhost:4179` en Edge o Chrome. Elige un apodo, crea una sala y copia el código. Abre un segundo perfil del navegador o una ventana privada, entra con otro apodo y pega el código. Si creaste la sala con clave, ingrésala también. Permite el acceso al micro cuando quieras hablar. Usa audífonos si pruebas ambos clientes cerca para evitar realimentación.
+| Síntoma | Qué revisar |
+| --- | --- |
+| El enlace de descarga devuelve 404 | Inicia sesión en GitHub con una cuenta que tenga acceso o usa el lobby web. |
+| El código de sala no funciona | Comprueba que ambos estén en el mismo servidor, que quede un cupo y que el anfitrión siga en la sala o haya otro miembro conectado. Tras un reinicio hay que crear una sala nueva. |
+| Entran a la sala, pero no se oyen | Comprueben el permiso del micrófono, los dispositivos elegidos y el diagnóstico de conexión. Si en redes separadas falla, revisen la disponibilidad del relay. |
+| Quiero verificar el instalador | Descarga también el archivo SHA256.txt de la misma versión. En PowerShell ejecuta `Get-FileHash .\Squadlink-Setup-x64.exe -Algorithm SHA256` y compara el valor. |
 
-El micrófono del navegador requiere HTTPS o el servidor local del propio equipo. Al probar con un amigo en otro PC, ambos necesitan abrir la misma dirección HTTPS. Cada equipo interpreta `localhost` como su propio dispositivo. [Acceso al micrófono](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)
+## Desarrollo, pruebas y operación
 
-## Instalar en Windows
+Para ejecutar el proyecto localmente, usa Node.js 22 o superior, instala las dependencias con `npm ci` y ejecuta `npm start`. Abre `http://localhost:4179`. Las instrucciones para Docker, compilación de Windows, pruebas de navegador y recuperación están en la [guía de desarrollo y operación](docs/operacion.md).
 
-Abre la dirección de la app en Microsoft Edge. Pulsa el icono para instalar en la barra de direcciones y confirma **Instalar**. La app se abre en su propia ventana y queda disponible en Inicio. La opción también está en el menú de Edge, en **Aplicaciones**. Con una instancia compartida, los amigos solo necesitan el navegador. El servidor es quien ejecuta Node. [Instalación de PWA en Microsoft Edge](https://learn.microsoft.com/es-es/microsoft-edge/progressive-web-apps/ux)
+[Arquitectura del lobby](docs/architecture/lobby.md) · [Progreso y rankings](docs/architecture/progreso.md) · [Voz en Santiago](ops/santiago/README.md) · [Controles de seguridad](docs/security/lobby.md) · [Pruebas de aceptación](docs/qa/lobby.md)
 
-## Conectar amigos por Internet
-
-La configuración de `ops/` está pensada para un servidor Linux con Docker Compose, una IPv4 pública alcanzable y dos registros DNS A. Un nombre sirve la app mediante Caddy y el otro identifica el servidor de voz coturn. Pueden apuntar a la misma IP. Los móviles y PC llegan al mismo servidor de salas. WebRTC intenta conectar el audio entre participantes y puede recurrir a TURN cuando la red lo exige.
-
-1. Apunta ambos nombres al servidor. Habilita entrada TCP 80 y 443 para HTTPS, UDP y TCP 3478 para STUN/TURN, y UDP 49160–49200 para los puertos de retransmisión. Si hay NAT, reenvía los mismos puertos del exterior hacia la IP de la interfaz local. El servicio Node solo recibe conexiones internas de Caddy. [HTTPS automático de Caddy](https://caddyserver.com/docs/automatic-https)
-2. Desde la carpeta del proyecto, crea un archivo privado de configuración en el host con los comandos siguientes. Edita `$HOME/.config/squadlink/pilot.env` y sustituye los dominios e IP de ejemplo. En `TURN_BIND_IP` pon la IPv4 asignada a la interfaz local y en `TURN_PUBLIC_IP` la que ven tus amigos. Asigna a `TURN_SECRET` un valor generado con `openssl rand -hex 32`. Usa un secreto distinto por entorno y reserva el acceso a Docker para los administradores del host.
-
-   ```sh
-   install -d -m 700 "$HOME/.config/squadlink"
-   install -m 600 ops/pilot.env.example "$HOME/.config/squadlink/pilot.env"
-   ```
-
-3. Valida la configuración e inicia los tres servicios en el servidor elegido:
-
-   ```sh
-   docker compose --env-file "$HOME/.config/squadlink/pilot.env" -f ops/compose.yaml config --quiet
-   docker compose --env-file "$HOME/.config/squadlink/pilot.env" -f ops/compose.yaml up --build -d
-   docker compose --env-file "$HOME/.config/squadlink/pilot.env" -f ops/compose.yaml ps
-   ```
-
-4. Abre `https://TU_DOMINIO_DE_APP` desde dos conexiones distintas, crea una sala con clave y comprueba el audio en ambos sentidos. Comparte con el grupo la dirección, el código y, si corresponde, la clave. Durante una llamada puedes revisar `edge://webrtc-internals` para ver si el par seleccionado usa un candidato de tipo `relay`. Un fallo de señalización se observa en la conexión al sitio. Si ambos aparecen en sala y el audio no conecta entre redes, revisa los puertos e IP de coturn. El piloto ofrece TURN por UDP/TCP en 3478. Las redes que solo admiten TLS por 443 requieren otro endpoint TURN compatible. [Configuración de coturn](https://github.com/coturn/coturn/blob/master/examples/etc/turnserver.conf)
-
-Las salas y sesiones están en memoria. Al reiniciar el servicio, los jugadores deben crear una nueva sala. Los certificados HTTPS se guardan en los volúmenes de Caddy. Para detener el piloto, ejecuta `docker compose --env-file "$HOME/.config/squadlink/pilot.env" -f ops/compose.yaml down`.
-
-## Verificación
-
-Ejecuta `npm test` desde esta carpeta para revisar las pruebas disponibles. El plan de aceptación está en [la especificación](docs/specs/lobby.md). Para evaluar rendimiento en una PC de gama baja, compara sesiones equivalentes con cinco participantes, el mismo juego, ajustes gráficos y red. Registra RAM, CPU, FPS y cortes de voz con el minijuego cerrado y abierto.
-
-## Cliente de escritorio para Windows x64
-
-En una máquina de compilación con .NET 10 SDK, abre `windows/Compilar.cmd`. Distribuye la carpeta completa `artifacts/Squadlink-win-x64` a los jugadores. El cliente incluye el runtime de .NET y utiliza Microsoft Edge WebView2 Runtime instalado en Windows. Los jugadores abren `Squadlink.exe`, acceden al lobby compartido y crean la sala o introducen su código. El cliente recuerda esa dirección en el perfil de Windows. El lanzador de pruebas `Iniciar-Squadlink.cmd` sirve para ejecutar el servidor local.
-
-El host compartido debe permanecer encendido. El código tiene alcance dentro de ese host. La voz intenta ir directamente de jugador a jugador y usa coturn si los participantes no pueden establecer la conexión directa. Cada jugador puede tener cuatro conexiones de voz al estar cinco en la sala. El consumo de red del relay depende del número de conexiones que necesiten pasar por él.
+<img src="public/icon-192.png" width="64" height="64" alt="Icono de Squadlink">

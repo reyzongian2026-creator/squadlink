@@ -36,6 +36,7 @@ internal sealed class LobbyWindow : Form
         gameTimer.Tick += async (_, _) => await ScanGame();
         FormClosed += (_, _) => { ResetDetector(); gameTimer.Dispose(); };
         Text = "Squadlink";
+        Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         MinimumSize = new Size(520, 400);
         Size = new Size(1100, 760);
         var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(6) };
