@@ -25,6 +25,15 @@ jobs:
       - name: Abrir la app y probar el lobby en macOS
         run: |
           ditto -x -k artifacts/macos/Squadlink-Moderno-macOS-arm64.zip "$RUNNER_TEMP/preview"
+          node --test electron/gateway.test.cjs
+          node test/windows/voice-lobby.mjs &
+          fixture_pid=$!
+          trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT
+          curl --fail --silent --retry 8 --retry-connrefused http://127.0.0.1:4179/api/directory >/dev/null
+          SQUADLINK_TEST_APP="$RUNNER_TEMP/preview/Squadlink Moderno.app" node --test electron/finder-launch.test.cjs
+          kill "$fixture_pid"
+          wait "$fixture_pid" || true
+          trap - EXIT
           node electron/smoke.cjs "$RUNNER_TEMP/preview/Squadlink Moderno.app/Contents/MacOS/Electron"
       - uses: actions/upload-artifact@v4
         with:
@@ -36,3 +45,4 @@ jobs:
           name: Capturas-Squadlink-macOS
           path: artifacts/capturas/
           if-no-files-found: error
+

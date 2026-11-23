@@ -14,7 +14,13 @@ let detectTimer,scanning=false,generation=0,detected=null;
 const windows=new Map();
 const locked=app.requestSingleInstanceLock();
 if(!locked)app.quit();
-app.on('second-instance',()=>reveal(home));
+function activateDesktop(){
+ if(closing||!home||home.isDestroyed())return;
+ const active=[settings,current].find(w=>w&&!w.isDestroyed()&&w.isVisible());
+ reveal(active||home);
+}
+app.on('second-instance',activateDesktop);
+if(mac)app.on('activate',activateDesktop);
 protocol.registerSchemesAsPrivileged([{scheme:'squad',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true,allowServiceWorkers:false}}]);
 app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
 const options={contextIsolation:true,nodeIntegration:false,sandbox:true,preload:path.join(__dirname,'preload.cjs'),partition:'persist:squadlink-modern'};
@@ -48,6 +54,7 @@ function createHome(pref=false){
  const w=new BrowserWindow({title:pref?'Ajustes · Squadlink':'Squadlink',width:pref?690:1080,height:pref?640:700,
  minWidth:pref?490:700,minHeight:pref?450:520,backgroundColor:'#0d1217',icon:path.join(__dirname,'Squadlink.ico'),autoHideMenuBar:true,webPreferences:options});
  guard(w.webContents);
+ if(mac&&!pref)w.once('ready-to-show',()=>reveal(w));
  w.loadURL('squad://home/'+(pref?'?page=preferences':''));
  if(!pref)w.on('close',()=>{closing=true;disposeVoice();for(const win of windows.values())win.destroy();settings?.destroy();});
  return w;
