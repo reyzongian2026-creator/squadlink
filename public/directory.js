@@ -52,6 +52,7 @@ export function mountDirectory({ api, getRoom, join, create }) {
       );
       button.type = "button";
       button.dataset.roomCode = room.code;
+      button.setAttribute("aria-label", button.textContent + " · " + room.name);
       button.disabled = Boolean(current) || room.count >= room.capacity;
       if (current && current.code !== room.code)
         button.title = "Sal de tu sala actual para unirte.";
@@ -68,14 +69,11 @@ export function mountDirectory({ api, getRoom, join, create }) {
           term ? "No hay coincidencias" : "Aún no hay salas publicadas",
         ),
       );
-      empty.append(
-        label(
-          "p",
-          term
-            ? "Prueba con otro juego, sala o nivel."
-            : "Aquí aparecerán las salas que sus anfitriones decidan compartir.",
-        ),
-      );
+      if (term || !current) {
+        empty.append(label("p", term
+          ? "Prueba con otro nombre, juego o nivel."
+          : "También puedes entrar a una sala con su código."));
+      }
       if (!term && !current) {
         const button = label(
           "button",

@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
+import {channels} from './channels.js';
 const api=window.squad;
 const shapes={
   sound:<><path d="M4 10v4m4-8v12m4-15v18m4-15v12m4-8v4"/></>,
@@ -14,10 +15,9 @@ const shapes={
   plus:<path d="M12 5v14M5 12h14"/>,code:<path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 20"/>,arrow:<path d="m9 5 7 7-7 7"/>,exit:<path d="M10 3H5v18h5m-1-9h12m-5-5 5 5-5 5"/>
 };
 function Icon({id}){return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{shapes[id]}</svg>}
-const shortcuts=[['friends','Amigos','group'],['player','Mi jugador','person'],['arcade','Minijuegos','game'],['ranking','Clasificación','trophy']];
 const params=new URLSearchParams(location.search);
 function App(){
- const [state,update]=useState(null),[error,setError]=useState(''),[feedback,setFeedback]=useState(''),[address,setAddress]=useState(''),[checking,setChecking]=useState(false);
+ const [state,update]=useState(null),[error,setError]=useState(''),[serverFeedback,setServerFeedback]=useState(''),[updateFeedback,setUpdateFeedback]=useState(''),[address,setAddress]=useState(''),[checking,setChecking]=useState(false);
  const [rooms,setRooms]=useState([]),[directoryStatus,setDirectoryStatus]=useState('Buscando salas…');
  const prefs=params.get('page')==='preferences';
  useEffect(()=>{const off=api.listen(update);api.state().then(update).catch(e=>setError(e.message));return off},[]);
@@ -28,21 +28,90 @@ function App(){
   return()=>{alive=false;controller.abort()};},[server,prefs,state?.joined]);
  async function run(work){setError('');try{return await work()}catch(e){setError(e.message.replace(/^Error invoking remote method.*?Error: /,''));}}
  function open(key,code){run(()=>api.open(code?{key,code}:key))}
- function tile([key,title,icon]){return <button className={'tile tile-'+key} key={key} onClick={()=>open(key)}><span className="glyph"><Icon id={icon}/></span><b>{title}</b><span className="chevron" aria-hidden="true">›</span></button>}
  if(!state)return <main><p role="status">{error||'Abriendo Squadlink…'}</p></main>;
- return <><header className="brand"><div><img src="/icon-192.png" alt=""/><b>Squadlink</b></div>{!prefs&&<button className="identity" onClick={()=>open('player')}><span>{(state.nickname||'J').slice(0,1).toUpperCase()}</span>{state.nickname||'Mi jugador'}</button>}</header>
- {prefs?<main className="config"><h1>Ajustes</h1>
- <section><h2>Rendimiento</h2><div className="choices">{[[true,'Bajo consumo'],[false,'Experiencia completa']].map(([value,label])=><button key={label} aria-pressed={state.low===value} onClick={()=>run(()=>api.prefs({low:value}))}>{label}</button>)}</div><p>En bajo consumo, los efectos se reducen y el motor de sala se libera cuando sales como invitado.</p></section>
- <section><h2>Servidor del grupo</h2><form onSubmit={e=>{e.preventDefault();run(async()=>{await api.prefs({server:address});setFeedback('Servidor guardado.')})}}><input aria-label="Servidor" type="url" required value={address} onChange={e=>setAddress(e.target.value)}/><button>Guardar</button></form></section>
- <section><h2>Actualizaciones</h2><p>Versión instalada · {state.version}</p><button disabled={checking} onClick={()=>run(async()=>{setChecking(true);try{setFeedback(await api.updates())}finally{setChecking(false)}})}>{checking?'Buscando…':'Buscar actualizaciones'}</button>{state.updateUrl&&<button onClick={()=>run(()=>api.download())}>Descargar actualización</button>}</section>
- {feedback&&<p role="status">{feedback}</p>}</main>:<main>
- <div className="intro"><h1>Lobby</h1><button className="quiet" onClick={()=>open('preferences')}><Icon id="sliders"/> Ajustes</button></div>
- <section className="hero"><div className="scene"></div><div className="hero-copy"><span className="signal"><Icon id="sound"/> VOZ EN GRUPO</span><h2>{state.joined?state.name:'Tu sala de voz'}</h2><p>{state.joined?state.members.length+' en la sala · Código '+state.code:'Crea una sala o entra con el código de tu grupo.'}</p>
- <div className="actions">{state.joined?<><button className="primary" onClick={()=>open('lobby')}><Icon id="headset"/> Mi sala</button><button disabled={!state.canMic} onClick={()=>run(()=>api.action('mic'))}><Icon id="mic"/>{state.mic?'Silenciar':'Activar micrófono'}</button><button className="exit" aria-label="Salir de sala" onClick={()=>run(()=>api.action('leave'))}><Icon id="exit"/></button></>:<><button className="primary" onClick={()=>open('create')}><Icon id="plus"/>Crear sala</button><button onClick={()=>open('join')}><Icon id="code"/>Unirme con código</button></>}</div></div></section>
- <div className="columns"><section className="block"><div className="section-head"><h2>Salas públicas</h2><button onClick={()=>open('rooms')}>Explorar salas <span>→</span></button></div>
- {rooms.length?<ul>{rooms.map(r=><li key={r.code}><button disabled={state.joined} onClick={()=>open('join',r.code)}><span className="room-symbol"><Icon id="sound"/></span><span><b>{r.name}</b><small>{[r.game,r.level].filter(Boolean).join(' · ')||'Sala de voz'}</small></span><em>{r.count}/{r.capacity}</em></button></li>)}</ul>:<div className="empty"><Icon id="headset"/><p>{directoryStatus}</p></div>}</section>
- <section className="block"><div className="section-head"><h2>Tu espacio</h2></div><div className="tiles">{shortcuts.map(tile)}</div></section></div>
- <footer><button onClick={()=>open('settings')}><Icon id="mic"/>Dispositivos de audio</button><button onClick={()=>open('preferences')}><i/>{state.low?'Bajo consumo':'Experiencia completa'}</button></footer></main>}
- {error&&<aside className="error" role="alert">{error}</aside>}</>
+ return <div className="desktop-shell">
+   <aside className="channel-rail">
+     <div className="channel-brand"><img src="/icon-192.png" alt=""/><span className="rail-label">Squadlink</span></div>
+     <nav className="channel-list" aria-label="Canales">
+       {channels.map(([key,label,path])=>
+         <button key={key} title={label} onClick={()=>open(key)} aria-current={key===(prefs?'preferences':'home')?'page':undefined}>
+           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={path}/></svg>
+           <span className="rail-label">{label}</span>
+         </button>)}
+     </nav>
+     <div className="account-row"><button title="Editar mi apodo" aria-label="Editar mi apodo" onClick={()=>open('player')}>
+       <span className="channel-avatar" aria-hidden="true">{(state.nickname||'J').slice(0,1).toUpperCase()}</span>
+       <span className="rail-label account-name">{state.nickname||'Invitado'}</span>
+     </button></div>
+   </aside>
+   <div className="channel-column">
+     <header className="channel-heading"><Icon id={prefs?'sliders':'headset'}/>{prefs?'Preferencias':'Lobby'}</header>
+   {prefs ? <main className="config">
+     <h1>Ajustes</h1>
+     <section aria-labelledby="performance-title">
+       <h2 id="performance-title">Rendimiento</h2>
+       <p>El modo de bajo consumo reduce los efectos y libera memoria al salir de la sala como invitado.</p>
+       <div className="choices" role="group" aria-labelledby="performance-title">
+         {[[true,'Bajo consumo'],[false,'Experiencia completa']].map(([value,label])=>
+           <button key={label} aria-pressed={state.low===value} onClick={()=>run(()=>api.prefs({low:value}))}>{label}</button>)}
+       </div>
+     </section>
+     <section>
+       <h2><label htmlFor="server-address">Servidor del grupo</label></h2>
+       <form onSubmit={e=>{e.preventDefault();run(async()=>{await api.prefs({server:address});setServerFeedback('Servidor guardado.')})}}>
+         <input id="server-address" type="url" required value={address} onChange={e=>{setAddress(e.target.value);setServerFeedback('')}}/>
+         <button>Guardar</button>
+       </form>
+       <p role="status">{serverFeedback}</p>
+     </section>
+     <section>
+       <h2>Actualizaciones</h2><p>Versión instalada · {state.version}</p>
+       <div className="choices"><button disabled={checking} onClick={()=>run(async()=>{
+         setChecking(true);setUpdateFeedback('');
+         try{setUpdateFeedback(await api.updates())}finally{setChecking(false)}
+       })}>{checking?'Buscando…':'Buscar actualizaciones'}</button>
+       {state.updateUrl&&<button onClick={()=>run(()=>api.download())}>Descargar actualización</button>}</div>
+       <p role="status">{updateFeedback}</p>
+     </section>
+     {error && <p className="error" role="alert">{error}</p>}
+   </main> : <main>
+     <section className="hero" aria-labelledby="room-title">
+       <div className="scene" aria-hidden="true"></div>
+       <div className="hero-copy">
+         <h1 id="room-title">{state.joined?state.name:'Tu sala de voz'}</h1>
+         <p>{state.joined?state.members.length+' en la sala · Código '+state.code:'Crea una sala o entra con el código de tu grupo.'}</p>
+         <div className="actions">{state.joined ? <>
+           <button className="primary" onClick={()=>open('lobby')}><Icon id="headset"/>Mi sala</button>
+           <button disabled={!state.canMic} onClick={()=>run(()=>api.action('mic'))}><Icon id="mic"/>{state.mic?'Silenciar':'Activar micrófono'}</button>
+           <button className="exit" onClick={()=>run(()=>api.action('leave'))}><Icon id="exit"/>Salir de sala</button>
+         </> : <>
+           <button className="primary" onClick={()=>open('create')}><Icon id="plus"/>Crear sala</button>
+           <button onClick={()=>open('join')}><Icon id="code"/>Unirme con código</button>
+         </>}</div>
+       </div>
+     </section>
+     {error && <p className="error" role="alert">{error}</p>}
+     <div className="columns">
+       <section className="block" aria-labelledby="public-title">
+         <div className="section-head"><h2 id="public-title">Salas públicas</h2>
+           <button onClick={()=>open('rooms')} aria-label="Ver directorio de salas">Ver todas <span aria-hidden="true">→</span></button>
+         </div>
+         {rooms.length ? <ul>{rooms.map(r=>{
+           const full=r.count>=r.capacity;
+           return <li key={r.code}><button disabled={state.joined || full} onClick={()=>open('join',r.code)}>
+             <span className="room-symbol"><Icon id="sound"/></span>
+             <span className="room-label"><b>{r.name}</b><small>{[r.game,r.level].filter(Boolean).join(' · ')||'Sala de voz'}</small></span>
+             <em aria-label={r.count+' de '+r.capacity+' plazas ocupadas'}>{full?'Llena':r.count+'/'+r.capacity}</em>
+           </button></li>})}</ul> :
+           <p className="empty" role="status"><Icon id="headset"/>{directoryStatus}</p>}
+       </section>
+     </div>
+   </main>}
+     <footer>
+       <button onClick={()=>open('settings')}><Icon id="mic"/>Dispositivos de audio</button>
+       {!prefs && <button onClick={()=>open('preferences')}><i aria-hidden="true"/>{state.low?'Bajo consumo':'Experiencia completa'}</button>}
+     </footer>
+   </div>
+ </div>;
 }
 createRoot(document.getElementById('root')).render(<App/>);

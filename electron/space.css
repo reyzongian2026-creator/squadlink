@@ -1,4 +1,28 @@
-:root{color-scheme:dark;--accent:#d1f477}body,:root{background:#11161c;color:#eff3f5;font-family:"Segoe UI",sans-serif}main.wrap{max-width:1000px;padding:22px 28px}.space-header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid #30363c;background:#171d24}.space-header strong{font-size:11px;letter-spacing:.18em;color:#aebcb9}.space-header button{border:1px solid #3b464e;border-radius:9px;background:#202933;color:white;padding:8px 14px;cursor:pointer}
-body[data-workspace=rooms] #directory{display:block!important;background:transparent;border:0;box-shadow:none}
-#room .actions #mic:not([hidden]),#room .actions #leave:not([hidden]){display:inline-flex!important}
-#entry,.settings,#room .room-info,.room-card{border-radius:14px}#entry{background:#1b242d;color:#f4f5f7;border:1px solid #47525b}#entry::backdrop{background:#080d12d9}#entry input,#entry textarea,#entry select{background:#10171c;color:#f4f6f2;border:1px solid #424d54;border-radius:8px}.primary,#submit-entry{background:#d3f783;color:#121b13;border-radius:9px}button:focus-visible{outline:2px solid #cef58c;outline-offset:3px}
+body.desktop-shell, :root {
+  color-scheme: dark; background: #24252b; color: #f1f1f5;
+  font-family: system-ui, "Segoe UI", sans-serif;
+}
+.workspace-column {
+  grid-column: 2; grid-row: 1; min-width: 0; display: flex;
+  flex-direction: column; min-height: 100vh; min-height: 100dvh;
+}
+.workspace-column > .workspace-heading {
+  margin: 0; font-size: 1rem; letter-spacing: normal; font-weight: 650; min-height: 58px; display: flex; align-items: center;
+  padding: 10px clamp(16px, 2.4vw, 34px); border-bottom: 1px solid #3b3b45;
+}
+body.desktop-shell .workspace-column > main.wrap {
+  flex: 1 0 auto; width: 100%; margin: 0 auto; padding: clamp(14px, 2.5vw, 34px);
+}
+.workspace-column > .workspace-footer {
+  position: static; display: flex; flex-wrap: wrap; justify-content: space-between;
+  align-items: center; gap: 8px 12px; width: 100%; margin: auto 0 0; padding: 12px 20px;
+  border-top: 1px solid #3b3b45; color: #bcbdc8; background: #202126; font-size: 12px;
+}
+#room .actions #mic:not([hidden]), #room .actions #leave:not([hidden]) { display: inline-flex !important; }
+#entry { background: #25262e; color: #f4f5f7; border: 1px solid #484955; }
+#entry::backdrop { background: #101017da; }
+#entry input, #entry textarea, #entry select {
+  background: #1a1b20; color: #f4f6f2; border: 1px solid #5b5b68; border-radius: 7px;
+}
+.primary, #submit-entry { background: #505cdb; color: white; border-radius: 7px; }
+button:focus-visible { outline: 2px solid #adafff; outline-offset: 2px; }

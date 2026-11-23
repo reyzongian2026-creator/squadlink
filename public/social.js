@@ -98,6 +98,8 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom, onUnauthoriz
     if (buttons.length) {
       const actions = document.createElement("div");
       actions.className = "row-actions";
+      actions.setAttribute("role", "group");
+      actions.setAttribute("aria-label", title);
       actions.append(...buttons);
       box.append(actions);
     }
@@ -136,7 +138,7 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom, onUnauthoriz
     const approved = s.approvedRoom?.ownerId;
     refreshList("friends", [s.friends, s.sentKnocks, active, approved], () => {
       if (!s.friends.length)
-        return [line("p", "Tu lista de amigos está vacía.", "status")];
+        return [line("p", "Aún no tienes amigos. Comparte tu código o envía una solicitud.", "status")];
       return [...s.friends]
         .sort(
           (a, b) =>

@@ -6,7 +6,7 @@ const base='https://squadlink-lobby.onrender.com';
 const repo='reyzongian2026-creator/squadlink';
 const mac=process.platform==='darwin';
 const channel=mac?{workflow:'electron-macos.yml',artifact:'Squadlink-Moderno-macOS-arm64'}:{workflow:'electron.yml',artifact:'Squadlink-Electron-Windows-x64'};
-const titles={create:'Crear sala',join:'Unirme con código',lobby:'Mi sala',rooms:'Explorar salas',friends:'Amigos',player:'Mi jugador',arcade:'Minijuegos',ranking:'Clasificación',settings:'Dispositivos de audio'};
+const titles={create:'Crear sala',join:'Unirme con código',lobby:'Mi sala',rooms:'Explorar salas',friends:'Amigos',player:'Mi jugador',arcade:'Arcade',guide:'Guía de sala',ranking:'Clasificación',settings:'Dispositivos de audio'};
 const prefsFile=()=>path.join(app.getPath('userData'),'desktop.json');
 const blank=()=>({joined:false,name:'',nickname:'',code:'',mic:false,canMic:false,members:[]});
 let prefs={server:base,low:true},state=blank(),home,settings,view,current,action,ready=false,visit=0,closing=false,updateUrl='',microphone=false;
@@ -77,6 +77,7 @@ function ensureView(){
  wc.loadURL('squad://app/?server='+encodeURIComponent(prefs.server));
 }
 function open(key,code){
+ if(key==='home'){focusHome();return;}
  if(key==='preferences'){if(!settings||settings.isDestroyed()){settings=createHome(true);settings.on('closed',()=>settings=null);}reveal(settings);return;}
  if(!Object.hasOwn(titles,key))throw Error('Opción desconocida.');
  if(state.joined&&['create','join'].includes(key))key='lobby';
@@ -92,7 +93,9 @@ function gameStatus(){send({type:'squadlink:game',enabled:Boolean(detectTimer),g
 ipcMain.on('home',e=>{if(fromVoice(e))focusHome();});
 ipcMain.on('desk-state',async(e,m)=>{
  if(!fromVoice(e)||!m||typeof m!=='object')return;
- if(m.type==='desktop:state'){
+ if(m.type==='desktop:navigate'){
+  if(['home','rooms','friends','player','arcade','ranking','guide','preferences'].includes(m.page))open(m.page);
+ }else if(m.type==='desktop:state'){
   const before=state.joined;state={joined:m.joined===true,name:String(m.name||'').slice(0,80),nickname:String(m.nickname||'').slice(0,40),code:String(m.code||'').slice(0,6),mic:m.mic===true,canMic:m.canMic===true,members:Array.isArray(m.members)?m.members.slice(0,5):[]};publish();
   if(!ready){ready=true;if(action)dispatch(action.key,action.code);}
   if(state.joined&&!before)open('lobby');
@@ -148,7 +151,7 @@ async function start(){
   let name=pathname.slice(1),dir=path.join(__dirname,'client');
   if(hostname==='home'){
    name=name||'home.html';
-   if(['home.html','home.css','home.js'].includes(name))dir=__dirname;
+   if(['home.html','home.css','home.js','channels.css'].includes(name))dir=__dirname;
    else if(!['hero-art.webp','icon-192.png'].includes(name))return new Response(null,{status:404});
   }else name=name||'index.html';
   const type=mime[path.extname(name)];if(!type)return new Response(null,{status:404});

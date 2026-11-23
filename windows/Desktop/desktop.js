@@ -23,7 +23,10 @@ const pages = {
   settings: ['desktop-settings']
 };
 
-if (window.squadBridge) pages.rooms = ['directory'];
+if (window.squadBridge) {
+  pages.rooms = ['directory'];
+  pages.guide = ['news'];
+}
 const settings = document.createElement('section');
 settings.id = 'desktop-settings';
 const heading = document.createElement('h2');
