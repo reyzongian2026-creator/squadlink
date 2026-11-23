@@ -16,11 +16,14 @@ internal static class Program
 internal sealed class LobbyWindow : Form
 {
     private readonly string dataDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Squadlink");
-    private readonly TextBox server = new() { Width = 340, PlaceholderText = "https://lobby.tudominio.com" };
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Squadlink Preview");
+    private readonly TextBox server = new() { Width = 240, PlaceholderText = "https://lobby.tudominio.com" };
     private readonly Button connect = new() { Text = "Conectar", AutoSize = true };
     private readonly WebView2 view = new() { Dock = DockStyle.Fill };
     private const string SharedLobby = "https://squadlink-lobby.onrender.com";
+    private readonly DesktopNavigation navigation = new();
+    private readonly FlowLayoutPanel serverSettings = new() { Dock = DockStyle.Top, AutoSize = true, Visible = false,
+        BackColor = Color.FromArgb(34, 32, 46), ForeColor = Color.WhiteSmoke, Padding = new Padding(8) };
     private Uri? origin;
     private readonly System.Windows.Forms.Timer gameTimer = new() { Interval = 30_000 };
     private bool gameEnabled;
@@ -35,18 +38,33 @@ internal sealed class LobbyWindow : Form
     {
         gameTimer.Tick += async (_, _) => await ScanGame();
         FormClosed += (_, _) => { ResetDetector(); gameTimer.Dispose(); };
-        Text = "Squadlink";
+        Text = "Squadlink Preview";
         Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        MinimumSize = new Size(520, 400);
+        MinimumSize = new Size(660, 565);
         Size = new Size(1100, 760);
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(6) };
-        bar.Controls.Add(new Label { Text = "Servidor", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
-        bar.Controls.Add(server);
-        bar.Controls.Add(connect);
-        Controls.Add(view);
-        Controls.Add(bar);
-        AcceptButton = connect;
-        connect.Click += async (_, _) => await Connect();
+        BackColor = Color.FromArgb(22, 21, 30);
+        view.DefaultBackgroundColor = BackColor;
+        var workspace = new Panel { Dock = DockStyle.Fill };
+        serverSettings.Controls.Add(new Label { Text = "Servidor del grupo", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
+        serverSettings.Controls.Add(server);
+        serverSettings.Controls.Add(connect);
+        workspace.Controls.Add(view);
+        workspace.Controls.Add(serverSettings);
+        Controls.Add(workspace);
+        Controls.Add(navigation);
+        navigation.ActionRequested += action =>
+        {
+            if (action == "settings") serverSettings.Visible = true;
+            else if (action != "mic" && action != "leave") serverSettings.Visible = false;
+            if (view.CoreWebView2 != null && SameOrigin(view.CoreWebView2.Source))
+                view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "desktop:action", action }));
+        };
+        connect.Click += async (_, _) =>
+        {
+            if (navigation.Joined && MessageBox.Show(this, "Reconectar te desconectará de la sala. ¿Continuar?",
+                "Cambiar servidor", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+            await Connect();
+        };
         Shown += async (_, _) =>
         {
             try
@@ -77,11 +95,19 @@ internal sealed class LobbyWindow : Form
             {
                 var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(dataDir, "WebView2"));
                 await view.EnsureCoreWebView2Async(env);
+                var core = view.CoreWebView2;
+                var assets = new DesktopAssets();
+                await core.CallDevToolsProtocolMethodAsync("Network.setBypassServiceWorker", "{\"bypass\":true}");
+                core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+                core.WebResourceRequested += (_, e) =>
+                {
+                    if (SameOrigin(e.Request.Uri)) assets.Respond(core, e, new Uri(e.Request.Uri));
+                };
                 view.CoreWebView2.NewWindowRequested += (_, e) => e.Handled = true;
                 view.CoreWebView2.NavigationStarting += (_, e) =>
                 {
-                    if (!SameOrigin(e.Uri)) e.Cancel = true;
-                    else ResetDetector();
+                    if (!SameOrigin(e.Uri) || new Uri(e.Uri).AbsolutePath != "/") e.Cancel = true;
+                    else { ResetDetector(); navigation.ResetState(); }
                 };
                 view.CoreWebView2.WebMessageReceived += OnWebMessage;
                 view.CoreWebView2.PermissionRequested += (_, e) =>
@@ -98,10 +124,12 @@ internal sealed class LobbyWindow : Form
             }
             origin = address;
             File.WriteAllText(Path.Combine(dataDir, "server.txt"), address.GetLeftPart(UriPartial.Authority));
+            serverSettings.Visible = false;
             view.CoreWebView2.Navigate(address.AbsoluteUri);
         }
         catch (Exception ex)
         {
+            serverSettings.Visible = true;
             MessageBox.Show(this, "No se pudo abrir el lobby. Comprueba que Microsoft Edge WebView2 Runtime esté instalado.\n" + ex.Message);
         }
         finally { connect.Enabled = true; }
@@ -130,12 +158,19 @@ internal sealed class LobbyWindow : Form
     {
         if (!SameOrigin(e.Source) || !SameOrigin(view.CoreWebView2.Source)) return;
         var raw = e.WebMessageAsJson;
-        if (raw.Length > 256) return;
+        if (raw.Length > 2048) return;
         using var document = JsonDocument.Parse(raw);
         var msg = document.RootElement;
         if (msg.ValueKind != JsonValueKind.Object || !msg.TryGetProperty("type", out var kind) ||
             kind.ValueKind != JsonValueKind.String) return;
         var type = kind.GetString();
+        if (type == "desktop:state")
+        {
+            navigation.UpdateState(msg);
+            if (msg.TryGetProperty("section", out var section) && section.ValueKind == JsonValueKind.String)
+                serverSettings.Visible = section.GetString() == "settings";
+            return;
+        }
         if (type == "squadlink:game:status") { SendGame(); return; }
         if (type != "squadlink:game:set" || !msg.TryGetProperty("enabled", out var flag) ||
             (flag.ValueKind != JsonValueKind.True && flag.ValueKind != JsonValueKind.False)) return;

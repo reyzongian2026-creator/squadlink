@@ -36,10 +36,7 @@ jobs:
           $dir = Join-Path $env:RUNNER_TEMP 'Squadlink-install-test'
           $install = Start-Process $setup -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"$dir`"" -Wait -PassThru
           if ($install.ExitCode) { throw "Install failed: $($install.ExitCode)" }
-          $app = Start-Process (Join-Path $dir 'Squadlink.exe') -PassThru
-          try {
-            if (!$app.WaitForInputIdle(20000) -or $app.HasExited) { throw 'Client did not start' }
-          } finally { if (!$app.HasExited) { $app.Kill(); $app.WaitForExit() } }
+          & ./windows/DesktopSmoke.ps1 -Executable (Join-Path $dir 'Squadlink.exe')
           $remove = Start-Process (Join-Path $dir 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
           if ($remove.ExitCode -or (Test-Path (Join-Path $dir 'Squadlink.exe'))) { throw 'Uninstall failed' }
           (Get-FileHash $setup -Algorithm SHA256).Hash + '  Squadlink-Setup-x64.exe' | Set-Content artifacts/installer/SHA256.txt -Encoding ascii
@@ -48,20 +45,3 @@ jobs:
           name: Squadlink-Windows-x64
           path: artifacts/installer/
           if-no-files-found: error
-  release:
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: Squadlink-Windows-x64
-          path: installer
-      - name: Publish verified installer
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="windows-0.3.0-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          gh release create "$tag" installer/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Squadlink para Windows x64" --notes "Instalador por usuario. Abre el lobby compartido. Compatible con WebView2. Incluye suma SHA-256."

@@ -1,0 +1,10 @@
+:root { color-scheme: dark; }
+body { margin: 0; background: #16151e; }
+.top, .title-row, main > footer, .desktop-inactive, .skip { display: none !important; }
+main.wrap { width: auto; max-width: 1080px; padding: clamp(16px, 3vw, 36px); margin: 0 auto; }
+main > :first-child, #home, #room, #directory, #social, #loadout, .lower { margin-top: 0; }
+.lower { display: block; }
+#home:not([hidden]) ~ .lower, #room:not([hidden]) ~ .lower { margin-top: 20px; }
+#desktop-settings h2 { margin-top: 0; }
+#desktop-settings summary { cursor: pointer; }
+[data-desktop-page=player] { margin-bottom: 12px; }

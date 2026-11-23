@@ -1,9 +1,9 @@
 [Setup]
-AppId=Squadlink.Desktop
-AppName=Squadlink
-AppVersion=0.3.0
-DefaultDirName={localappdata}\Programs\Squadlink
-DefaultGroupName=Squadlink
+AppId=Squadlink.Desktop.Preview
+AppName=Squadlink Preview
+AppVersion=0.4.0-preview.1
+DefaultDirName={localappdata}\Programs\Squadlink Preview
+DefaultGroupName=Squadlink Preview
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -20,6 +20,6 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 [Files]
 Source: "..\artifacts\app\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 [Icons]
-Name: "{group}\Squadlink"; Filename: "{app}\Squadlink.exe"
+Name: "{group}\Squadlink Preview"; Filename: "{app}\Squadlink.exe"
 [Run]
 Filename: "{app}\Squadlink.exe"; Description: "Abrir Squadlink"; Flags: nowait postinstall skipifsilent
