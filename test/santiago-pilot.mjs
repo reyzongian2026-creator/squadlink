@@ -42,7 +42,10 @@ try {
       }
       for (const page of pages) await page.getByRole('button',{name:'Activar micrófono'}).click();
       const results = await Promise.all(pages.map(async page => {
-        const handle = await page.waitForFunction(async ip => {
+        const deadline = Date.now() + 50000;
+        let data;
+        while (!data && Date.now() < deadline) {
+          data = await page.evaluate(async ip => {
           for (const peer of window.pilotPeers) {
             if (peer.connectionState !== 'connected') continue;
             const stats = await peer.getStats();
@@ -54,10 +57,17 @@ try {
               return { ruta:candidate.candidateType, ip:candidate.address, paquetes:audio.packetsReceived, energia:audio.totalAudioEnergy, rtt_ms:Math.round(pair.currentRoundTripTime*1000) };
           }
           return false;
-        }, relay, {timeout:45000});
-        return handle.jsonValue();
+        }, relay);
+          if (!data) await new Promise(resolve => setTimeout(resolve, 400));
+        }
+        if (!data) {
+          const diagnostic = await page.evaluate(async () => Promise.all(window.pilotPeers.map(async p => ({state:p.connectionState, ice:p.iceConnectionState, candidates:[...(await p.getStats()).values()].filter(s=>s.type==='local-candidate'||s.type==='remote-candidate').map(s=>[s.type,s.candidateType,s.address,s.relayProtocol]), inbound:[...(await p.getStats()).values()].filter(s=>s.type==='inbound-rtp').map(s=>[s.packetsReceived,s.totalAudioEnergy])}))));
+          throw Error(JSON.stringify(diagnostic));
+        }
+        return data;
       }));
       assert.equal(results.length, 2);
+      assert.ok(results.every(result => result && result.ruta === 'relay' && result.paquetes >= 40 && result.energia > 0));
       console.log('Audio bidireccional', transport, JSON.stringify(results));
     } finally {
       for (const page of pages) {
