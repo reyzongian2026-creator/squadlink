@@ -1,0 +1,33 @@
+name: Squadlink Moderno para Mac
+on:
+  workflow_dispatch:
+  push:
+    branches: ['preview/electron-escritorio']
+    paths: ['electron/**', 'public/**', '.github/workflows/electron-macos.yml']
+permissions:
+  contents: read
+jobs:
+  mac:
+    runs-on: macos-15
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Preparar escritorio Apple Silicon
+        working-directory: electron
+        run: |
+          test "$(uname -m)" = arm64
+          npm ci --no-fund --no-audit
+          npm run build
+          bash package-mac.sh
+      - name: Abrir la app y probar el lobby en macOS
+        run: |
+          ditto -x -k artifacts/macos/Squadlink-Moderno-macOS-arm64.zip "$RUNNER_TEMP/preview"
+          node electron/smoke.cjs "$RUNNER_TEMP/preview/Squadlink Moderno.app/Contents/MacOS/Electron"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Squadlink-Moderno-macOS-arm64
+          path: artifacts/macos/
+          if-no-files-found: error

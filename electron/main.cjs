@@ -1,9 +1,11 @@
-const {app,BrowserWindow,BaseWindow,WebContentsView,protocol,session,ipcMain,dialog,shell,Menu}=require('electron');
+const {app,BrowserWindow,BaseWindow,WebContentsView,protocol,session,ipcMain,dialog,shell,Menu,systemPreferences}=require('electron');
 const fs=require('node:fs'),path=require('node:path');
 const {relay,parseServer}=require('./gateway.cjs');
 const {detect}=require('./detection.cjs');
 const base='https://squadlink-lobby.onrender.com';
 const repo='reyzongian2026-creator/squadlink';
+const mac=process.platform==='darwin';
+const channel=mac?{workflow:'electron-macos.yml',artifact:'Squadlink-Moderno-macOS-arm64'}:{workflow:'electron.yml',artifact:'Squadlink-Electron-Windows-x64'};
 const titles={create:'Crear sala',join:'Unirme con código',lobby:'Mi sala',rooms:'Explorar salas',friends:'Amigos',player:'Mi jugador',arcade:'Minijuegos',ranking:'Clasificación',settings:'Dispositivos de audio'};
 const prefsFile=()=>path.join(app.getPath('userData'),'desktop.json');
 const blank=()=>({joined:false,name:'',nickname:'',code:'',mic:false,canMic:false,members:[]});
@@ -64,7 +66,7 @@ function ensureView(){
  view=new WebContentsView({webPreferences:options});const wc=view.webContents;guard(wc);
  wc.on('render-process-gone',()=>{if(view?.webContents!==wc)return;disposeVoice();state=blank();publish();focusHome();
  dialog.showMessageBox(home,{type:'warning',message:'El motor de la sala se cerró. Puedes volver a abrirla desde el lobby.'});});
- wc.on('before-input-event',(e,input)=>{if(input.type==='keyDown'&&input.control&&input.shift&&input.code==='KeyM'&&!input.isAutoRepeat&&state.canMic){e.preventDefault();dispatch('mic');}});
+ wc.on('before-input-event',(e,input)=>{if(input.type==='keyDown'&&(mac?input.meta:input.control)&&input.shift&&input.code==='KeyM'&&!input.isAutoRepeat&&state.canMic){e.preventDefault();dispatch('mic');}});
  wc.loadURL('squad://app/?server='+encodeURIComponent(prefs.server));
 }
 function open(key,code){
@@ -89,8 +91,9 @@ ipcMain.on('desk-state',async(e,m)=>{
   if(state.joined&&!before)open('lobby');
   if(before&&!state.joined){if(current?.isVisible())current.hide();visit++;action=null;dispatch('background');focusHome();}
  }else if(m.type==='desktop:release'&&m.visit===visit&&!state.joined&&!current?.isVisible()&&prefs.low)disposeVoice();
- else if(m.type==='squadlink:game:status')gameStatus();
+ else if(m.type==='squadlink:game:status'&&!mac)gameStatus();
  else if(m.type==='squadlink:game:set'){
+  if(mac)return;
   if(!m.enabled){stopDetection();gameStatus();return;}
   if(detectTimer)return;
   const ticket=generation;
@@ -110,7 +113,7 @@ ipcMain.handle('prefs',(e,data)=>{
  prefs=next;if(ready&&action)dispatch(action.key,action.code);publish();
 });
 ipcMain.handle('updates',async e=>{
- hostPage(e);const url='https://api.github.com/repos/'+repo+'/actions/workflows/electron.yml/runs?branch=preview%2Felectron-escritorio&status=success&per_page=1';
+ hostPage(e);const url='https://api.github.com/repos/'+repo+'/actions/workflows/'+channel.workflow+'/runs?branch=preview%2Felectron-escritorio&status=success&per_page=1';
  const response=await fetch(url,{signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('No se pudo consultar GitHub.');
  const [run]=(await response.json()).workflow_runs;
  const build=Number(require('./package.json').squadBuild||0),attempt=Number(require('./package.json').squadAttempt||1);
@@ -118,7 +121,7 @@ ipcMain.handle('updates',async e=>{
  if(run&&(run.run_number>build||(run.run_number===build&&run.run_attempt>attempt))){
  const assets=await fetch('https://api.github.com/repos/'+repo+'/actions/runs/'+run.id+'/artifacts',{signal:AbortSignal.timeout(10000)});
  if(!assets.ok)throw Error('No se pudo consultar el instalador.');
- const asset=(await assets.json()).artifacts.find(a=>a.name==='Squadlink-Electron-Windows-x64'&&!a.expired);
+ const asset=(await assets.json()).artifacts.find(a=>a.name===channel.artifact&&!a.expired);
  if(asset)updateUrl='https://github.com/'+repo+'/actions/runs/'+run.id+'/artifacts/'+asset.id;
  }publish();return updateUrl?'Hay una nueva compilación disponible.':'Tienes la compilación más reciente disponible.';
 });
@@ -151,9 +154,12 @@ async function start(){
   if(['speaker-selection','clipboard-sanitized-write'].includes(p))return done(true);
   if(p!=='media'||!details.mediaTypes?.includes('audio')||details.mediaTypes.includes('video'))return done(false);
   if(!microphone){const answer=await dialog.showMessageBox(current||home,{type:'question',message:'¿Permitir que Squadlink use tu micrófono?',buttons:['Cancelar','Permitir'],cancelId:0,defaultId:0});microphone=answer.response===1&&trusted(wc);}
-  done(microphone);
+  if(microphone&&mac)microphone=await systemPreferences.askForMediaAccess('microphone');
+  done(microphone&&trusted(wc));
  });
- Menu.setApplicationMenu(null);home=createHome();
+ if(mac)Menu.setApplicationMenu(Menu.buildFromTemplate([{role:'appMenu'},{role:'editMenu'},{role:'windowMenu'}]));
+ else Menu.setApplicationMenu(null);
+ home=createHome();
  // Restore presence and membership for returning players. Guests only start the voice renderer on demand.
  if((await ses.cookies.get({url:prefs.server,name:'squad_session'})).length)ensureView();
 }
