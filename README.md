@@ -6,7 +6,7 @@ Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte
 
 **[Descargar el instalador de Windows x64](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/Squadlink-Setup-x64.exe)** · **[Abrir el lobby web](https://squadlink-lobby.onrender.com/)** · [Versiones y SHA-256](https://github.com/reyzongian2026-creator/squadlink/releases/latest)
 
-La descarga requiere una cuenta de GitHub con acceso a este repositorio privado. Tus amigos también pueden entrar desde el enlace web. El cliente de Windows se instala para el usuario actual, utiliza Microsoft Edge WebView2 Runtime y abre el lobby compartido. Los jugadores de Windows y del navegador pueden estar en la misma sala.
+El instalador es público y se puede descargar sin iniciar sesión en GitHub. Tus amigos también pueden entrar desde el enlace web. El cliente de Windows se instala para el usuario actual, utiliza Microsoft Edge WebView2 Runtime y abre el lobby compartido. Los jugadores de Windows y del navegador pueden estar en la misma sala.
 
 ## La primera partida
 
@@ -43,7 +43,7 @@ Para uso permanente quedan por definir el alojamiento continuo del relay y la co
 
 | Síntoma | Qué revisar |
 | --- | --- |
-| El enlace de descarga devuelve 404 | Inicia sesión en GitHub con una cuenta que tenga acceso o usa el lobby web. |
+| El enlace de descarga devuelve 404 | Abre [Releases](https://github.com/reyzongian2026-creator/squadlink/releases) y busca `Squadlink-Setup-x64.exe` entre los archivos de la versión. También puedes entrar al lobby web. |
 | El código de sala no funciona | Comprueba que ambos estén en el mismo servidor, que quede un cupo y que el anfitrión siga en la sala o haya otro miembro conectado. Tras un reinicio hay que crear una sala nueva. |
 | Entran a la sala, pero no se oyen | Comprueben el permiso del micrófono, los dispositivos elegidos y el diagnóstico de conexión. Si en redes separadas falla, revisen la disponibilidad del relay. |
 | Quiero verificar el instalador | Descarga también el archivo SHA256.txt de la misma versión. En PowerShell ejecuta `Get-FileHash .\Squadlink-Setup-x64.exe -Algorithm SHA256` y compara el valor. |
