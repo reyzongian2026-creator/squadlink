@@ -135,6 +135,14 @@ try {
   $root = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
   Find-Control $root 'Andes Five' | Out-Null
   Find-Control $root 'Crear sala' | Out-Null
+  Invoke-Control $root 'Ajustes'
+  Invoke-Control $root 'Actualizaciones'
+  Find-Control $root 'Buscar actualizaciones' | Out-Null
+  Find-Control $root 'Buscar al abrir Squadlink' | Out-Null
+  $version = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition) | Where-Object { $_.Current.Name -like "*Compilación ${env:GITHUB_RUN_NUMBER}.${env:GITHUB_RUN_ATTEMPT}*" }
+  if (!$version) {throw 'La versión instalada carece de identidad de compilación.'}
+  Invoke-Control $root 'Voz'
+  Find-Control $root 'Andes Five' | Out-Null
   Measure-Idle 'directorio-nativo'
   Save-Window $app.MainWindowHandle
   Invoke-Control $root 'Comunidad'

@@ -5,13 +5,14 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.4.0-preview.3</Version>
+    <Version>0.4.0-preview.4</Version>
     <ApplicationIcon>Squadlink.ico</ApplicationIcon>
     <AssemblyName>Squadlink</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="../public/*" Exclude="../public/sw.js;../public/install.js;../public/manifest.webmanifest" Link="Client/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Desktop/*" Link="Client/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <AssemblyMetadata Include="SquadlinkBuild" Value="$(SquadlinkBuildNumber).$(SquadlinkBuildAttempt)" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4370.26" />
   </ItemGroup>
 </Project>

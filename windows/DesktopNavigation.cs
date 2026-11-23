@@ -9,7 +9,7 @@ internal sealed class DesktopNavigation : UserControl
         ("Voz", "\uE720", new[] { ("rooms", "Explorar salas"), ("lobby", "Mi sala") }),
         ("Comunidad", "\uE716", new[] { ("friends", "Amigos"), ("player", "Mi jugador") }),
         ("Juegos", "\uE7FC", new[] { ("arcade", "Minijuegos"), ("ranking", "Clasificación") }),
-        ("Ajustes", "\uE713", new[] { ("performance", "Rendimiento"), ("settings", "Dispositivos"), ("server", "Servidor") })
+        ("Ajustes", "\uE713", new[] { ("performance", "Rendimiento"), ("settings", "Dispositivos"), ("server", "Servidor"), ("updates", "Actualizaciones") })
     };
     private readonly TableLayoutPanel rail = Stack(Rail), channels = Stack(Surface);
     private readonly Panel context = new() {Dock = DockStyle.Fill, BackColor = Surface, Padding = new Padding(12, 0, 12, 10)};

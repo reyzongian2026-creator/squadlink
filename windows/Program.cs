@@ -28,6 +28,7 @@ internal sealed class LobbyWindow : Form
     private readonly Label loading = DesktopNavigation.Caption("Abriendo sección…", 14, FontStyle.Regular);
     private readonly RoomDirectory directory;
     private readonly PerformanceSettings performance;
+    private readonly UpdateSettings updates;
     private readonly LightWorkspace lite = new();
     private bool nativePage;
     private string page = "rooms";
@@ -54,6 +55,9 @@ internal sealed class LobbyWindow : Form
         Size = new Size(1120, 730);
         BackColor = DesktopNavigation.Canvas;
         view.DefaultBackgroundColor = BackColor;
+        updates = new UpdateSettings(dataDir);
+        updates.AvailabilityChanged += found => Text = found ? "Squadlink Preview · Actualización disponible" : "Squadlink Preview";
+        workspace.Controls.Add(updates);
         performance = new PerformanceSettings(dataDir);
         performance.Changed += async () => await Navigate("performance");
         lite.DetailRequested += async action => await Navigate(action);
@@ -94,6 +98,7 @@ internal sealed class LobbyWindow : Form
             origin = ParseServer(saved) ?? new Uri(SharedLobby);
             server.Text = origin.AbsoluteUri;
             var directoryLoad = Navigate("rooms");
+            _ = updates.CheckAtStartup();
             try {
                 var remembered = Path.Combine(dataDir,"presence-server.txt");
                 hasProfile = File.Exists(remembered) && File.ReadAllText(remembered) == origin.AbsoluteUri;
@@ -127,12 +132,13 @@ internal sealed class LobbyWindow : Form
         navigation.SelectPage(page);
         pendingAction = null; pendingCode = null;
         bool useLite = performance.Low && (action == "friends" || (action == "lobby" && navigation.Joined));
-        nativePage = useLite || page is "rooms" or "server" or "performance";
+        nativePage = useLite || page is "rooms" or "server" or "performance" or "updates";
         SetMemoryTarget();
         if (nativePage)
         {
             if (ready) Post("background");
             if (useLite) { lite.ShowPage(page == "friends"); Present(lite); return; }
+            if (page == "updates") { Present(updates); return; }
             if (page == "performance") { Present(performance); return; }
             if (page == "server") { Present(serverSettings); return; }
             Present(directory); await directory.Reload(); return;
