@@ -62,6 +62,30 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   refresh.textContent = 'Actualizar dispositivos';
   const status = document.createElement('p');
   status.setAttribute('role', 'status');
+  const host = window.chrome?.webview;
+  const sampleButton = testArea.querySelector('button');
+  const sampleStatus = testArea.querySelector('[role="status"]');
+  function notifyHost() {
+    if (!host || document.body.dataset.workspace !== 'settings') return;
+    const selector = el => ({value: el.value, enabled: !el.disabled, options: [...el.options].map(o=>[o.value, o.text])});
+    const toggle = el => ({checked: el.checked, enabled: !el.disabled});
+    host.postMessage({type:'desktop:audio-state', input:selector(microphone), output:selector(speakers),
+      noise:toggle(noise), gain:toggle(gain), volume:Number(volume.value), canVolume:!volume.disabled,
+      test:sampleButton.textContent, canTest:!sampleButton.disabled, showTest:!testArea.hidden,
+      testStatus:sampleStatus?.textContent || '', filters:actual.textContent, status:status.textContent, canRefresh:!refresh.disabled});
+  }
+  const audioCommand = ({data}) => {
+    if (data?.type === 'desktop:action' && data.action === 'settings') { queueMicrotask(notifyHost); return; }
+    if (data?.type !== 'desktop:audio-change' || document.body.dataset.workspace !== 'settings') return;
+    const el = {input:microphone, output:speakers, volume, noise, gain, test:sampleButton, refresh}[data.key];
+    if (!el || el.disabled) return;
+    if (el===sampleButton || el===refresh) { if(el!==sampleButton || !testArea.hidden) el.click(); return; }
+    if (el.type==='checkbox') el.checked=data.value===true; else el.value=String(data.value);
+    el.dispatchEvent(new Event('change'));
+  };
+  const audioObserver = host ? new MutationObserver(notifyHost) : null;
+  audioObserver?.observe(container,{subtree:true,childList:true,characterData:true,attributeFilter:['disabled','hidden','aria-valuetext']});
+  host?.addEventListener('message',audioCommand);
   const media = navigator.mediaDevices;
   const outputSupported = typeof HTMLMediaElement.prototype.setSinkId === 'function';
   const noiseSupported = !!media?.getSupportedConstraints?.().noiseSuppression;
@@ -136,5 +160,5 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   media?.addEventListener?.('devicechange', render);
   window.addEventListener('squadlink:audio-state', syncProcessing);
   render();
-  return () => { ++reading; micTest.dispose(); window.removeEventListener('squadlink:audio-state', syncProcessing); media?.removeEventListener?.('devicechange', render); };
+  return () => { ++reading; audioObserver?.disconnect(); host?.removeEventListener('message',audioCommand); micTest.dispose(); window.removeEventListener('squadlink:audio-state', syncProcessing); media?.removeEventListener?.('devicechange', render); };
 }

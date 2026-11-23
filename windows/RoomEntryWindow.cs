@@ -55,6 +55,7 @@ internal sealed class RoomEntryWindow : Form
         void EnableCancel(object? _, EventArgs __) => cancel.Enabled=submit.Enabled;
         submit.EnabledChanged+=EnableCancel;
     }
+    public void SetCode(string value) { code.Text=value; }
     public void Error(string message) { Busy=false; submit.Enabled=true; status.Text=message; }
     public void Complete() { Busy=false; Close(); }
 }

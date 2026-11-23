@@ -36,6 +36,7 @@ internal sealed class LobbyWindow : Form
     private readonly UpdateSettings updates;
     private readonly LightWorkspace lite = new(), friendsPanel = new();
     private readonly Dictionary<string,FeatureWindow> windows = new();
+    private readonly AudioDevicesPanel audioPanel=new();
     private FeatureWindow? detailWindow;
     private RoomEntryWindow? entryWindow;
     private object? entryData;
@@ -89,6 +90,10 @@ internal sealed class LobbyWindow : Form
         var retry = DesktopNavigation.ActionButton("Reintentar sección");
         retry.Dock=DockStyle.None; retry.Size=new Size(175,42); recovery.Controls.Add(retry);
         retry.Click += async (_,_) => await Navigate(pendingAction ?? "lobby",pendingCode);
+        audioPanel.Change+=(key,value)=>{
+            if (ready && page=="settings") view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new {type="desktop:audio-change",key,value}));
+        };
+        workspace.Controls.Add(audioPanel);
         workspace.Controls.Add(recovery);
         loading.TextAlign = ContentAlignment.MiddleCenter;
         workspace.Controls.Add(loading);
@@ -211,7 +216,7 @@ internal sealed class LobbyWindow : Form
     {
         if (navigation.Joined) return;
         if (entryWindow!=null && !entryWindow.IsDisposed) {
-            if (entryWindow.Busy || entryWindow.Creating==creating) { Reveal(entryWindow); return; }
+            if (entryWindow.Busy || entryWindow.Creating==creating) { if (!entryWindow.Busy && !creating && code!=null) entryWindow.SetCode(code); Reveal(entryWindow); return; }
             entryWindow.Close();
         }
         var form = new RoomEntryWindow(creating,code,rememberedNick) { Icon=Icon };
@@ -233,6 +238,7 @@ internal sealed class LobbyWindow : Form
 
     private void Present(Control selected)
     {
+        if (selected==view && page=="settings") selected=audioPanel;
         foreach (Control control in workspace.Controls)
             control.Visible = control == selected;
         selected.BringToFront();
@@ -317,11 +323,20 @@ internal sealed class LobbyWindow : Form
                 else { navigationId = e.NavigationId; ResetDetector(); ready = false; WatchStartup(client); }
             };
             core.WebMessageReceived += (sender, e) => { if (IsCurrent(client)) OnWebMessage(sender, e); };
-            core.PermissionRequested += (_, e) =>
+            core.PermissionRequested += async (_, e) =>
             {
-                if (!IsCurrent(client) || !SameOrigin(e.Uri) || e.PermissionKind != CoreWebView2PermissionKind.Microphone)
-                    e.State = CoreWebView2PermissionState.Deny;
-                // WebView2 asks the player for microphone permission on the selected origin.
+                if (!IsCurrent(client) || !SameOrigin(e.Uri) || e.PermissionKind != CoreWebView2PermissionKind.Microphone) {
+                    e.State = CoreWebView2PermissionState.Deny; return;
+                }
+                using var pending=e.GetDeferral();
+                await Task.Yield();
+                e.State=CoreWebView2PermissionState.Deny;
+                if (IsCurrent(client) && SameOrigin(e.Uri)) {
+                    var permitted=MessageBox.Show(Form.ActiveForm ?? this,
+                        $"¿Permitir que {new Uri(e.Uri).Authority} use tu micrófono?", "Micrófono de Squadlink",
+                        MessageBoxButtons.YesNo,MessageBoxIcon.Question,MessageBoxDefaultButton.Button2);
+                    if (permitted==DialogResult.Yes && IsCurrent(client) && SameOrigin(e.Uri)) e.State=CoreWebView2PermissionState.Allow;
+                }
             };
             core.NavigationCompleted += (_, e) =>
             {
@@ -405,6 +420,7 @@ internal sealed class LobbyWindow : Form
         if (msg.ValueKind != JsonValueKind.Object || !msg.TryGetProperty("type", out var kind) ||
             kind.ValueKind != JsonValueKind.String) return;
         var type = kind.GetString();
+        if (type=="desktop:audio-state") { if (page=="settings") audioPanel.Apply(msg); return; }
         if (type=="desktop:entry-result" && msg.TryGetProperty("token",out var requestId) && requestId.GetString()==entryToken)
         {
             if (msg.TryGetProperty("error",out var error)) entryWindow?.Error(error.GetString() ?? "Revisa los datos de la sala.");
