@@ -19,7 +19,7 @@ internal sealed class LobbyWindow : Form
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Squadlink Preview");
     private readonly TextBox server = new() { Width = 240, PlaceholderText = "https://lobby.tudominio.com" };
     private readonly Button connect = new() { Text = "Conectar", AutoSize = true };
-    private readonly WebView2 view = new() { Dock = DockStyle.Fill };
+    private WebView2 view = new() { Dock = DockStyle.Fill };
     private const string SharedLobby = "https://squadlink-lobby.onrender.com";
     private readonly DesktopNavigation navigation = new();
     private readonly FlowLayoutPanel serverSettings = new() { Dock = DockStyle.Top, AutoSize = true, Visible = false,
@@ -30,6 +30,7 @@ internal sealed class LobbyWindow : Form
     private string page = "rooms";
     private string? pendingAction, pendingCode;
     private bool opening, ready, hasProfile;
+    private int visit;
     private Uri? origin;
     private readonly System.Windows.Forms.Timer gameTimer = new() { Interval = 30_000 };
     private bool gameEnabled;
@@ -110,9 +111,13 @@ internal sealed class LobbyWindow : Form
     private async Task Navigate(string action, string? code = null)
     {
         if (action is "mic" or "leave") { if (ready) Post(action); return; }
+        visit++;
         page = action is "create" or "join" ? "lobby" : action;
         navigation.SelectPage(page);
         pendingAction = null; pendingCode = null;
+        if (ready && view.CoreWebView2 != null)
+            view.CoreWebView2.MemoryUsageTargetLevel = (page is "rooms" or "server") && !navigation.Joined
+                ? CoreWebView2MemoryUsageTargetLevel.Low : CoreWebView2MemoryUsageTargetLevel.Normal;
         if (page is "rooms" or "server")
         {
             if (ready) Post("background");
@@ -130,7 +135,7 @@ internal sealed class LobbyWindow : Form
     private void Post(string action, string? code = null)
     {
         if (view.CoreWebView2 != null && SameOrigin(view.CoreWebView2.Source))
-            view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "desktop:action", action, code }));
+            view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "desktop:action", action, code, visit }));
     }
 
     async Task Connect()
@@ -203,7 +208,7 @@ internal sealed class LobbyWindow : Form
 
     private async void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        if (!SameOrigin(e.Source) || !SameOrigin(view.CoreWebView2.Source)) return;
+        if (view.CoreWebView2 == null || !SameOrigin(e.Source) || !SameOrigin(view.CoreWebView2.Source)) return;
         var raw = e.WebMessageAsJson;
         if (raw.Length > 2048) return;
         using var document = JsonDocument.Parse(raw);
@@ -211,6 +216,16 @@ internal sealed class LobbyWindow : Form
         if (msg.ValueKind != JsonValueKind.Object || !msg.TryGetProperty("type", out var kind) ||
             kind.ValueKind != JsonValueKind.String) return;
         var type = kind.GetString();
+        if (type == "desktop:release" && msg.TryGetProperty("visit", out var token) && token.TryGetInt32(out int expected))
+        {
+            BeginInvoke(new Action(() =>
+            {
+                if (expected != visit || page is not ("rooms" or "server") || navigation.Joined || hasProfile || !ready) return;
+                ready = false; ResetDetector(); view.Dispose();
+                view = new WebView2 {Dock = DockStyle.Fill, DefaultBackgroundColor = BackColor};
+            }));
+            return;
+        }
         if (type == "desktop:state")
         {
             if (!hasProfile && origin != null && msg.TryGetProperty("identified", out var identified) && identified.ValueKind == JsonValueKind.True)

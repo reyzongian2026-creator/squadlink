@@ -1,6 +1,18 @@
+import { canReleaseGuestWorkspace } from './app.js';
 const byId = id => document.getElementById(id);
 const bridge = window.chrome.webview;
 byId('hero-title').textContent = 'Mi sala';
+const occupants = document.createElement('aside');
+occupants.id = 'desktop-members';
+const membersTitle = document.createElement('h3');
+membersTitle.textContent = 'Participantes';
+occupants.setAttribute('aria-label', 'Participantes en la llamada');
+occupants.append(membersTitle, byId('members'));
+const details = document.createElement('div');
+details.className = 'desktop-room-details';
+const roomPanel = byId('room');
+while (roomPanel.firstChild) details.append(roomPanel.firstChild);
+roomPanel.append(details, occupants);
 
 const pages = {
   lobby: ['home', 'room'],
@@ -62,10 +74,15 @@ const observer = new MutationObserver(sync);
 for (const id of ['room', 'mic', 'leave', 'room-name', 'friend-id']) {
   observer.observe(byId(id), {attributes:true, attributeFilter:['hidden','disabled','aria-pressed'], childList:true, characterData:true, subtree:id === 'room-name' || id === 'friend-id'});
 }
+let releaseTimer;
 bridge.addEventListener('message', ({data}) => {
   if (data?.type !== 'desktop:action') return;
+  clearTimeout(releaseTimer);
   if (data.action === 'background') {
     for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+    releaseTimer = setTimeout(async () => {
+      if (await canReleaseGuestWorkspace()) bridge.postMessage({type:'desktop:release', visit:data.visit});
+    }, 3000);
   } else if (['create','join'].includes(data.action)) {
     show('lobby');
     if (!inRoom) {

@@ -20,3 +20,14 @@ main.wrap { width: 100%; max-width: 1040px; padding: 23px 26px; }
 body[data-workspace=ranking] .kit-editor, body[data-workspace=ranking] .kit-heading, body[data-workspace=player] .kit-ranking { display: none; }
 #loadout .kit-panels { grid-template-columns: 1fr; }
 #room #listen:not([hidden]) { display: inline-block; }
+
+#room:not([hidden]):not(.desktop-inactive) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, 28%); align-items: start; gap: 22px; }
+#desktop-members { border-left: 1px solid #454452; padding-left: 16px; }
+#desktop-members h3 { margin: 0 0 14px; font-size: 16px; }
+#desktop-members #members { display: grid; grid-template-columns: 1fr; }
+#desktop-members li { min-width: 0; }
+#desktop-members input { max-width: 100%; }
+@media(max-width: 650px) {
+  #room:not([hidden]):not(.desktop-inactive) { grid-template-columns: 1fr; }
+  #desktop-members { border-left: 0; border-top: 1px solid #454452; padding: 16px 0 0; }
+}

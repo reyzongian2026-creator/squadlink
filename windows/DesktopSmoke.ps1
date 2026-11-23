@@ -50,7 +50,7 @@ function Measure-Idle($label) {
   $mib = [Math]::Round(($last | Measure-Object WorkingSet64 -Sum).Sum/1MB,1)
   $children = @($last | Where-Object ProcessName -eq 'msedgewebview2').Count
   Write-Output "METRICA $label | RAM_MiB=$mib CPU_pct=$cpuPercent WebView2=$children Cores=$([Environment]::ProcessorCount)"
-  if ($label -eq 'directorio-nativo' -and $children -ne 0) { throw 'El directorio inició WebView2.' }
+  if ($label.StartsWith('directorio-') -and $children -ne 0) { throw 'El directorio inició WebView2.' }
 }
 function Save-Window($handle) {
   Add-Type -AssemblyName System.Drawing
@@ -117,6 +117,27 @@ try {
   Find-Control $root 'Código de sala' | Out-Null
   Invoke-Control $root 'Explorar salas'
   Find-Control $root 'Andes Five' | Out-Null
+  Start-Sleep -Seconds 4
+  Measure-Idle 'directorio-tras-volver'
+  Invoke-Control $root 'Juegos'
+  Find-Control $root 'Reflejos' $true | Out-Null
+  Invoke-Control $root 'Voz'
+  Invoke-Control $root 'Crear sala'
+  $nick = Find-Control $root 'Tu apodo'
+  $nick.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Prueba')
+  $name = Find-Control $root 'Nombre de la sala'
+  $name.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Canal de prueba')
+  $submit = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | Where-Object { $_.Current.Name -eq 'Crear sala' -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and !$_.Current.IsOffscreen } | Select-Object -Last 1
+  $submit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+  Find-Control $root 'Participantes' | Out-Null
+  Invoke-Control $root 'Juegos'
+  Find-Control $root 'Reflejos' $true | Out-Null
+  Find-Control $root 'Canal de prueba' | Out-Null
+  Invoke-Control $root 'Voz'
+  Start-Sleep -Seconds 4
+  if (!(Find-Control $root 'Salir de sala').Current.IsEnabled) { throw 'Se perdió la llamada al volver al directorio.' }
+  Invoke-Control $root 'Salir de sala'
+  Find-Control $root 'Sin sala' | Out-Null
   Write-Output 'Verificados directorio, grupos, secciones, perfil, clasificación, audio y entrada por código.'
 } finally {
   if ($app -and !$app.HasExited) { $app.Kill(); $app.WaitForExit() }

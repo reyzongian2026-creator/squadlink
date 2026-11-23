@@ -15,6 +15,7 @@ internal sealed class RoomDirectory : UserControl
     private readonly Label status = DesktopNavigation.Caption("", 10, FontStyle.Regular);
     private readonly Button more = DesktopNavigation.ActionButton("Cargar más"), enter = DesktopNavigation.ActionButton("Entrar a la sala");
     private readonly Button create = DesktopNavigation.ActionButton("Crear sala"), join = DesktopNavigation.ActionButton("Unirme con código");
+    private readonly ImageList rowHeight = new() {ImageSize = new Size(1,36)};
     private readonly List<Room> rooms = new();
     private int? next;
     private int revision;
@@ -39,6 +40,8 @@ internal sealed class RoomDirectory : UserControl
         query.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); query.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,104));
         var refresh = DesktopNavigation.ActionButton("Actualizar"); query.Controls.Add(search,0,0); query.Controls.Add(refresh,1,0);
         layout.Controls.Add(query,0,2);
+        search.BackColor = DesktopNavigation.Surface; search.ForeColor = Color.WhiteSmoke; search.BorderStyle = BorderStyle.FixedSingle;
+        list.SmallImageList = rowHeight;
         list.Columns.Add("Sala"); list.Columns.Add("Juego"); list.Columns.Add("Nivel"); list.Columns.Add("Cupos");
         list.DrawColumnHeader += (_, e) => {
             using var fill = new SolidBrush(DesktopNavigation.Surface); e.Graphics.FillRectangle(fill,e.Bounds);
@@ -88,5 +91,5 @@ internal sealed class RoomDirectory : UserControl
             if(version==revision && !IsDisposed)status.Text="No se pudo cargar el directorio. Pulsa Actualizar para reintentar.";
         } finally {if(version==revision && !IsDisposed)more.Enabled=true;}
     }
-    protected override void Dispose(bool disposing){ if(disposing){revision++;http.Dispose();}base.Dispose(disposing);}
+    protected override void Dispose(bool disposing){ if(disposing){revision++;http.Dispose();rowHeight.Dispose();}base.Dispose(disposing);}
 }

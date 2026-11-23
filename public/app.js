@@ -614,3 +614,9 @@ bindVoiceDiagnostics(
   () => room?.members ?? [],
 );
 boot();
+
+// The desktop host may release a guest renderer once restoration and room entry have settled.
+export async function canReleaseGuestWorkspace() {
+  await identityReady;
+  return !self && !room && !$("submit-entry").disabled && !$("entry").open && !$("game-dialog").open;
+}
