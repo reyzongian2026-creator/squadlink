@@ -31,3 +31,8 @@ jobs:
           name: Squadlink-Moderno-macOS-arm64
           path: artifacts/macos/
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Capturas-Squadlink-macOS
+          path: artifacts/capturas/
+          if-no-files-found: error

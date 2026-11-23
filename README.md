@@ -4,6 +4,10 @@
 
 Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte un código y conversa mientras juegan. En la espera de una partida pueden abrir Reflejos o Memoria sin salir de la sala.
 
+## Squadlink Moderno para Mac
+
+Edición de desarrollo para Mac con Apple Silicon. La compilación incluye una firma local y se prueba en macOS con dos clientes de voz. La distribución pública con notarización de Apple queda pendiente. El ZIP incluye una suma SHA-256. [Descargar para Mac con Apple Silicon](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45159962254/artifacts/14810511243)
+
 ## Squadlink Moderno para Windows
 
 **[Descargar Squadlink Moderno para Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45158949110/artifacts/14810775040)** · [Capturas del escritorio](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45158949110/artifacts/14808664864)
