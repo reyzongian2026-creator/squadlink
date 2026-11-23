@@ -37,7 +37,7 @@ jobs:
       - name: Check out the previous desktop version for the upgrade test
         uses: actions/checkout@v4
         with:
-          ref: 7f3611e55e4de96ef071107ab505c6c38b3552cf
+          ref: 6df1e53804b072616a7f4438e0ac3ac1d57d6cdf
           path: upgrade-baseline
           persist-credentials: false
       - name: Build the previous installer
@@ -87,7 +87,7 @@ jobs:
           foreach ($pref in $preferences) {
             if ($savedHashes[$pref] -ne (Get-FileHash (Join-Path $profileDir $pref)).Hash) { throw "La desinstalación alteró $pref." }
           }
-          Write-Host 'Prueba de actualización de Preview 6 y conservación de preferencias completada.'
+          Write-Host 'Prueba de actualización de Preview 7 y conservación de preferencias completada.'
           Copy-Item windows/tools/Comparar-FPS.ps1 artifacts/installer/
           (Get-FileHash $setup -Algorithm SHA256).Hash + '  Squadlink-Setup-x64.exe' | Set-Content artifacts/installer/SHA256.txt -Encoding ascii
       - uses: actions/upload-artifact@v4

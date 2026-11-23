@@ -238,6 +238,11 @@ try {
   Invoke-Control $root 'Ajustes'
   Invoke-Control $root 'Dispositivos'
   Find-Control $root 'Ajustes de voz' | Out-Null
+  Find-Control $root 'Ganancia automática del micrófono' | Out-Null
+  Find-Control $root 'Volumen de las voces que escucho' | Out-Null
+  Invoke-Control $root 'Grabar prueba de 4 segundos'
+  Invoke-Control $root 'Escuchar mi prueba'
+  Find-Control $root 'Prueba terminada.' | Out-Null
   Invoke-Control $root 'Servidor'
   Find-Control $root 'Servidor del grupo' | Out-Null
   Invoke-Control $root 'Voz'

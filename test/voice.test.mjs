@@ -105,7 +105,7 @@ test('changing input and suppression during a call replaces the sender track and
   assert.equal(second.readyState, 'ended');
   assert.equal(requested.at(-1).noiseSuppression, false);
   const nextRoom = createRoom();
-  assert.deepEqual(nextRoom.settings, { inputId: 'usb-microphone', outputId: '', noiseSuppression: false });
+  assert.deepEqual(nextRoom.settings, { inputId: 'usb-microphone', outputId: '', noiseSuppression: false, autoGainControl: true, listenVolume: 1 });
 });
 
 test('failed input selection keeps existing microphone and saved setting', async t => {
@@ -184,3 +184,43 @@ for (const action of ['mute', 'leave']) {
     }
   });
 }
+
+test('gain and noise adjustments reuse the live microphone, and an error preserves the settings', async t => {
+  const track = fakeTrack();
+  const observed = [];
+  let opens = 0;
+  track.applyConstraints = async constraints => {
+    observed.push(constraints);
+    if (constraints.noiseSuppression === false) throw new Error('unsupported combination');
+  };
+  installMedia(t, async () => { opens++; return fakeStream(track); });
+  const room = createRoom();
+  t.after(() => room.close());
+  await room.setMicrophone(true);
+  await room.configureAudio({autoGainControl: false});
+  assert.equal(opens, 1);
+  assert.equal(observed[0].autoGainControl, false);
+  assert.equal(observed[0].echoCancellation, true);
+  await assert.rejects(room.configureAudio({noiseSuppression: false}), /unsupported/);
+  assert.equal(room.settings.noiseSuppression, true);
+  assert.equal(room.stream.getAudioTracks()[0], track);
+  assert.equal(track.readyState, 'live');
+});
+
+test('master listening volume preserves individual levels and applies to new peers', async t => {
+  globalThis.RTCPeerConnection = class { close() {} };
+  globalThis.document = { createElement: () => ({ pause() {} }) };
+  t.after(() => { delete globalThis.RTCPeerConnection; delete globalThis.document; });
+  const room = new VoiceRoom({selfId: 'Z'});
+  t.after(() => room.close());
+  room.setVolume('A', 0.5);
+  await room.configureAudio({listenVolume: 0.8});
+  room.syncMembers(['A','B']);
+  assert.equal(room.peers.get('A').audio.volume, 0.4);
+  assert.equal(room.peers.get('B').audio.volume, 0.8);
+  await room.configureAudio({listenVolume: 0});
+  assert.equal(room.peers.get('A').audio.volume, 0);
+  await room.configureAudio({listenVolume: 1});
+  assert.equal(room.peers.get('A').audio.volume, 0.5);
+  assert.equal(room.stream, null);
+});

@@ -417,6 +417,7 @@ async function enterRoom(snapshot) {
   const attempt = generation;
   $("room").hidden = false;
   $("home").hidden = true;
+  audioStateChanged();
   setConnection("Conectando", false);
   updateRoom(snapshot);
   directory.reload();
@@ -448,6 +449,7 @@ async function enterRoom(snapshot) {
         }
       },
     });
+    for (const [id, percent] of volumes) voice.setVolume(id, percent / 100);
     voice.syncMembers(snapshot.members.map((member) => member.id));
   } catch (error) {
     if (generation !== attempt) return;
@@ -491,6 +493,9 @@ async function enterRoom(snapshot) {
     await api("member", { muted: true }).catch(() => {});
   }
 }
+function audioStateChanged() {
+  window.dispatchEvent(new window.Event('squadlink:audio-state'));
+}
 function resetRoom() {
   generation++;
   stream?.close();
@@ -513,6 +518,7 @@ function resetRoom() {
   $("listen").hidden = true;
   $("voice-status").textContent = "";
   $("room").hidden = true;
+  audioStateChanged();
   $("home").hidden = false;
   document.body.classList.remove("in-match");
   $("compact").textContent = "Modo partida";
@@ -522,6 +528,7 @@ function resetRoom() {
 function updateMicrophone(enabled) {
   const current = voice;
   microphone = enabled;
+  audioStateChanged();
   $("mic").textContent = enabled ? "Silenciar micrófono" : "Activar micrófono";
   $("mic").setAttribute("aria-pressed", String(enabled));
   // A device can disconnect while the previous presence update is in flight.
@@ -556,6 +563,7 @@ $("leave").onclick = async () => {
   stream = null;
   voice?.close();
   voice = null;
+  audioStateChanged();
   microphone = false;
   $("mic").disabled = true;
   $("mic").textContent = "Micro apagado";

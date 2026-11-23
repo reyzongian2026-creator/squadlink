@@ -1,4 +1,4 @@
-import { readAudioSettings, saveAudioSettings } from './audio-settings.js';
+import { microphoneConstraints, readAudioSettings, saveAudioSettings } from './audio-settings.js';
 
 const restartStepMs = 4000;
 const maxRestartDelayMs = 30000;
@@ -8,6 +8,7 @@ export class VoiceRoom {
   constructor({ selfId, iceServers = [], sendSignal, onStatus = () => {}, onPeerState = () => {}, onMicrophoneEnded = () => {} }) {
     Object.assign(this, { selfId, iceServers, sendSignal, onStatus, onPeerState, onMicrophoneEnded });
     this.peers = new Map();
+    this.memberGain = new Map();
     this.members = new Set();
     this.stream = null;
     this.captures = new Set();
@@ -31,6 +32,7 @@ export class VoiceRoom {
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
     const audio = document.createElement('audio');
     audio.autoplay = false;
+    audio.volume = this.settings.listenVolume * (this.memberGain.get(id) ?? 1);
     const outputId = this.pendingOutputId ?? this.settings.outputId;
     const sinkReady = outputId && audio.setSinkId
       ? audio.setSinkId(outputId).catch(() => {
@@ -164,9 +166,7 @@ export class VoiceRoom {
 
   async openMicrophone(settings, request) {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Para activar el micrófono, abre la app mediante HTTPS o localhost.');
-    const audio = { channelCount: { ideal: 1 }, echoCancellation: true,
-      noiseSuppression: settings.noiseSuppression, autoGainControl: true };
-    if (settings.inputId) audio.deviceId = { exact: settings.inputId };
+    const audio = microphoneConstraints(settings);
     let next;
     try { next = await navigator.mediaDevices.getUserMedia({ audio, video: false }); }
     catch (err) {
@@ -261,9 +261,19 @@ export class VoiceRoom {
         throw new Error('No se pudo usar esa salida. Comprueba que esté conectada y autorizada.');
       } finally { this.pendingOutputId = undefined; }
     }
-    if ((next.inputId !== previous.inputId || next.noiseSuppression !== previous.noiseSuppression) && this.wantsMicrophone) {
+    const deviceChanged = next.inputId !== previous.inputId;
+    const filtersChanged = next.noiseSuppression !== previous.noiseSuppression ||
+      next.autoGainControl !== previous.autoGainControl;
+    if ((deviceChanged || filtersChanged) && this.wantsMicrophone) {
       const request = ++this.captureRequest;
-      try { await this.openMicrophone(next, request); }
+      try {
+        const liveTrack = this.stream?.getAudioTracks()[0];
+        if (!deviceChanged && liveTrack?.readyState === 'live' && liveTrack.applyConstraints) {
+          await liveTrack.applyConstraints(microphoneConstraints(next));
+        } else {
+          await this.openMicrophone(next, request);
+        }
+      }
       catch (err) {
         if (request === this.captureRequest) this.wantsMicrophone = !!this.stream;
         throw err;
@@ -271,13 +281,19 @@ export class VoiceRoom {
     }
     if (!this.closed) {
       this.settings = next;
+      if (next.listenVolume !== previous.listenVolume) {
+        for (const [id, peer] of this.peers) peer.audio.volume = next.listenVolume * (this.memberGain.get(id) ?? 1);
+      }
       saveAudioSettings(next);
     }
   }
 
   setVolume(id, gain) {
+    if (this.closed || !Number.isFinite(gain)) return;
+    const value = Math.max(0, Math.min(1, gain));
+    this.memberGain.set(id, value);
     const peer = this.peers.get(id);
-    if (peer && Number.isFinite(gain)) peer.audio.volume = Math.max(0, Math.min(1, gain));
+    if (peer) peer.audio.volume = value * this.settings.listenVolume;
   }
 
   async resumePlayback() {
@@ -302,5 +318,6 @@ export class VoiceRoom {
     this.captureRequest++;
     for (const id of this.peers.keys()) this.removePeer(id);
     this.stopCaptures();
+    this.memberGain.clear();
   }
 }

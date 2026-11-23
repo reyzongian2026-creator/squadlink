@@ -1,3 +1,20 @@
+import { mountMicTest } from './mic-test.js';
+
+export function microphoneConstraints(settings) {
+  const audio = { channelCount: { ideal: 1 }, echoCancellation: true,
+    noiseSuppression: settings.noiseSuppression, autoGainControl: settings.autoGainControl };
+  if (settings.inputId) audio.deviceId = { exact: settings.inputId };
+  return audio;
+}
+
+function describeProcessing(track) {
+  if (!track || track.readyState === 'ended') return 'Activa el micrófono para comprobar los filtros.';
+  const actual = track.getSettings?.() ?? {};
+  const state = value => value === true ? 'activa' : value === false ? 'desactivada' : 'sin confirmar';
+  return 'Reducción de ruido: ' + state(actual.noiseSuppression) +
+    '. Ganancia automática: ' + state(actual.autoGainControl) + '.';
+}
+
 const preferencesKey = 'squadlink.audio.v1';
 
 export function readAudioSettings() {
@@ -6,7 +23,9 @@ export function readAudioSettings() {
   return {
     inputId: typeof stored?.inputId === 'string' ? stored.inputId : '',
     outputId: typeof stored?.outputId === 'string' ? stored.outputId : '',
-    noiseSuppression: stored?.noiseSuppression !== false
+    noiseSuppression: stored?.noiseSuppression !== false,
+    autoGainControl: stored?.autoGainControl !== false,
+    listenVolume: Number.isFinite(stored?.listenVolume) ? Math.max(0, Math.min(1, stored.listenVolume)) : 1
   };
 }
 
@@ -24,6 +43,19 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   const speakers = document.createElement('select');
   const noise = document.createElement('input');
   noise.type = 'checkbox';
+  const gain = document.createElement('input');
+  gain.type = 'checkbox';
+  const volume = document.createElement('input');
+  volume.type = 'range'; volume.min = '0'; volume.max = '100';
+  const actual = document.createElement('p');
+  actual.setAttribute('role', 'status');
+  const testArea = document.createElement('div');
+  const syncProcessing = () => {
+    actual.textContent = describeProcessing(getVoice()?.stream?.getAudioTracks()[0]);
+    if (getVoice() || !document.getElementById('room')?.hidden) micTest.cancel();
+    testArea.hidden = !!getVoice() || !document.getElementById('room')?.hidden;
+  };
+  const micTest = mountMicTest(testArea, () => microphoneConstraints(readAudioSettings()), () => readAudioSettings());
   const refresh = document.createElement('button');
   refresh.type = 'button';
   refresh.className = 'secondary';
@@ -55,6 +87,12 @@ export function mountAudioSettings(container, getVoice, onStatus) {
     renderOptions(microphone, devices, settings.inputId, 'audioinput');
     renderOptions(speakers, devices, settings.outputId, 'audiooutput');
     noise.checked = settings.noiseSuppression;
+    gain.checked = settings.autoGainControl;
+    volume.value = String(Math.round(settings.listenVolume * 100));
+    volume.setAttribute('aria-valuetext', volume.value + ' %');
+    gain.disabled = saving || !media?.getSupportedConstraints?.().autoGainControl;
+    volume.disabled = saving;
+    syncProcessing();
     microphone.disabled = saving || !media;
     speakers.disabled = saving || !outputSupported;
     noise.disabled = saving || !noiseSupported;
@@ -63,6 +101,8 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   async function change(patch) {
     if (saving) return;
     saving = true;
+    micTest.cancel();
+    volume.disabled = gain.disabled = true;
     microphone.disabled = speakers.disabled = noise.disabled = refresh.disabled = true;
     try {
       const voice = getVoice();
@@ -79,6 +119,8 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   }
   microphone.onchange = () => change({ inputId: microphone.value });
   speakers.onchange = () => change({ outputId: speakers.value });
+  volume.onchange = () => change({ listenVolume: Number(volume.value) / 100 });
+  gain.onchange = () => change({ autoGainControl: gain.checked });
   noise.onchange = () => change({ noiseSuppression: noise.checked });
   refresh.onclick = async () => {
     await render();
@@ -89,8 +131,10 @@ export function mountAudioSettings(container, getVoice, onStatus) {
     ? 'Activa el micrófono para que el navegador muestre los nombres de los dispositivos.'
     : 'La salida de audio se elige en los ajustes de sonido de tu sistema.';
   container.replaceChildren(field('Micrófono', microphone), field('Salida de audio', speakers),
-    field('Reducir ruido de fondo', noise), refresh, note, status);
+    field('Volumen de las voces que escucho', volume), field('Reducir ruido de fondo', noise),
+    field('Ganancia automática del micrófono', gain), actual, testArea, refresh, note, status);
   media?.addEventListener?.('devicechange', render);
+  window.addEventListener('squadlink:audio-state', syncProcessing);
   render();
-  return () => { ++reading; media?.removeEventListener?.('devicechange', render); };
+  return () => { ++reading; micTest.dispose(); window.removeEventListener('squadlink:audio-state', syncProcessing); media?.removeEventListener?.('devicechange', render); };
 }
