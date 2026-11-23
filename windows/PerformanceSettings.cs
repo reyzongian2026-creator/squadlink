@@ -5,7 +5,7 @@ internal sealed class PerformanceSettings : FlowLayoutPanel
     private readonly string file;
     private readonly RadioButton low = Choice("Bajo consumo", LowDescription);
     private readonly RadioButton full = Choice("Experiencia completa", FullDescription);
-    public bool Low => low.Checked;
+    public bool Low { get; private set; } = true;
     public event Action? Changed;
 
     public PerformanceSettings(string dataDir)
@@ -21,7 +21,8 @@ internal sealed class PerformanceSettings : FlowLayoutPanel
         bool detailed = false;
         try { detailed = File.Exists(file) && File.ReadAllText(file).Trim() == "full"; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
-        low.Checked = !detailed; full.Checked = detailed;
+        Low = !detailed;
+        low.Checked = Low; full.Checked = detailed;
         low.CheckedChanged += Save; full.CheckedChanged += Save;
     }
 
@@ -37,7 +38,8 @@ internal sealed class PerformanceSettings : FlowLayoutPanel
     };
     private void Save(object? sender, EventArgs args)
     {
-        if (sender is not RadioButton {Checked:true}) return;
+        if (sender is not RadioButton {Checked:true} selected) return;
+        Low = selected == low;
         string? temp = null;
         try {
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);

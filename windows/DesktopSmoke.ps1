@@ -56,6 +56,14 @@ function Set-Mode($root, $name) {
   if (!$mode.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) {
     $mode.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
   }
+  $file = Join-Path $profileDir 'performance.txt'
+  $expected = if ($name -eq 'Experiencia completa') { 'full' } else { 'low' }
+  $until = [DateTime]::UtcNow.AddSeconds(5)
+  do {
+    if ((Test-Path $file) -and ([IO.File]::ReadAllText($file)).Trim() -eq $expected) { return }
+    Start-Sleep -Milliseconds 100
+  } while ([DateTime]::UtcNow -lt $until)
+  throw "El perfil '$name' no se guardó al seleccionarlo."
 }
 function Get-ClientProcesses([int]$rootId) {
   if ($rootId -le 0) { throw 'Identificador de proceso de Squadlink inválido.' }
