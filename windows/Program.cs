@@ -242,7 +242,7 @@ internal sealed class LobbyWindow : Form
                 if (pendingAction != null) {
                     string action = pendingAction; pendingAction = null;
                     Present(view); Post(action, pendingCode); pendingCode = null;
-                }
+                } else if (page is "rooms" or "server") { Post("background"); }
             }
             if (wasJoined != navigation.Joined && (navigation.Joined || page == "lobby"))
                 await Navigate(navigation.Joined ? "lobby" : "rooms");

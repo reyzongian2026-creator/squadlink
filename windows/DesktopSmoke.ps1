@@ -25,7 +25,19 @@ function Find-Control($root, $name, [bool]$partial = $false) {
   throw "El control '$name' no apareció."
 }
 function Invoke-Control($root, $name) {
-  (Find-Control $root $name).GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+  (Find-TypedControl $root $name ([System.Windows.Automation.ControlType]::Button)).GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+}
+function Find-TypedControl($root, $name, $type) {
+  $criteria = [System.Windows.Automation.AndCondition]::new(
+    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $name),
+    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, $type))
+  $until = [DateTime]::UtcNow.AddSeconds(25)
+  do {
+    $candidates = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $criteria)
+    foreach ($element in $candidates) { if ($element.Current.IsEnabled -and !$element.Current.IsOffscreen) {return $element} }
+    Start-Sleep -Milliseconds 150
+  } while ([DateTime]::UtcNow -lt $until)
+  throw "No se encontró $type con nombre '$name'."
 }
 function Get-ClientProcesses([int]$rootId) {
   $tree = Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId
@@ -123,13 +135,14 @@ try {
   Find-Control $root 'Reflejos' $true | Out-Null
   Invoke-Control $root 'Voz'
   Invoke-Control $root 'Crear sala'
-  $nick = Find-Control $root 'Tu apodo'
+  $nick = Find-TypedControl $root 'Tu apodo' ([System.Windows.Automation.ControlType]::Edit)
   $nick.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Prueba')
-  $name = Find-Control $root 'Nombre de la sala'
+  $name = Find-TypedControl $root 'Nombre de la sala' ([System.Windows.Automation.ControlType]::Edit)
   $name.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Canal de prueba')
-  $submit = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | Where-Object { $_.Current.Name -eq 'Crear sala' -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and !$_.Current.IsOffscreen } | Select-Object -Last 1
+  $submit = Find-TypedControl $root 'Crear sala' ([System.Windows.Automation.ControlType]::Button)
   $submit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
   Find-Control $root 'Participantes' | Out-Null
+  Measure-Idle 'en-sala-sin-microfono'
   Invoke-Control $root 'Juegos'
   Find-Control $root 'Reflejos' $true | Out-Null
   Find-Control $root 'Canal de prueba' | Out-Null
