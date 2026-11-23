@@ -1,0 +1,63 @@
+name: Publicar Squadlink Moderno
+on:
+  push:
+    branches: [main]
+    paths: ['release/desktop.json', '.github/workflows/publicar-escritorio.yml']
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: write
+concurrency:
+  group: publicar-escritorio
+  cancel-in-progress: false
+jobs:
+  publicar:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verificar compilaciones nativas y publicar las descargas
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          config=release/desktop.json
+          commit=$(jq -er .commit "$config")
+          tag=$(jq -er .tag "$config")
+          [[ $commit =~ ^[0-9a-f]{40}$ && $tag =~ ^moderno-v[0-9A-Za-z.-]+$ ]]
+          fetch_build() {
+            local platform=$1 workflow=$2 artifact=$3 file=$4 id
+            id=$(jq -er --arg key "$platform" '.[$key]' "$config")
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id" |
+              jq -e --arg sha "$commit" --arg path ".github/workflows/$workflow" \
+                '.head_sha == $sha and .head_branch == "preview/electron-escritorio" and .path == $path and .event == "push" and .conclusion == "success"' >/dev/null
+            gh run download "$id" -n "$artifact" -D "$platform"
+            (cd "$platform" && tr -d '\r' < SHA256.txt | sha256sum -c - && test -s "$file")
+          }
+          win=Squadlink-Moderno-Setup-x64.exe
+          mac=Squadlink-Moderno-macOS-arm64.zip
+          fetch_build windows electron.yml Squadlink-Electron-Windows-x64 "$win"
+          fetch_build macos electron-macos.yml Squadlink-Moderno-macOS-arm64 "$mac"
+          mkdir dist
+          cp "windows/$win" "macos/$mac" dist/
+          cd dist
+          sha256sum "$win" "$mac" > SHA256.txt
+          if gh release view "$tag" >/dev/null 2>&1; then
+            existing=$(gh release view "$tag" --json isDraft,targetCommitish)
+            jq -e --arg sha "$commit" '.targetCommitish == $sha' <<< "$existing" >/dev/null
+            if [[ $(jq -r .isDraft <<< "$existing") == false ]]; then
+              gh release download "$tag" --dir existing
+              for asset in "$win" "$mac" SHA256.txt; do cmp "$asset" "existing/$asset"; done
+              exit 0
+            fi
+          else
+            gh release create "$tag" --target "$commit" --draft --prerelease --latest=false \
+              --title "Squadlink Moderno ${tag#moderno-v}" \
+              --notes 'Navega por canales en Windows x64 y Mac con Apple Silicon. En Windows, ejecuta el instalador. En Mac, extrae el ZIP y mueve Squadlink Moderno a Aplicaciones. La firma para Mac es local y esta edición preliminar no está notarizada por Apple.'
+          fi
+          gh release upload "$tag" "$win" "$mac" SHA256.txt --clobber
+          gh release edit "$tag" --draft=false --prerelease --latest=false
