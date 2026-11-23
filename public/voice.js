@@ -1,3 +1,5 @@
+import { readAudioSettings, saveAudioSettings } from './audio-settings.js';
+
 // One audio transceiver per pair. Listening does not require microphone access.
 export class VoiceRoom {
   constructor({ selfId, iceServers = [], sendSignal, onStatus = () => {}, onPeerState = () => {} }) {
@@ -6,6 +8,8 @@ export class VoiceRoom {
     this.members = new Set();
     this.stream = null;
     this.captureRequest = 0;
+    this.settings = readAudioSettings();
+    this.wantsMicrophone = false;
     this.closed = false;
   }
 
@@ -22,7 +26,13 @@ export class VoiceRoom {
     if (this.peers.has(id)) return this.peers.get(id);
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
     const audio = document.createElement('audio');
-    audio.autoplay = true;
+    audio.autoplay = false;
+    const outputId = this.pendingOutputId ?? this.settings.outputId;
+    const sinkReady = outputId && audio.setSinkId
+      ? audio.setSinkId(outputId).catch(() => {
+        if (!this.closed) this.onStatus('La salida guardada no está disponible. Se usará la salida del sistema.');
+      })
+      : Promise.resolve();
     const peer = { id, pc, audio, transceiver: null, incoming: Promise.resolve(), candidates: [],
       offerer: this.selfId < id, restartTimer: null, attempts: 0, dropped: false };
     this.peers.set(id, peer);
@@ -31,7 +41,7 @@ export class VoiceRoom {
     };
     pc.ontrack = ({ track }) => {
       audio.srcObject = new MediaStream([track]);
-      audio.play().catch(() => {
+      sinkReady.then(() => peer.dropped || audio.play()).catch(() => {
         if (!peer.dropped) this.onStatus('Pulsa el control de audio para escuchar a tu equipo.');
       });
     };
@@ -137,37 +147,94 @@ export class VoiceRoom {
     return pc.remoteDescription.sdp.split(/\r?\n/).includes('a=ice-ufrag:' + candidate.usernameFragment);
   }
 
+  async replaceSenders(track, request) {
+    const failures = [];
+    await Promise.all(Array.from(this.peers.values(), peer => this.queue(peer, async () => {
+      if (request !== this.captureRequest || !peer.transceiver) return;
+      try { await peer.transceiver.sender.replaceTrack(track); }
+      catch (err) { if (!peer.dropped) failures.push(err); }
+    })));
+    if (failures.length) throw new Error('No se pudo cambiar el micrófono en la llamada.');
+  }
+
+  async openMicrophone(settings, request) {
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Para activar el micrófono, abre la app mediante HTTPS o localhost.');
+    const audio = { channelCount: { ideal: 1 }, echoCancellation: true,
+      noiseSuppression: settings.noiseSuppression, autoGainControl: true };
+    if (settings.inputId) audio.deviceId = { exact: settings.inputId };
+    let next;
+    try { next = await navigator.mediaDevices.getUserMedia({ audio, video: false }); }
+    catch (err) {
+      if (err.name === 'NotAllowedError') throw new Error('Permiso de micrófono denegado. Puedes escuchar y activarlo desde los permisos de la app.');
+      if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError') throw new Error('No se encontró ese micrófono. Elige otra entrada en los ajustes de audio.');
+      throw new Error('No se pudo abrir el micrófono. Revisa el dispositivo de entrada.');
+    }
+    if (this.closed || request !== this.captureRequest) {
+      next.getTracks().forEach(t => t.stop());
+      return false;
+    }
+    const old = this.stream;
+    this.stream = next;
+    try { await this.replaceSenders(next.getAudioTracks()[0], request); }
+    catch (err) {
+      if (request === this.captureRequest && !this.closed) {
+        this.stream = old;
+        try { await this.replaceSenders(old?.getAudioTracks()[0] ?? null, request); } finally { next.getTracks().forEach(t => t.stop()); }
+      } else old?.getTracks().forEach(t => t.stop());
+      throw err;
+    }
+    old?.getTracks().forEach(t => t.stop());
+    return this.stream === next && !this.closed;
+  }
+
   async setMicrophone(enabled) {
     if (this.closed) return false;
+    this.wantsMicrophone = enabled;
+    if (enabled && this.stream?.active) return true;
     const request = ++this.captureRequest;
-    if (!enabled) {
-      for (const track of this.stream?.getTracks() ?? []) track.stop();
-      this.stream = null;
-    } else if (this.stream?.active) return true;
-    else {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Para activar el micrófono, abre la app mediante HTTPS o localhost.');
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: { channelCount: { ideal: 1 }, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-          video: false
-        });
-      } catch (err) {
-        if (err.name === 'NotAllowedError') throw new Error('Permiso de micrófono denegado. Puedes escuchar y activarlo desde los permisos de la app.');
-        if (err.name === 'NotFoundError') throw new Error('No se encontró un micrófono. Conecta uno y vuelve a intentarlo.');
-        throw new Error('No se pudo abrir el micrófono. Revisa el dispositivo de entrada.');
+    if (enabled) {
+      try { return await this.openMicrophone(this.settings, request); }
+      catch (err) {
+        if (request === this.captureRequest) this.wantsMicrophone = !!this.stream;
+        throw err;
       }
-      if (this.closed || request !== this.captureRequest) {
-        stream.getTracks().forEach(track => track.stop());
-        return false;
-      }
-      this.stream = stream;
     }
-    const track = this.stream?.getAudioTracks()[0] ?? null;
-    await Promise.all(Array.from(this.peers.values(), peer => this.queue(peer, async () => {
-      if (request === this.captureRequest && peer.transceiver) await peer.transceiver.sender.replaceTrack(track);
-    })));
-    return !!this.stream;
+    this.stream?.getTracks().forEach(t => t.stop());
+    this.stream = null;
+    await this.replaceSenders(null, request);
+    return false;
+  }
+
+  async configureAudio(patch) {
+    if (this.closed) return;
+    const previous = this.settings;
+    const next = { ...previous, ...patch };
+    if (next.outputId !== previous.outputId) {
+      this.pendingOutputId = next.outputId;
+      try {
+        const results = await Promise.allSettled([...this.peers.values()].map(async peer => {
+          try { await peer.audio.setSinkId(next.outputId); }
+          catch (err) { if (!peer.dropped) throw err; }
+        }));
+        if (results.some(result => result.status === 'rejected')) throw new Error('output');
+      } catch {
+        this.pendingOutputId = previous.outputId;
+        await Promise.allSettled([...this.peers.values()].map(async peer => peer.audio.setSinkId(previous.outputId)));
+        throw new Error('No se pudo usar esa salida. Comprueba que esté conectada y autorizada.');
+      } finally { this.pendingOutputId = undefined; }
+    }
+    if ((next.inputId !== previous.inputId || next.noiseSuppression !== previous.noiseSuppression) && this.wantsMicrophone) {
+      const request = ++this.captureRequest;
+      try { await this.openMicrophone(next, request); }
+      catch (err) {
+        if (request === this.captureRequest) this.wantsMicrophone = !!this.stream;
+        throw err;
+      }
+    }
+    if (!this.closed) {
+      this.settings = next;
+      saveAudioSettings(next);
+    }
   }
 
   setVolume(id, gain) {

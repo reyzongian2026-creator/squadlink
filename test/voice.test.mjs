@@ -76,3 +76,76 @@ test('muting releases the hardware track and permits listening', async t => {
   assert.equal(room.closed, false);
   room.close();
 });
+
+function installMedia(t, getUserMedia) {
+  Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } });
+  t.after(() => delete navigator.mediaDevices);
+}
+
+test('changing input and suppression during a call replaces the sender track and persists preferences', async t => {
+  const storage = new Map();
+  globalThis.window = { localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) } };
+  t.after(() => delete globalThis.window);
+  const requested = [];
+  installMedia(t, async ({ audio }) => {
+    requested.push(audio);
+    return fakeStream(fakeTrack());
+  });
+  const room = createRoom();
+  const sent = [];
+  room.peers.set('A', { incoming: Promise.resolve(), transceiver: { sender: { replaceTrack: async track => sent.push(track) } } });
+  await room.setMicrophone(true);
+  const first = room.stream.getAudioTracks()[0];
+  await room.configureAudio({ inputId: 'usb-microphone' });
+  const second = room.stream.getAudioTracks()[0];
+  assert.equal(first.readyState, 'ended');
+  assert.deepEqual(requested[1].deviceId, { exact: 'usb-microphone' });
+  assert.equal(second, sent[1]);
+  await room.configureAudio({ noiseSuppression: false });
+  assert.equal(second.readyState, 'ended');
+  assert.equal(requested.at(-1).noiseSuppression, false);
+  const nextRoom = createRoom();
+  assert.deepEqual(nextRoom.settings, { inputId: 'usb-microphone', outputId: '', noiseSuppression: false });
+});
+
+test('failed input selection keeps existing microphone and saved setting', async t => {
+  const working = fakeStream(fakeTrack());
+  installMedia(t, async ({ audio }) => {
+    if (audio.deviceId) throw Object.assign(new Error(), { name: 'OverconstrainedError' });
+    return working;
+  });
+  const room = createRoom();
+  await room.setMicrophone(true);
+  await assert.rejects(room.configureAudio({ inputId: 'disconnected' }), /No se encontró/);
+  assert.equal(room.stream, working);
+  assert.equal(working.getAudioTracks()[0].readyState, 'live');
+  assert.equal(room.settings.inputId, '');
+  room.close();
+});
+
+test('muted input selection stores preference without opening the microphone', async t => {
+  installMedia(t, () => assert.fail('unexpected capture'));
+  const room = createRoom();
+  await room.configureAudio({ inputId: 'usb' });
+  await room.configureAudio({ noiseSuppression: false });
+  assert.equal(room.settings.inputId, 'usb');
+  assert.equal(room.stream, null);
+});
+
+test('output change routes every remote participant and restores all outputs when switching fails', async () => {
+  const room = createRoom();
+  const speaker = reject => ({
+    id: '',
+    async setSinkId(id) {
+      if (reject && id === 'bad') throw new Error('device unavailable');
+      this.id = id;
+    }
+  });
+  const a = speaker(false), b = speaker(true);
+  room.peers.set('A', { audio: a });
+  room.peers.set('C', { audio: b });
+  await room.configureAudio({ outputId: 'headset' });
+  assert.deepEqual([a.id, b.id], ['headset', 'headset']);
+  await assert.rejects(room.configureAudio({ outputId: 'bad' }), /salida/);
+  assert.deepEqual([room.settings.outputId, a.id, b.id], ['headset', 'headset', 'headset']);
+});

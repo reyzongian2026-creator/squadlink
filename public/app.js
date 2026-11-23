@@ -1,5 +1,9 @@
+import { bindVoiceDiagnostics } from "./connection.js";
 const $ = (id) => document.getElementById(id);
 const paths = {
+  friends:
+    "M3 21v-2a5 5 0 0 1 10 0v2 M8 4a4 4 0 1 0 .01 0 M16 5a3 3 0 1 1 0 6 M16 14a5 5 0 0 1 5 5v2",
+  copy: "M8 8h12v13H8z M4 16V3h12",
   lobby: "M3 4h7v7H3z M14 4h7v7h-7z M3 15h7v6H3z M14 15h7v6h-7z",
   game: "M7 7h10c3 0 4 3 5 9 .4 3-2 4-4 2l-3-3H9l-3 3c-2 2-4.4 1-4-2 1-6 2-9 5-9z M7 9v4 M5 11h4 M16 10h.1 M19 12h.1",
   signal: "M3 18v2 M8 13v7 M13 8v12 M18 4v16",
@@ -40,6 +44,47 @@ let self,
   toastTimer,
   generation = 0,
   gameRequest = 0;
+let social, socialImport;
+async function setupSocial() {
+  if (!socialImport)
+    socialImport = import("./social.js")
+      .then(({ createSocial }) => {
+        social = createSocial({
+          api,
+          tell,
+          copy,
+          enterRoom,
+          getRoom: () => room,
+        });
+        return social;
+      })
+      .catch((error) => {
+        socialImport = null;
+        throw error;
+      });
+  const client = await socialImport;
+  await client.connect();
+}
+function startSocial() {
+  setupSocial().catch((error) => {
+    $("social-status").textContent = error.message;
+    $("social-retry").hidden = false;
+  });
+}
+$("social-retry").onclick = startSocial;
+$("social-login").onclick = () => openEntry("profile");
+let audioMount;
+$("audio-panel").ontoggle = () => {
+  if (!$("audio-panel").open || audioMount) return;
+  audioMount = import("./audio-settings.js")
+    .then(({ mountAudioSettings }) =>
+      mountAudioSettings($("audio-settings"), () => voice, tell),
+    )
+    .catch(() => {
+      audioMount = null;
+      tell("No se pudieron cargar los ajustes de audio.");
+    });
+};
 const peerStates = new Map();
 const volumes = new Map();
 const invited = new URLSearchParams(location.search).get("room") || "";
@@ -91,7 +136,12 @@ function openEntry(next) {
   mode = next;
   $("entry-error").textContent = "";
   $("entry-title").textContent = $("submit-entry").textContent =
-    next === "create" ? "Crear sala" : "Unirme a la sala";
+    next === "create"
+      ? "Crear sala"
+      : next === "join"
+        ? "Unirme a la sala"
+        : "Entrar con mi apodo";
+  $("password-field").hidden = next === "profile";
   $("nickname").value = self?.nick || readNick();
   $("name").value = "";
   $("name-field").hidden = next !== "create";
@@ -101,7 +151,7 @@ function openEntry(next) {
   $("code").value = next === "join" ? invited.toUpperCase() : "";
   $("password").value = "";
   $("entry").showModal();
-  ($("nickname").value
+  ($("nickname").value && next !== "profile"
     ? $(next === "create" ? "name" : "code")
     : $("nickname")
   ).focus();
@@ -123,6 +173,11 @@ $("entry-form").onsubmit = async (event) => {
     try {
       localStorage.setItem("squadlink.nick", self.nick);
     } catch {}
+    startSocial();
+    if (mode === "profile") {
+      $("entry").close();
+      return;
+    }
     const password = $("password").value;
     const result =
       mode === "create"
@@ -160,6 +215,23 @@ function renderMembers() {
     info.textContent =
       (member.muted ? "Micro apagado" : "Micro activo") + suffix;
     li.append(nick, info);
+    if (member.joinedAt || member.game) {
+      const activity = document.createElement("small");
+      const clock = (time) =>
+        new Date(time).toLocaleTimeString("es-PE", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      activity.textContent = [
+        member.id === room.ownerId && "Anfitrión",
+        member.joinedAt && "En sala desde " + clock(member.joinedAt),
+        member.game &&
+          member.game + (member.since ? " desde " + clock(member.since) : ""),
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      li.append(activity);
+    }
     if (member.id !== self.id) {
       const slider = document.createElement("input");
       slider.type = "range";
@@ -180,6 +252,14 @@ function renderMembers() {
 function updateRoom(snapshot) {
   room = snapshot;
   $("room-name").textContent = room.name;
+  $("room-age").textContent = room.createdAt
+    ? "Creada a las " +
+      new Date(room.createdAt).toLocaleTimeString("es-PE", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
+  social?.roomChanged();
   $("room-code").textContent = room.code;
   $("count").textContent = room.members.length + " / 5 jugadores";
   $("privacy").textContent = room.locked ? "Con clave" : "Acceso con código";
@@ -268,7 +348,9 @@ function resetRoom() {
   voice?.close();
   voice = null;
   room = null;
+  social?.roomChanged();
   microphone = false;
+  $("voice-measurements").replaceChildren();
   peerStates.clear();
   volumes.clear();
   $("mic").textContent = "Activar micrófono";
@@ -392,6 +474,7 @@ async function boot() {
     const result = await api("session");
     self = result.self;
     showGuest(self.nick);
+    startSocial();
     if (result.room) {
       await enterRoom(result.room);
       return;
@@ -401,4 +484,8 @@ async function boot() {
   }
   if (/^[a-z0-9]{6}$/i.test(invited) && !$("entry").open) openEntry("join");
 }
+bindVoiceDiagnostics(
+  () => voice,
+  () => room?.members ?? [],
+);
 boot();

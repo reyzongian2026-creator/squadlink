@@ -4,7 +4,13 @@ Sala de voz para hasta cinco amigos, con acceso por apodo, código compartible, 
 
 ## Descargar para Windows x64
 
-Entra con una cuenta que tenga acceso al repositorio privado y descarga [Squadlink-Setup-x64.exe](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/Squadlink-Setup-x64.exe). [SHA256.txt](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/SHA256.txt) contiene su huella. El instalador configura el cliente para tu usuario. Al abrir la app por primera vez, introduce la dirección HTTPS del servidor que te proporcione el anfitrión. El código de sala solo funciona dentro de ese servidor.
+Entra con una cuenta que tenga acceso al repositorio privado y descarga [Squadlink-Setup-x64.exe](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/Squadlink-Setup-x64.exe). [SHA256.txt](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/SHA256.txt) contiene su huella. El instalador configura el cliente para tu usuario. Al abrir la app se conecta al lobby compartido de Squadlink en https://squadlink-lobby.onrender.com. El código de sala solo funciona dentro de ese servidor.
+
+## Amigos y actividad
+
+Comparte tu código de amigo y acepta la solicitud. Tus amigos pueden ver si estás en línea, tu juego y desde cuándo estás en la sala. Pueden pedir entrar y el anfitrión decide si acepta. También se puede compartir el código de sala y su clave opcional. El perfil y los contactos se conservan en el dispositivo. Borrar los datos de la app elimina esa identidad.
+
+En el cliente de Windows puedes activar la detección de juegos compatibles. En el navegador puedes indicar el juego manualmente. Dentro de la sala, los ajustes de voz permiten elegir micrófono y salida, y activar la reducción de ruido según el dispositivo. El diagnóstico de conexión muestra la ruta y el tiempo de ida y vuelta cuando WebRTC los reporta.
 
 ## Probar en este equipo
 
@@ -54,6 +60,6 @@ Ejecuta `npm test` desde esta carpeta para revisar las pruebas disponibles. El p
 
 ## Cliente de escritorio para Windows x64
 
-En una máquina de compilación con .NET 10 SDK, abre `windows/Compilar.cmd`. Distribuye la carpeta completa `artifacts/Squadlink-win-x64` a los jugadores. El cliente incluye el runtime de .NET y utiliza Microsoft Edge WebView2 Runtime instalado en Windows. Los jugadores abren `Squadlink.exe`, indican una vez la URL HTTPS del servidor del grupo y luego crean la sala o introducen su código. El cliente recuerda esa dirección en el perfil de Windows. El lanzador de pruebas `Iniciar-Squadlink.cmd` sirve para ejecutar el servidor local.
+En una máquina de compilación con .NET 10 SDK, abre `windows/Compilar.cmd`. Distribuye la carpeta completa `artifacts/Squadlink-win-x64` a los jugadores. El cliente incluye el runtime de .NET y utiliza Microsoft Edge WebView2 Runtime instalado en Windows. Los jugadores abren `Squadlink.exe`, acceden al lobby compartido y crean la sala o introducen su código. El cliente recuerda esa dirección en el perfil de Windows. El lanzador de pruebas `Iniciar-Squadlink.cmd` sirve para ejecutar el servidor local.
 
 El host compartido debe permanecer encendido. El código tiene alcance dentro de ese host. La voz intenta ir directamente de jugador a jugador y usa coturn si los participantes no pueden establecer la conexión directa. Cada jugador puede tener cuatro conexiones de voz al estar cinco en la sala. El consumo de red del relay depende del número de conexiones que necesiten pasar por él.

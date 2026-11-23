@@ -29,3 +29,9 @@ Abrir el mismo servicio HTTPS desde dos redes, instalar la app en Windows, crear
 ### Verificación de varias salas
 
 La suite ampliada pasó 12/12. Diez salas mantuvieron simultáneamente cinco sesiones SSE cada una. Las 50 sesiones recibieron su instantánea y cada emisor envió una oferta de prueba al siguiente miembro de su propia sala. Se usaron transportes dúplex en memoria y el servidor HTTP real. La prueba mide comportamiento funcional concurrente, sin paquetes de audio ni enlaces de Internet. La compilación y el audio del cliente de escritorio requieren verificación en Windows.
+
+## Amigos, admisión y audio en v0.2
+
+La suite local de Node pasó 21 de 21 casos en la revisión del módulo social. El recorrido adicional con Happy DOM y el HTTP de la app utilizó una sesión del anfitrión y otra independiente del visitante. Se aceptó la amistad en la interfaz, se verificó la actividad VALORANT del visitante, se confirmó que este seguía fuera mientras esperaba y que pudo acceder a la misma sala protegida tras la autorización.
+
+El script de Chromium amplía el recorrido existente de código manual y audio sintético con tres perfiles, dos amistades confirmadas, estado y actividad, autorización por el anfitrión, persistencia tras recarga y diagnóstico de ruta. Comprueba además que desactivar la reducción de ruido en el navegador persiste al reabrir los controles. La prueba contra localhost en el entorno de desarrollo no llegó a arrancar por el bloqueo del puerto. Los resultados de Chromium de un runner deben vincularse a la revisión que realmente se ejecutó.

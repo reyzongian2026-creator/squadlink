@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fixture } from './support/http.mjs';
 
@@ -47,6 +48,33 @@ export async function domSmoke(Window) {
     assert.equal(el('room-name').textContent, 'Sala QA');
     assert.match(el('privacy').textContent, /clave/);
     assert.match(el('members').textContent, /Prueba/);
+
+    // The owner exercises the UI, while a separately authenticated client signs its own requests.
+    await until(() => /^[A-F0-9]{16}$/.test(el('friend-id').textContent));
+    const ownerId = el('friend-id').textContent;
+    const visitor = f.player();
+    await visitor.hit('session', { nick: 'Luz' });
+    const device = await visitor.hit('social/connect', { deviceKey: randomBytes(32).toString('hex'), contacts: [] });
+    assert.equal(device.status, 200);
+    assert.equal((await visitor.hit('social/request', { id: ownerId })).status, 200);
+    win.dispatchEvent(new win.Event('focus'));
+    const action = name => document.querySelector('[data-action="' + name + '"]');
+    await until(() => action('accept-friend'));
+    action('accept-friend').click();
+    await until(() => el('friends').textContent.includes('Luz'));
+    assert.equal((await visitor.hit('social/game', { game: 'VALORANT' })).status, 200);
+    assert.equal((await visitor.hit('social/knock', { id: ownerId })).status, 200);
+    win.dispatchEvent(new win.Event('focus'));
+    await until(() => action('admit'));
+    assert.match(el('friends').textContent, /Jugando VALORANT desde/);
+    assert.equal((await visitor.hit('session')).data.room, null);
+    action('admit').click();
+    await until(() => el('room-requests').hidden);
+    const admitted = await visitor.hit('social/enter', {});
+    assert.equal(admitted.status, 200);
+    assert.equal(admitted.data.room.code, code);
+    assert.equal((await visitor.hit('leave', {})).status, 200);
+
     el('compact').click();
     assert.ok(document.body.classList.contains('in-match'));
     el('compact').click();
@@ -79,7 +107,7 @@ export async function domSmoke(Window) {
     await until(() => el('room-name').textContent === 'Partida de Ana' && !el('room').hidden);
     assert.match(el('members').textContent, /Ana/);
     assert.match(el('members').textContent, /Prueba/);
-    console.log('DOM y HTTP: crear con clave, código, modo partida, jugar, salir, recordar apodo, rechazo de clave y segundo jugador verificados.');
+    console.log('DOM y HTTP: amistad, actividad, admisión a sala protegida, código manual, arcade, preferencias de apodo y reintento de salida verificados.');
   } finally {
     for (const dispose of disposals) dispose();
     await win.happyDOM.abort();

@@ -3,6 +3,76 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createServer } from '../server.mjs';
 
+async function socialSmoke(host, guest, spectator) {
+  const socialWait = { timeout: 45000 };
+  const refresh = page => page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  async function addFriend(from, to) {
+    await to.waitForFunction(() => /^[a-f0-9]{16}$/i.test(document.querySelector('#friend-id')?.textContent.trim() || ''));
+    const id = (await to.locator('#friend-id').innerText()).trim();
+    await from.locator('#friend-code').fill(id);
+    await from.locator('#friend-add').click();
+    await from.locator('#friend-requests').getByText('Solicitud de amistad enviada').waitFor(socialWait);
+    await refresh(to);
+    await to.locator('[data-action="accept-friend"]').first().click(socialWait);
+    await to.locator('#friends').getByText('Gian', { exact: true }).waitFor(socialWait);
+    await refresh(from);
+  }
+  await addFriend(host, guest);
+  await spectator.locator('#social-login').click();
+  await spectator.getByLabel('Tu apodo').fill('Luz');
+  await spectator.locator('#submit-entry').click();
+  await addFriend(host, spectator);
+
+  // Exercise the real time-bounded presence refresh. Share activity before knocking.
+  const contact = host.locator('#friends');
+  const owner = guest.locator('#friends');
+  await contact.getByText('Ana', { exact: true }).waitFor(socialWait);
+  await owner.getByText('Gian', { exact: true }).waitFor(socialWait);
+  await contact.locator('.social-row').filter({ hasText: 'Luz' }).getByText(/En línea desde/).waitFor(socialWait);
+  await guest.locator('#player-game').fill('Valorant');
+  await guest.locator('#game-save').click();
+  await guest.getByText('Actividad guardada.', { exact: true }).waitFor(socialWait);
+  await refresh(host);
+  await contact.getByText(/Valorant/i).first().waitFor(socialWait);
+  await owner.locator('[data-action="knock"]').click(socialWait);
+  await owner.getByText(/Solicitud enviada/).waitFor(socialWait);
+  await refresh(host);
+
+  // Waiting for the owner's decision must not expose the room or its members.
+  await host.locator('#room-requests [data-action="admit"]').first().waitFor(socialWait);
+  assert.ok(!await guest.locator('#room').isVisible(), 'petición pendiente aún fuera de sala');
+  await host.locator('#room-requests [data-action="admit"]').first().click();
+  await host.locator('#room-requests').waitFor({ state: 'hidden', timeout: 45000 });
+  await refresh(guest);
+  await guest.locator('[data-action="enter"]').first().click(socialWait);
+  await host.locator('#members').getByText('Ana', { exact: true }).waitFor(socialWait);
+  assert.equal(await guest.locator('#room-name').innerText(), 'Grupo de prueba');
+
+  // Reload the profile holding the friend grant, then verify the same friend is still rendered.
+  await guest.reload();
+  await guest.locator('#friends').getByText('Gian', { exact: true }).waitFor(socialWait);
+  await guest.getByRole('heading', { name: 'Grupo de prueba', exact: true }).waitFor(socialWait);
+}
+
+async function audioPreferencesSmoke(page) {
+  const settings = page.locator('#audio-panel');
+  const openSettings = async () => {
+    await settings.waitFor();
+    if (!await settings.evaluate(element => element.open)) await settings.locator('summary').click();
+    await settings.locator('select option').first().waitFor({ state: 'attached' });
+  };
+  await openSettings();
+  const noise = settings.getByLabel('Reducir ruido de fondo');
+  assert.ok(await noise.isEnabled(), 'Chromium ofrece el control de supresión de ruido');
+  const selected = !await noise.isChecked();
+  await noise.setChecked(selected);
+  await settings.getByText('Preferencia de audio actualizada.').waitFor();
+  await page.reload();
+  await openSettings();
+  assert.equal(await noise.isChecked(), selected, 'la preferencia de audio persiste tras recargar');
+}
+
+
 export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLINK_TEST_ORIGIN) {
   const server = sharedOrigin ? null : createServer();
   let browser;
@@ -83,6 +153,8 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
       throw Error('Sin evidencia de paquetes de voz recibidos con energía audible');
     }
     const initial = await Promise.all([inbound(a), inbound(b)]);
+    await a.getByRole('button', { name: 'Medir conexión de voz' }).click();
+    await a.locator('#voice-measurements').getByText(/Ana.*(Directa|Por retransmisor)/).waitFor();
     await a.locator('[data-game="reflex"]').click();
     await a.locator('#game-dialog[open]').waitFor();
     const activeGame = a.locator('#game-mount button').first();
@@ -94,6 +166,8 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     await b.getByRole('button', { name: 'Salir de la sala' }).click();
     await b.waitForFunction(() => window.qaTracks.length > 0 && window.qaTracks.every(t => t.readyState === 'ended') && window.qaPeers.every(p => p.connectionState === 'closed'));
     await a.waitForFunction(() => !document.querySelector('#members').textContent.includes('Ana'));
+    await socialSmoke(a, b, await client());
+    await audioPreferencesSmoke(a);
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({ initial, during, browser: browser.version() }));
   } finally {

@@ -4,8 +4,8 @@ import { createServer } from '../../server.mjs';
 
 // Use real Node HTTP parsers over local streams, including unbuffered SSE.
 // TCP port binding is unnecessary, and each test owns an independent server.
-export function fixture(t) {
-  const server = createServer();
+export function fixture(t, options) {
+  const server = createServer(options);
   const agent = new http.Agent({ keepAlive: false });
   const streams = new Set();
   agent.createConnection = () => {

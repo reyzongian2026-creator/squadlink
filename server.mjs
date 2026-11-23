@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { createSocial } from './social.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve, extname, sep } from 'node:path';
@@ -67,8 +68,9 @@ function passwordField(data) {
 }
 function roomView(room) {
   if (!room) return null;
-  return {code: room.code, name: room.name, locked: Boolean(room.key),
-    members: [...room.members.values()].map(({id,nick,muted}) => ({id,nick,muted}))};
+  return {code:room.code, name:room.name, locked:Boolean(room.key), createdAt:room.createdAt, ownerId:room.ownerId,
+    members:[...room.members.values()].map(({id,nick,muted,joinedAt,social}) =>
+      ({id,nick,muted,joinedAt,game:social?.game || '',since:social?.since ?? null}))};
 }
 function writeEvent(stream, name, value) {
   if (stream.writableLength > 256 * 1024) { stream.destroy(); return; }
@@ -124,6 +126,8 @@ function signalPayload(data) {
 }
 
 export function createServer(options = {}) {
+  const clock = options.clock ?? Date.now;
+  const social = createSocial({reject, throttle, enter, roomView, broadcastRoom, now:clock});
   const sessions = new Map();
   const rooms = new Map();
   const limits = new Map();
@@ -154,7 +158,9 @@ export function createServer(options = {}) {
   function leave(session) {
     const room = session.room;
     if (!room) return;
+    social.exiting(session, room);
     room.members.delete(session.id);
+    if (room.ownerId === session.id) room.ownerId = room.members.keys().next().value ?? null;
     session.room = null;
     session.pending = [];
     session.stream?.end();
@@ -167,7 +173,9 @@ export function createServer(options = {}) {
     if (session.room === room) return;
     if (session.room) reject(409, 'Sal de tu sala actual para entrar a otra.');
     if (room.members.size >= 5) reject(409, 'La sala está llena.');
+    social.entering(session);
     session.room = room;
+    session.joinedAt = clock();
     session.muted = true;
     session.disconnected = Date.now();
     room.members.set(session.id, session);
@@ -208,6 +216,8 @@ export function createServer(options = {}) {
       if (!session) reject(401, 'Elige tu apodo para continuar.');
       session.used = Date.now();
       if (route === 'GET /api/session') return send(res, 200, {self:{id:session.id,nick:session.nick}, room:roomView(session.room)});
+      if (req.method === 'POST' && path.startsWith('/api/social/'))
+        return send(res, 200, social.handle(path.slice('/api/social/'.length), session, data));
       if (route === 'POST /api/rooms') {
         if (session.room) return send(res, 200, {room:roomView(session.room)});
         throttle('create/' + ip, 40);
@@ -219,7 +229,7 @@ export function createServer(options = {}) {
         let code;
         do { code = Array.from({length:6}, () => alphabet[randomInt(alphabet.length)]).join(''); }
         while (rooms.has(code));
-        const room = {code,name,salt,key,members:new Map()};
+        const room = {code,name,salt,key,ownerId:session.id,createdAt:clock(),members:new Map()};
         rooms.set(code, room);
         enter(session, room);
         return send(res, 201, {room:roomView(room)});
@@ -280,6 +290,7 @@ export function createServer(options = {}) {
   });
   const timer = setInterval(() => {
     const now = Date.now();
+    social.sweep();
     for (const [key, limit] of limits) if (limit.end <= now) limits.delete(key);
     for (const [token, session] of sessions) {
       if (session.stream) {

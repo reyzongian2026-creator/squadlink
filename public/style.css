@@ -826,3 +826,185 @@ dialog input {
     padding: 0 14px;
   }
 }
+
+.social {
+  margin-top: 30px;
+  padding: 22px 26px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.social-head,
+.social-row,
+.social-code,
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.social-head .section-head {
+  margin: 0;
+}
+.social-head h2 {
+  font-size: 26px;
+}
+#social-intro {
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin-top: 8px;
+}
+.social-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 24px;
+  padding: 16px 0;
+}
+.social-contacts,
+.social-presence {
+  min-width: 0;
+}
+.social-code {
+  flex-wrap: wrap;
+  justify-content: start;
+}
+.social-code > span {
+  font-size: 0.81rem;
+  color: var(--muted);
+}
+#friend-id {
+  font: 600 0.85rem var(--mono);
+  letter-spacing: 1px;
+}
+#friend-code {
+  text-transform: uppercase;
+}
+.inline-form label {
+  margin: 10px 0 5px;
+}
+.social-presence .inline-form label {
+  margin-top: 0;
+}
+.inline-form > div {
+  display: flex;
+  gap: 8px;
+}
+.inline-form input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid #4b4555;
+  border-radius: 5px;
+  padding: 8px 11px;
+  color: var(--ink);
+}
+.social-presence .status,
+.social #auto-game {
+  margin-top: 6px;
+}
+.friend-list {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.social-row {
+  padding: 8px 0;
+  flex-wrap: wrap;
+}
+.social-row strong {
+  font-size: 0.91rem;
+  overflow-wrap: anywhere;
+}
+.social-row .status {
+  margin-top: 2px;
+}
+.social-row .dot {
+  display: inline-block;
+  border-radius: 50%;
+  background: #88828f;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+}
+.social-row .dot.online {
+  background: var(--lime);
+}
+.row-actions {
+  flex-wrap: wrap;
+  justify-content: start;
+}
+.settings {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.settings summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.in-match .social {
+  display: none;
+}
+@media (max-width: 850px) {
+  .top-inner {
+    gap: 14px;
+  }
+  nav {
+    gap: 14px;
+  }
+}
+@media (max-width: 700px) {
+  .social-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .social {
+    padding: 17px;
+  }
+  .top nav a[href="#news"] {
+    display: none;
+  }
+}
+@media (max-width: 460px) {
+  .top nav a[href="#arcade"] {
+    display: none;
+  }
+}
+#audio-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  align-items: end;
+  gap: 10px 16px;
+  padding: 10px 0;
+}
+#audio-settings label {
+  font-size: 0.85rem;
+  margin: 0;
+  display: grid;
+  gap: 5px;
+}
+#audio-settings select {
+  font: inherit;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--ink);
+  border-radius: 5px;
+  padding: 8px;
+}
+#audio-settings input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--lime);
+}
+#audio-settings p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+#audio-settings select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 2px;
+}

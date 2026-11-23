@@ -34,6 +34,7 @@
         >
         <nav aria-label="Navegación">
           <a href="#main" class="selected"><i data-icon="lobby"></i>Lobby</a
+          ><a href="#social"><i data-icon="friends"></i>Amigos</a
           ><a href="#arcade"><i data-icon="game"></i>Arcade</a
           ><a href="#news"><i data-icon="signal"></i>Novedades</a>
         </nav>
@@ -79,7 +80,8 @@
           <button class="secondary small" id="compact">Modo partida</button>
         </div>
         <div class="room-info">
-          <span id="privacy"></span><span id="count"></span>
+          <span id="privacy"></span><span id="count"></span
+          ><span id="room-age"></span>
         </div>
         <div class="invite">
           <span>Código de sala <strong id="room-code"></strong></span
@@ -87,6 +89,10 @@
           ><button class="secondary small" id="invite">Copiar enlace</button>
         </div>
         <ul id="members" aria-label="Jugadores en la sala"></ul>
+        <button id="measure-voice" class="secondary small" type="button">
+          Medir conexión de voz
+        </button>
+        <div id="voice-measurements" class="status" role="status"></div>
         <div class="actions">
           <button class="primary" id="mic" aria-pressed="false">
             Activar micrófono</button
@@ -94,6 +100,106 @@
           ><button class="secondary danger" id="leave">Salir de la sala</button>
         </div>
         <p class="status" id="voice-status" role="status"></p>
+        <details id="audio-panel" class="settings">
+          <summary>Ajustes de audio</summary>
+          <div id="audio-settings"></div>
+        </details>
+        <div
+          id="room-requests"
+          class="requests"
+          aria-live="polite"
+          hidden
+        ></div>
+      </section>
+      <section id="social" class="social" aria-labelledby="social-title">
+        <div class="social-head">
+          <div class="section-head">
+            <span class="eyebrow"
+              ><b class="section-mark mint"></b> TU GRUPO</span
+            >
+            <h2 id="social-title">Amigos</h2>
+          </div>
+          <button id="social-login" class="secondary small">
+            Elegir mi apodo
+          </button>
+          <button id="social-retry" class="secondary small" hidden>
+            Reconectar amigos
+          </button>
+        </div>
+        <p id="social-intro">
+          Elige tu apodo para agregar amigos y ver quién está jugando.
+        </p>
+        <div id="social-content" hidden>
+          <div class="social-grid">
+            <div class="social-contacts">
+              <div class="social-code">
+                <span>Mi código de amigo</span
+                ><button
+                  id="copy-friend"
+                  class="secondary small"
+                  aria-label="Copiar mi código de amigo"
+                >
+                  <strong id="friend-id"></strong><i data-icon="copy"></i>
+                </button>
+              </div>
+              <form id="friend-form" class="inline-form">
+                <label for="friend-code">Agregar amigo por código</label>
+                <div>
+                  <input
+                    id="friend-code"
+                    minlength="16"
+                    maxlength="16"
+                    pattern="[a-fA-F0-9]{16}"
+                    required
+                    autocomplete="off"
+                    autocapitalize="characters"
+                    placeholder="Código de 16 caracteres"
+                  /><button id="friend-add" class="primary small">
+                    Agregar
+                  </button>
+                </div>
+              </form>
+              <div id="friend-requests" class="requests"></div>
+            </div>
+            <div class="social-presence">
+              <form id="activity-form" class="inline-form">
+                <label for="player-game">Mi actividad</label>
+                <div>
+                  <input
+                    id="player-game"
+                    maxlength="60"
+                    list="game-options"
+                    placeholder="Juego actual"
+                    autocomplete="off"
+                  /><datalist id="game-options">
+                    <option value="VALORANT"></option>
+                    <option value="Counter-Strike 2"></option>
+                    <option value="Fortnite"></option>
+                    <option value="League of Legends"></option>
+                    <option value="Minecraft"></option></datalist
+                  ><button id="game-save" class="secondary small">
+                    Guardar
+                  </button>
+                </div>
+              </form>
+              <p id="self-activity" class="status"></p>
+              <button
+                id="auto-game"
+                class="secondary small"
+                aria-pressed="false"
+                hidden
+              >
+                Detectar juego en Windows
+              </button>
+              <p id="game-privacy" class="status">
+                Tus amigos y los participantes de tu sala pueden ver tu actividad.
+              </p>
+            </div>
+          </div>
+          <div id="friends" class="friend-list"></div>
+          <div id="room-admission" class="requests" aria-live="polite"></div>
+        </div>
+        <p id="social-status" class="status" role="status"></p>
       </section>
       <div class="lower">
         <section id="arcade" aria-labelledby="arcade-title">
@@ -196,13 +302,15 @@
             placeholder="ABC123"
           />
         </div>
-        <label for="password">Clave <span>(opcional)</span></label
-        ><input
-          id="password"
-          type="password"
-          maxlength="64"
-          autocomplete="off"
-        />
+        <div id="password-field">
+          <label for="password">Clave <span>(opcional)</span></label
+          ><input
+            id="password"
+            type="password"
+            maxlength="64"
+            autocomplete="off"
+          />
+        </div>
         <p class="error" id="entry-error" role="alert"></p>
         <button id="submit-entry" class="primary wide" type="submit">
           Crear sala
