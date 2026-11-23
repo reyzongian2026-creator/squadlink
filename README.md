@@ -21,6 +21,15 @@ En **Ajustes → Rendimiento** puedes cambiar de perfil durante una sesión. **B
 
 La aplicación mantiene la presencia de un perfil vinculado. Si un invitado vuelve al directorio tras salir de un panel, el cliente libera el motor cuando ha terminado cualquier entrada a una sala. El artefacto incluye una captura del directorio con dos salas de prueba. El registro de compilación muestra la memoria del árbol de procesos y el porcentaje de CPU en reposo, medidos en un equipo de prueba de Windows.
 
+### Consumo medido en Windows
+
+| Escenario | Bajo consumo | Experiencia completa |
+| --- | ---: | ---: |
+| Amigos, como invitado | 72,2 MiB | 338,5 MiB |
+| Llamada con audio bidireccional | 396,9 MiB | 414,5 MiB |
+
+El directorio inicial ocupó 70,0 MiB. Son muestras de la suma de memoria residente de los procesos del cliente en un equipo Windows de cuatro procesadores lógicos. Para la llamada se usaron dos clientes y audio sintético en lugar de micrófono físico. Durante la prueba aumentaron tanto los paquetes como la energía del audio recibido en ambos sentidos al cambiar de perfil. Queda pendiente medir FPS con un juego abierto en hardware de gama baja. [Ver ejecución y resultados](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45124762306).
+
 ## La primera partida
 
 1. Abre Squadlink y elige tu apodo. El dispositivo lo recuerda para la próxima sesión.
