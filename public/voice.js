@@ -7,6 +7,7 @@ export class VoiceRoom {
     this.peers = new Map();
     this.members = new Set();
     this.stream = null;
+    this.captures = new Set();
     this.captureRequest = 0;
     this.settings = readAudioSettings();
     this.wantsMicrophone = false;
@@ -173,18 +174,31 @@ export class VoiceRoom {
       next.getTracks().forEach(t => t.stop());
       return false;
     }
+    this.captures.add(next);
     const old = this.stream;
     this.stream = next;
     try { await this.replaceSenders(next.getAudioTracks()[0], request); }
     catch (err) {
       if (request === this.captureRequest && !this.closed) {
         this.stream = old;
-        try { await this.replaceSenders(old?.getAudioTracks()[0] ?? null, request); } finally { next.getTracks().forEach(t => t.stop()); }
-      } else old?.getTracks().forEach(t => t.stop());
+        try { await this.replaceSenders(old?.getAudioTracks()[0] ?? null, request); } finally { this.releaseCapture(next); }
+      } else this.releaseCapture(old);
       throw err;
     }
-    old?.getTracks().forEach(t => t.stop());
+    this.releaseCapture(old);
     return this.stream === next && !this.closed;
+  }
+
+  releaseCapture(stream) {
+    if (this.captures.delete(stream)) {
+      for (const track of stream.getTracks()) track.stop();
+    }
+  }
+
+  stopCaptures() {
+    // During a device switch, peers can temporarily be using different inputs.
+    for (const stream of this.captures) this.releaseCapture(stream);
+    this.stream = null;
   }
 
   async setMicrophone(enabled) {
@@ -199,8 +213,7 @@ export class VoiceRoom {
         throw err;
       }
     }
-    this.stream?.getTracks().forEach(t => t.stop());
-    this.stream = null;
+    this.stopCaptures();
     await this.replaceSenders(null, request);
     return false;
   }
@@ -263,7 +276,6 @@ export class VoiceRoom {
     this.closed = true;
     this.captureRequest++;
     for (const id of this.peers.keys()) this.removePeer(id);
-    this.stream?.getTracks().forEach(track => track.stop());
-    this.stream = null;
+    this.stopCaptures();
   }
 }

@@ -149,3 +149,38 @@ test('output change routes every remote participant and restores all outputs whe
   await assert.rejects(room.configureAudio({ outputId: 'bad' }), /salida/);
   assert.deepEqual([room.settings.outputId, a.id, b.id], ['headset', 'headset', 'headset']);
 });
+
+for (const action of ['mute', 'leave']) {
+  test(action + ' releases both microphones while a device change is pending', async t => {
+    const original = fakeTrack();
+    const replacement = fakeTrack();
+    installMedia(t, async ({audio}) => fakeStream(audio.deviceId ? replacement : original));
+    const room = createRoom();
+    await room.setMicrophone(true);
+
+    const started = Promise.withResolvers();
+    const resume = Promise.withResolvers();
+    room.peers.set('A', {
+      incoming: Promise.resolve(),
+      pc: {close() {}},
+      audio: {pause() {}},
+      transceiver: {sender: {async replaceTrack(track) {
+        if (track === replacement) {
+          started.resolve();
+          await resume.promise;
+        }
+      }}}
+    });
+    const change = room.configureAudio({inputId:'second'});
+    await started.promise;
+    const stopped = action === 'leave' ? room.close() : room.setMicrophone(false);
+    try {
+      assert.equal(original.readyState, 'ended');
+      assert.equal(replacement.readyState, 'ended');
+    } finally {
+      resume.resolve();
+      await Promise.all([stopped, change]);
+      room.close();
+    }
+  });
+}
