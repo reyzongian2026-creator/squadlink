@@ -28,7 +28,7 @@ function App(){
   return()=>{alive=false;controller.abort()};},[server,prefs,state?.joined]);
  async function run(work){setError('');try{return await work()}catch(e){setError(e.message.replace(/^Error invoking remote method.*?Error: /,''));}}
  function open(key,code){run(()=>api.open(code?{key,code}:key))}
- function tile([key,title,icon]){return <button className={'tile tile-'+key} key={key} onClick={()=>open(key)}><span className="glyph"><Icon id={icon}/></span><b>{title}</b><span className="chevron">›</span></button>}
+ function tile([key,title,icon]){return <button className={'tile tile-'+key} key={key} onClick={()=>open(key)}><span className="glyph"><Icon id={icon}/></span><b>{title}</b><span className="chevron" aria-hidden="true">›</span></button>}
  if(!state)return <main><p role="status">{error||'Abriendo Squadlink…'}</p></main>;
  return <><header className="brand"><div><img src="/icon-192.png" alt=""/><b>Squadlink</b></div>{!prefs&&<button className="identity" onClick={()=>open('player')}><span>{(state.nickname||'J').slice(0,1).toUpperCase()}</span>{state.nickname||'Mi jugador'}</button>}</header>
  {prefs?<main className="config"><h1>Ajustes</h1>

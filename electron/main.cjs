@@ -154,6 +154,8 @@ async function start(){
   done(microphone);
  });
  Menu.setApplicationMenu(null);home=createHome();
+ // Restore presence and membership for returning players. Guests only start the voice renderer on demand.
+ if((await ses.cookies.get({url:prefs.server,name:'squad_session'})).length)ensureView();
 }
 if(locked)app.whenReady().then(start);
 app.on('window-all-closed',()=>app.quit());

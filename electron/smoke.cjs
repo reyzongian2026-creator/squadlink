@@ -11,11 +11,13 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  try{
  let available=false;for(let i=0;i<100;i++){try{available=(await fetch('http://127.0.0.1:4179/api/directory')).ok;}catch{}if(available)break;await delay(100);}assert.ok(available);
  app=await _electron.launch({executablePath,args:['--user-data-dir='+profile],timeout:45000});
- const home=await app.firstWindow();
+ app.context().setDefaultTimeout(15000);
+ const home=await app.firstWindow({timeout:20000});console.log('Ventana principal',home.url());
  const diagnostics=page=>{page.on('pageerror',err=>console.log('RENDER',err.message));page.on('console',m=>{if(m.type()==='error')console.log('RENDER',m.text())});};
  diagnostics(home);app.context().on('page',diagnostics);
  const capture=path.resolve(__dirname,'../artifacts/capturas');fs.mkdirSync(capture,{recursive:true});
  await home.getByRole('button',{name:'Crear sala',exact:true}).waitFor();
+ assert.equal((await home.evaluate(()=>window.squad.state())).server,'http://127.0.0.1:4179');
  await home.getByText('Todavía no hay salas públicas.').waitFor();
  await home.screenshot({path:path.join(capture,'Inicio-Moderno.png')});
  async function memory(label){const values=await app.evaluate(({app})=>app.getAppMetrics().map(m=>m.memory.workingSetSize));console.log('RAM '+label+' MiB: '+(values.reduce((a,b)=>a+b,0)/1024).toFixed(1));}
@@ -26,11 +28,11 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await home.getByRole('button',{name:'Experiencia completa'}).waitFor();
  await config.getByRole('button',{name:'Bajo consumo'}).click();await config.close();
  const fixture=fs.readFileSync(path.join(__dirname,'../test/windows/audio-fixture.js'),'utf8');
- await app.context().addInitScript({content:fixture});
+ await app.context().addInitScript({content:"if(location.hostname==='app' && navigator.mediaDevices){"+fixture+"\n}"});
  await home.getByRole('button',{name:'Crear sala',exact:true}).click();
  let space;
  for(let i=0;i<120&&!space;i++){space=app.context().pages().find(p=>p.url().startsWith('squad://app/'));if(!space)await delay(100);}
- assert.ok(space,'El motor debe abrir su ventana de Electron.');
+ console.log("Motor de sala",space?.url());assert.ok(space,'El motor debe abrir su ventana de Electron.');
  await space.locator('#entry[open]').waitFor();await space.locator('#nickname').fill('Prueba Electron');await space.locator('#name').fill('Escuadra Lima');
  await space.screenshot({path:path.join(capture,'Crear-sala-Moderna.png')});await space.locator('#submit-entry').click();
  await home.getByRole('heading',{name:'Escuadra Lima'}).waitFor();
@@ -38,7 +40,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await home.getByRole('button',{name:'Activar micrófono',exact:true}).click();
  await home.getByRole('button',{name:'Silenciar',exact:true}).waitFor();
  browser=await chromium.launch({channel:'msedge',headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
- const peer=await browser.newPage();await peer.addInitScript({content:fixture});await peer.goto('http://127.0.0.1:4179');
+ const peer=await browser.newPage();peer.setDefaultTimeout(15000);await peer.addInitScript({content:fixture});await peer.goto('http://127.0.0.1:4179');
  await peer.locator('#join').click();await peer.locator('#nickname').fill('Amigo');await peer.locator('#code').fill(code);await peer.locator('#submit-entry').click();await peer.locator('#mic').click();
  const sample=p=>p.evaluate(async()=>{for(const pc of window.testPeers){for(const stat of (await pc.getStats()).values()){if(stat.type==='inbound-rtp'&&stat.kind==='audio')return stat.totalAudioEnergy||0;}}return 0;});
  async function audio(previous){let values;for(let i=0;i<100;i++){values=await Promise.all([sample(space),sample(peer)]);if(values.every((v,j)=>v>previous[j]))return values;await delay(250);}throw Error('Falta voz bidireccional '+JSON.stringify(values));}
