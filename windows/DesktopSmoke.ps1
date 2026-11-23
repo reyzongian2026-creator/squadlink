@@ -288,7 +288,7 @@ try {
   $root = Open-Option 'Minijuegos' 'Minijuegos · Squadlink'
   Find-Control $root 'Reflejos' $true | Out-Null
   $root = Open-Option 'Clasificación' 'Clasificación · Squadlink'
-  Find-Control $root 'Ranking arcade' | Out-Null
+  Find-Control $root 'Clasificación del arcade' | Out-Null
   $root = Open-Option 'Dispositivos' 'Dispositivos · Squadlink'
   Find-Control $root 'Ajustes de voz' | Out-Null
   Find-Control $root 'Ganancia automática del micrófono' | Out-Null
