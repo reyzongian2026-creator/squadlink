@@ -5,7 +5,7 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 $profileDir = Join-Path $env:LOCALAPPDATA 'Squadlink Preview'
 New-Item -ItemType Directory -Force $profileDir | Out-Null
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--use-fake-device-for-media-stream --use-fake-ui-for-media-stream --autoplay-policy=no-user-gesture-required'
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-address=127.0.0.1 --remote-debugging-port=9227 --use-fake-device-for-media-stream --use-fake-ui-for-media-stream --autoplay-policy=no-user-gesture-required'
 $env:HOST = '127.0.0.1'
 $env:PORT = '4179'
 'http://127.0.0.1:4179' | Set-Content (Join-Path $profileDir 'server.txt')
@@ -81,9 +81,9 @@ function Measure-Idle($label) {
   Write-Output "METRICA $label | RAM_MiB=$mib CPU_pct=$cpuPercent WebView2=$children Cores=$([Environment]::ProcessorCount)"
   if (($label.StartsWith('directorio-') -or $label -eq 'amigos-invitado-bajo') -and $children -ne 0) { throw 'El directorio inició WebView2.' }
 }
-function Save-Window($handle) {
+function Save-Window($handle, $file = 'Squadlink-escritorio.png') {
   Add-Type -AssemblyName System.Drawing
-  Add-Type -TypeDefinition @"
+  if (!('WindowImage' -as [type])) { Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 public static class WindowImage {
@@ -92,13 +92,14 @@ public static class WindowImage {
     public struct Rect { public int Left, Top, Right, Bottom; }
 }
 "@
+  }
   $rect = New-Object WindowImage+Rect
   if(![WindowImage]::GetWindowRect($handle,[ref]$rect)){ throw 'Falta el tamaño de la ventana.' }
   $image=[Drawing.Bitmap]::new(($rect.Right-$rect.Left),($rect.Bottom-$rect.Top))
   try {
     $g=[Drawing.Graphics]::FromImage($image)
     try { $dc=$g.GetHdc(); try { if(![WindowImage]::PrintWindow($handle,$dc,2)){throw 'La ventana no se pudo capturar.'} } finally {$g.ReleaseHdc($dc)} } finally {$g.Dispose()}
-    $image.Save((Join-Path (Get-Location) 'artifacts/installer/Squadlink-escritorio.png'),[Drawing.Imaging.ImageFormat]::Png)
+    $image.Save((Join-Path (Get-Location) ('artifacts/installer/'+$file)),[Drawing.Imaging.ImageFormat]::Png)
   } finally {$image.Dispose()}
 }
 try {
@@ -133,6 +134,7 @@ try {
   Invoke-Control $root 'Elegir mi apodo'
   Find-Control $root 'Tu apodo' | Out-Null
   Set-Mode $root 'Experiencia completa'
+  Save-Window $app.MainWindowHandle 'Ajustes-rendimiento.png'
   Invoke-Control $root 'Comunidad'
   Find-Control $root 'Elegir mi apodo' | Out-Null
   Measure-Idle 'amigos-completo'
@@ -176,9 +178,12 @@ try {
   $roomCode = $Matches[1]
   $sync = Join-Path $env:RUNNER_TEMP 'squadlink-voice-bench'
   New-Item -ItemType Directory -Force $sync | Out-Null
+  $voicePeer = Start-Process node -ArgumentList ('test/windows/live-voice.mjs ' + $roomCode + ' "' + $sync + '"') -PassThru -RedirectStandardOutput (Join-Path $sync 'peer.log') -RedirectStandardError (Join-Path $sync 'peer.err')
+  $deadline = [DateTime]::UtcNow.AddSeconds(40)
+  while (!(Test-Path (Join-Path $sync 'source-ready')) -and !$voicePeer.HasExited -and [DateTime]::UtcNow -lt $deadline) {Start-Sleep -Milliseconds 200}
+  if (!(Test-Path (Join-Path $sync 'source-ready'))) {Get-Content (Join-Path $sync 'peer.err'); throw 'No se pudo preparar la fuente sintética de audio.'}
   Invoke-Control $root 'Activar micrófono'
   Find-Control $root 'Silenciar micrófono' | Out-Null
-  $voicePeer = Start-Process node -ArgumentList ('test/windows/live-voice.mjs ' + $roomCode + ' "' + $sync + '"') -PassThru -RedirectStandardOutput (Join-Path $sync 'peer.log') -RedirectStandardError (Join-Path $sync 'peer.err')
   $deadline = [DateTime]::UtcNow.AddSeconds(80)
   while (!(Test-Path (Join-Path $sync 'connected')) -and !$voicePeer.HasExited -and [DateTime]::UtcNow -lt $deadline) {Start-Sleep -Milliseconds 200}
   if (!(Test-Path (Join-Path $sync 'connected'))) {Get-Content (Join-Path $sync 'peer.err'); throw 'No llegó audio al segundo cliente.'}
