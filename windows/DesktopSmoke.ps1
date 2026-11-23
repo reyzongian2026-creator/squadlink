@@ -293,6 +293,7 @@ try {
   Find-Control $root 'Ajustes de voz' | Out-Null
   Find-Control $root 'Ganancia automática del micrófono' | Out-Null
   Find-Control $root 'Volumen de las voces que escucho' | Out-Null
+  Save-Window ([IntPtr]$root.Current.NativeWindowHandle) 'Dispositivos-Windows.png'
   Invoke-Control $root 'Grabar prueba de 4 segundos'
   Invoke-Control $root 'Escuchar mi prueba'
   Find-Control $root 'Prueba terminada.' | Out-Null
@@ -316,6 +317,7 @@ try {
   $nick.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Prueba')
   $name = Find-TypedControl $root 'Nombre de la sala' ([System.Windows.Automation.ControlType]::Edit)
   $name.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Canal de prueba')
+  Save-Window ([IntPtr]$root.Current.NativeWindowHandle) 'Crear-sala-Windows.png'
   Write-Host 'Apodo y nombre de sala ingresados'
   $submit = Find-TypedControl $root 'Crear sala' ([System.Windows.Automation.ControlType]::Button)
   $submit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()

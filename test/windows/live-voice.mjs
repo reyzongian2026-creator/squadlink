@@ -36,13 +36,13 @@ try {
     if(first.every(x=>x>0)) break;
     await delay(250);
   }
-  assert.ok(first.every(x=>x>0), 'El cliente debe recibir voz sintética del instalador.');
+  assert.ok(first.every(x=>x>0), `Falta audio en los dos sentidos (paquetes y energía, navegador y escritorio): ${JSON.stringify(first)}`);
   await writeFile(join(directory,'connected'),String(first[0]));
   for(let i=0;i<240;i++){
     if(await access(join(directory,'finish')).then(()=>true,()=>false))break;
     await delay(500);
   }
   const last=(await Promise.all([incoming(page),fetch('http://127.0.0.1:4179/api/test-audio').then(r=>r.json())])).flat();
-  assert.ok(last.every((v,i)=>v>first[i]), 'La voz debe continuar después del cambio de perfil.');
+  assert.ok(last.every((v,i)=>v>first[i]), `La voz debe continuar tras cambiar de perfil: ${JSON.stringify({first,last})}`);
   console.log('Voz recibida desde Windows durante ambos perfiles.', first, last);
 } finally { await browser.close(); }

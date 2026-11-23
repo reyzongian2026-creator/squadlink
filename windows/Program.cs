@@ -191,7 +191,7 @@ internal sealed class LobbyWindow : Form
     }
     private void EnsureEngineWindow()
     {
-        if (workspace.Parent==null) { var engine=WindowFor("lobby-detail","Mi sala"); engine.Content.Controls.Add(workspace); _=engine.Handle; _=workspace.Handle; }
+        if (workspace.Parent==null) { var engine=WindowFor("lobby-detail","Mi sala · Detalles"); engine.Content.Controls.Add(workspace); _=engine.Handle; _=workspace.Handle; }
     }
     private static void Reveal(Form window)
     {
@@ -201,7 +201,13 @@ internal sealed class LobbyWindow : Form
     private void NativeWindow(string key,string title,Control panel)
     {
         var window=WindowFor(key,title);
-        if (panel.Parent!=window.Content) window.Content.Controls.Add(panel);
+        if (panel == lite && navigation.Joined)
+        {
+            if (workspace.Parent != window.Content) window.Content.Controls.Add(workspace);
+            if (lite.Parent != workspace) workspace.Controls.Add(lite);
+            Present(lite);
+        }
+        else if (panel.Parent!=window.Content) window.Content.Controls.Add(panel);
         panel.Visible=true; Reveal(window);
     }
     private void DetailWindow(string key,string title)
@@ -209,6 +215,11 @@ internal sealed class LobbyWindow : Form
         var window=WindowFor(key,title);
         if (detailWindow!=null && detailWindow!=window) detailWindow.Hide();
         detailWindow=window;
+        if (lite.Parent == workspace && windows.TryGetValue("lobby", out var roomWindow))
+        {
+            roomWindow.Content.Controls.Add(lite);
+            lite.Visible = true;
+        }
         if (workspace.Parent!=window.Content) window.Content.Controls.Add(workspace);
         Reveal(window);
     }
@@ -240,7 +251,7 @@ internal sealed class LobbyWindow : Form
     {
         if (selected==view && page=="settings") selected=audioPanel;
         foreach (Control control in workspace.Controls)
-            control.Visible = control == selected;
+            control.Visible = control == selected || (control == view && (selected == audioPanel || selected == lite));
         selected.BringToFront();
     }
 
@@ -302,7 +313,9 @@ internal sealed class LobbyWindow : Form
         {
             Directory.CreateDirectory(dataDir);
             if (client.Parent == null) { workspace.Controls.Add(client); client.Visible = false; }
-            var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(dataDir, "WebView2"));
+            // Playback is initiated by native Windows buttons, outside Chromium's gesture tracking.
+            var options = new CoreWebView2EnvironmentOptions("--autoplay-policy=no-user-gesture-required");
+            var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(dataDir, "WebView2"), options);
             if (!IsCurrent(client)) return;
             await client.EnsureCoreWebView2Async(env);
             if (!IsCurrent(client)) return;
