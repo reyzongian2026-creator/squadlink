@@ -44,7 +44,7 @@ internal sealed class DesktopNavigation : UserControl
         }
         groupName.Height = 62; groupName.Dock = DockStyle.Top;
         var call = Stack(Surface); call.Dock = DockStyle.Bottom; call.Height = 150;
-        var shortcutHint = Caption(MicShortcut, 9);
+        var shortcutHint = Caption(MicShortcut, 9, FontStyle.Regular);
         shortcutHint.ForeColor = Muted; shortcutHint.Padding = new Padding(9, 0, 0, 0);
         mic.AccessibleDescription = $"Atajo en los controles de Windows: {MicShortcut}.";
         tips.SetToolTip(mic, mic.AccessibleDescription);
