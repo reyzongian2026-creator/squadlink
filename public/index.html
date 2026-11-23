@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111019" />
+    <meta
+      name="description"
+      content="Crea una sala de voz para tus amigos, comparte el código y abre el arcade mientras esperas la partida."
+    />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta property="og:title" content="Squadlink · Lobby de voz" />
+    <meta
+      property="og:description"
+      content="Voz para tu grupo y minijuegos para la cola."
+    />
+    <meta property="og:image" content="/icon-192.png" />
+    <meta name="twitter:card" content="summary" />
+    <title>Squadlink · Lobby de voz</title>
+    <link rel="icon" href="/icon-192.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+    <script type="module" src="/install.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Ir al contenido</a>
+    <header class="top">
+      <div class="wrap top-inner">
+        <a class="wordmark" href="#main" aria-label="Squadlink, inicio"
+          ><span class="brand-mark" aria-hidden="true"
+            ><i></i><i></i><i></i></span
+          >SQUAD<span>LINK</span></a
+        >
+        <nav aria-label="Navegación">
+          <a href="#main" class="selected"><i data-icon="lobby"></i>Lobby</a
+          ><a href="#arcade"><i data-icon="game"></i>Arcade</a
+          ><a href="#news"><i data-icon="signal"></i>Novedades</a>
+        </nav>
+        <div class="identity">
+          <button id="install-app" class="secondary small" hidden>
+            Instalar app</button
+          ><span id="avatar" aria-hidden="true">S</span
+          ><span id="profile">Invitado</span>
+        </div>
+      </div>
+    </header>
+    <main id="main" tabindex="-1" class="wrap">
+      <div class="title-row">
+        <div>
+          <span class="eyebrow"
+            ><b class="section-mark"></b> CENTRO DE JUEGO</span
+          >
+          <h1>Tu lobby<span>.</span></h1>
+        </div>
+        <span id="connection" class="connection"><b></b>Sin sala</span>
+      </div>
+      <section class="hero" id="home" aria-labelledby="hero-title">
+        <div class="landscape" aria-hidden="true"></div>
+        <div class="hero-copy">
+          <div class="label"><i data-icon="headphones"></i> CHAT DE VOZ</div>
+          <h2 id="hero-title">Reúne a tu <em>squad.</em></h2>
+          <p>Abre una sala de voz y comparte el código con tus amigos.</p>
+          <div class="actions">
+            <button class="primary" id="create">
+              <i data-icon="plus"></i>Crear sala</button
+            ><button class="secondary" id="join">
+              <i data-icon="enter"></i>Unirme con código
+            </button>
+          </div>
+        </div>
+      </section>
+      <section id="room" class="room-panel" aria-labelledby="room-name" hidden>
+        <div class="room-top">
+          <div>
+            <div class="label"><i data-icon="headphones"></i> SALA DE VOZ</div>
+            <h2 id="room-name"></h2>
+          </div>
+          <button class="secondary small" id="compact">Modo partida</button>
+        </div>
+        <div class="room-info">
+          <span id="privacy"></span><span id="count"></span>
+        </div>
+        <div class="invite">
+          <span>Código de sala <strong id="room-code"></strong></span
+          ><button class="secondary small" id="copy">Copiar código</button
+          ><button class="secondary small" id="invite">Copiar enlace</button>
+        </div>
+        <ul id="members" aria-label="Jugadores en la sala"></ul>
+        <div class="actions">
+          <button class="primary" id="mic" aria-pressed="false">
+            Activar micrófono</button
+          ><button class="secondary" id="listen" hidden>Reanudar audio</button
+          ><button class="secondary danger" id="leave">Salir de la sala</button>
+        </div>
+        <p class="status" id="voice-status" role="status"></p>
+      </section>
+      <div class="lower">
+        <section id="arcade" aria-labelledby="arcade-title">
+          <div class="section-head">
+            <span class="eyebrow"
+              ><b class="section-mark violet"></b> MIENTRAS ESPERAS</span
+            >
+            <h2 id="arcade-title">Arcade</h2>
+          </div>
+          <div class="games">
+            <button class="game-card" data-game="reflex">
+              <span class="art art-target" aria-hidden="true"
+                ><span class="scope"><b></b></span><i class="target-line"></i
+              ></span>
+              <span class="game-body"
+                ><small>VELOCIDAD</small><strong>Reflejos</strong
+                ><span>Reacciona a la señal.</span><i data-icon="play"></i
+              ></span>
+            </button>
+            <button class="game-card" data-game="sequence">
+              <span class="art art-memory" aria-hidden="true"
+                ><span class="tiles"><b></b><b></b><b></b><b></b></span
+              ></span>
+              <span class="game-body"
+                ><small>CONCENTRACIÓN</small><strong>Memoria</strong
+                ><span>Repite la secuencia.</span><i data-icon="play"></i
+              ></span>
+            </button>
+          </div>
+        </section>
+        <section id="news" aria-labelledby="news-title">
+          <div class="section-head">
+            <span class="eyebrow"
+              ><b class="section-mark mint"></b> DEL LOBBY</span
+            >
+            <h2 id="news-title">Novedades</h2>
+          </div>
+          <div class="news-card">
+            <div class="news-item">
+              <i data-icon="key"></i>
+              <div>
+                <h3>Salas bajo llave</h3>
+                <p>
+                  Añade una clave al crear tu sala y compártela con tu grupo.
+                </p>
+              </div>
+            </div>
+            <div class="news-item">
+              <i data-icon="focus"></i>
+              <div>
+                <h3>Modo partida</h3>
+                <p>
+                  Reduce el lobby a los controles de voz cuando comience el
+                  match.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <footer>
+        <span class="footer-logo">SQUADLINK</span
+        ><span>Lobby de voz y arcade</span>
+      </footer>
+    </main>
+    <dialog id="entry" aria-labelledby="entry-title">
+      <form id="entry-form">
+        <button
+          type="button"
+          class="x"
+          data-dismiss="entry"
+          aria-label="Cerrar"
+        >
+          ×
+        </button>
+        <div class="label"><i data-icon="headphones"></i> CHAT DE VOZ</div>
+        <h2 id="entry-title">Crear sala</h2>
+        <label for="nickname">Tu apodo</label
+        ><input
+          id="nickname"
+          name="nick"
+          autocomplete="nickname"
+          maxlength="24"
+          required
+          placeholder="Cómo te llaman tus amigos"
+        />
+        <div id="name-field">
+          <label for="name">Nombre de la sala</label
+          ><input id="name" maxlength="48" placeholder="Lobby del squad" />
+        </div>
+        <div id="code-field" hidden>
+          <label for="code">Código de sala</label
+          ><input
+            id="code"
+            maxlength="6"
+            minlength="6"
+            pattern="[a-zA-Z0-9]{6}"
+            autocapitalize="characters"
+            autocomplete="off"
+            placeholder="ABC123"
+          />
+        </div>
+        <label for="password">Clave <span>(opcional)</span></label
+        ><input
+          id="password"
+          type="password"
+          maxlength="64"
+          autocomplete="off"
+        />
+        <p class="error" id="entry-error" role="alert"></p>
+        <button id="submit-entry" class="primary wide" type="submit">
+          Crear sala
+        </button>
+      </form>
+    </dialog>
+    <dialog id="game-dialog" aria-labelledby="game-title">
+      <button
+        class="x"
+        data-dismiss="game-dialog"
+        aria-label="Cerrar minijuego"
+      >
+        ×
+      </button>
+      <div class="label"><i data-icon="game"></i> ARCADE</div>
+      <h2 id="game-title"></h2>
+      <div id="game-mount"></div>
+    </dialog>
+    <p id="feedback" class="toast" role="status" hidden></p>
+  </body>
+</html>

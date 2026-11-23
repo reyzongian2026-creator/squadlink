@@ -1,0 +1,60 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4179
+      PUBLIC_ORIGIN: https://${APP_DOMAIN:?Falta APP_DOMAIN}
+      ICE_SERVERS_JSON: '[{"urls":"stun:${TURN_DOMAIN:?Falta TURN_DOMAIN}:3478"}]'
+      TURN_URLS: turn:${TURN_DOMAIN}:3478?transport=udp,turn:${TURN_DOMAIN}:3478?transport=tcp
+      TURN_SECRET: ${TURN_SECRET:?Falta TURN_SECRET}
+  web:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - tls_data:/data
+      - tls_config:/config
+  turn:
+    image: coturn/coturn:4.19.2-r0
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - -n
+      - --listening-port=3478
+      - --listening-ip=${TURN_BIND_IP:?Falta la IPv4 de la interfaz}
+      - --relay-ip=${TURN_BIND_IP}
+      - --external-ip=${TURN_PUBLIC_IP:?Falta la IPv4 pública}
+      - --realm=${TURN_DOMAIN}
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SECRET}
+      - --fingerprint
+      - --min-port=49160
+      - --max-port=49200
+      - --total-quota=60
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --no-multicast-peers
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=100.64.0.0-100.127.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+      - --log-file=stdout
+volumes:
+  tls_data:
+  tls_config:
