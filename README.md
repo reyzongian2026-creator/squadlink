@@ -6,9 +6,17 @@ Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte
 
 ## Squadlink Moderno para Windows
 
+**[Descargar Squadlink Moderno para Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45158949110/artifacts/14810775040)** · [Capturas del escritorio](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45158949110/artifacts/14808664864)
+
+Inicia sesión en GitHub, extrae el ZIP y ejecuta `Squadlink-Moderno-Setup-x64.exe`.
+
+![Inicio de Squadlink Moderno en Windows, con salas y accesos directos](docs/media/inicio-moderno.png)
+
 La nueva edición de prueba usa Electron y React. El inicio muestra la sala activa, las salas públicas y accesos a Amigos, Mi jugador, Minijuegos y Clasificación. Crear una sala o entrar con código abre una ventana de escritorio. Las herramientas comparten el motor de voz y los ajustes de audio durante la llamada. Los perfiles se cambian desde **Ajustes**.
 
 Con tu sesión de GitHub abierta, entra en la última compilación correcta y elige **Squadlink-Electron-Windows-x64**. Extrae el ZIP y ejecuta `Squadlink-Moderno-Setup-x64.exe`. Las capturas de la instalación están en **Capturas-Squadlink-Moderno**. [Compilaciones de Squadlink Moderno](https://github.com/reyzongian2026-creator/squadlink/actions/workflows/electron.yml?query=branch%3Apreview%2Felectron-escritorio)
+
+En Windows de pruebas, los procesos de Electron sumaron 300,1 MiB en el inicio y 545,2 MiB con audio sintético bidireccional en modo Bajo consumo. La edición ligera de Windows Forms está disponible más abajo para equipos con memoria limitada.
 
 El instalador crea el acceso **Squadlink Moderno** y utiliza un perfil propio. Para compilar la interfaz desde el código, usa Node.js 24 y ejecuta `npm ci`, `npm run build` y `npm start` en `electron/`.
 
