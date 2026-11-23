@@ -11,6 +11,8 @@ $env:PORT = '4179'
 $serverProcess = Start-Process node -ArgumentList 'test/windows/voice-lobby.mjs' -PassThru -WindowStyle Hidden
 $app = $null
 $voicePeer = $null
+$directoryHosts = [System.Net.Http.HttpClient]::new()
+$hostStreams = [Collections.Generic.List[System.Net.Http.HttpResponseMessage]]::new()
 function Find-Control($root, $name, [bool]$partial = $false) {
   $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $name)
   if ($partial) { $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button) }
@@ -130,6 +132,15 @@ try {
     $fixture = [Microsoft.PowerShell.Commands.WebRequestSession]::new()
     Invoke-RestMethod -Uri 'http://127.0.0.1:4179/api/session' -Method Post -ContentType 'application/json' -Body (@{nick='Jugador QA'}|ConvertTo-Json) -WebSession $fixture | Out-Null
     Invoke-RestMethod -Uri 'http://127.0.0.1:4179/api/rooms' -Method Post -ContentType 'application/json' -Body (@{name=$example[0];directory=@{published=$true;game=$example[1];level=$example[2]}}|ConvertTo-Json) -WebSession $fixture | Out-Null
+    # Real room hosts keep their events connection open while listed in the directory.
+    $events = [Uri]'http://127.0.0.1:4179/api/events'
+    $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, $events)
+    $request.Headers.Add('Cookie', $fixture.Cookies.GetCookieHeader($events))
+    try {
+      $response = $directoryHosts.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+      [void]$response.EnsureSuccessStatusCode()
+      $hostStreams.Add($response)
+    } finally { $request.Dispose() }
   }
   # Keep the installer and its installed directory intact. Supply only the audio input
   # and RTP counters in a private test copy of the published desktop client.
@@ -320,6 +331,8 @@ try {
   Write-Output 'Perfiles, memoria, continuidad de sala y persistencia tras reinicio verificados.'
   Write-Output 'Verificados directorio, grupos, secciones, perfil, clasificación, audio y entrada por código.'
 } finally {
+  foreach ($response in $hostStreams) { $response.Dispose() }
+  $directoryHosts.Dispose()
   if ($voicePeer -and !$voicePeer.HasExited) { $voicePeer.Kill(); $voicePeer.WaitForExit() }
   if ($app -and !$app.HasExited) { $app.Kill(); $app.WaitForExit() }
   if (!$serverProcess.HasExited) { $serverProcess.Kill(); $serverProcess.WaitForExit() }
