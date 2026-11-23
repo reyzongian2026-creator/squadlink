@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.ComponentModel;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -20,9 +22,19 @@ internal sealed class LobbyWindow : Form
     private readonly WebView2 view = new() { Dock = DockStyle.Fill };
     private const string SharedLobby = "https://squadlink-lobby.onrender.com";
     private Uri? origin;
+    private readonly System.Windows.Forms.Timer gameTimer = new() { Interval = 30_000 };
+    private bool gameEnabled;
+    private bool scanRunning;
+    private bool gamePromptShown;
+    private bool prompting;
+    private int documentVersion;
+    private string? currentGame;
+    private long? gameSince;
 
     public LobbyWindow()
     {
+        gameTimer.Tick += async (_, _) => await ScanGame();
+        FormClosed += (_, _) => { ResetDetector(); gameTimer.Dispose(); };
         Text = "Squadlink";
         MinimumSize = new Size(520, 400);
         Size = new Size(1100, 760);
@@ -68,7 +80,9 @@ internal sealed class LobbyWindow : Form
                 view.CoreWebView2.NavigationStarting += (_, e) =>
                 {
                     if (!SameOrigin(e.Uri)) e.Cancel = true;
+                    else ResetDetector();
                 };
+                view.CoreWebView2.WebMessageReceived += OnWebMessage;
                 view.CoreWebView2.PermissionRequested += (_, e) =>
                 {
                     if (!SameOrigin(e.Uri) || e.PermissionKind != CoreWebView2PermissionKind.Microphone)
@@ -90,6 +104,92 @@ internal sealed class LobbyWindow : Form
             MessageBox.Show(this, "No se pudo abrir el lobby. Comprueba que Microsoft Edge WebView2 Runtime esté instalado.\n" + ex.Message);
         }
         finally { connect.Enabled = true; }
+    }
+
+    private void ResetDetector()
+    {
+        documentVersion++;
+        gameTimer.Stop();
+        gameEnabled = false;
+        gamePromptShown = false;
+        currentGame = null;
+        gameSince = null;
+    }
+
+    private void SendGame()
+    {
+        if (IsDisposed || Disposing || view.CoreWebView2 == null ||
+            !SameOrigin(view.CoreWebView2.Source)) return;
+        view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new {
+            type = "squadlink:game", enabled = gameEnabled, game = currentGame, since = gameSince
+        }));
+    }
+
+    private async void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+    {
+        if (!SameOrigin(e.Source) || !SameOrigin(view.CoreWebView2.Source)) return;
+        var raw = e.WebMessageAsJson;
+        if (raw.Length > 256) return;
+        using var document = JsonDocument.Parse(raw);
+        var msg = document.RootElement;
+        if (msg.ValueKind != JsonValueKind.Object || !msg.TryGetProperty("type", out var kind) ||
+            kind.ValueKind != JsonValueKind.String) return;
+        var type = kind.GetString();
+        if (type == "squadlink:game:status") { SendGame(); return; }
+        if (type != "squadlink:game:set" || !msg.TryGetProperty("enabled", out var flag) ||
+            (flag.ValueKind != JsonValueKind.True && flag.ValueKind != JsonValueKind.False)) return;
+
+        if (!flag.GetBoolean())
+        {
+            // Invalidate any scan or consent dialog still in flight.
+            documentVersion++;
+            gameEnabled = false;
+            gameTimer.Stop();
+            currentGame = null;
+            gameSince = null;
+        }
+        else if (!gameEnabled && !prompting && !gamePromptShown)
+        {
+            int version = documentVersion;
+            prompting = true;
+            gamePromptShown = true;
+            // Exit the WebView2 callback before opening a modal WinForms dialog.
+            await Task.Yield();
+            if (version != documentVersion || IsDisposed || Disposing) { prompting = false; return; }
+            var allow = MessageBox.Show(this,
+                $"¿Compartir con {origin!.Authority} el juego reconocido que tienes abierto y desde cuándo se detectó? Puedes desactivarlo desde el lobby.",
+                "Actividad de juego", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+            prompting = false;
+            if (documentVersion != version) return;
+            if (allow == DialogResult.Yes)
+            {
+                gameEnabled = true;
+                gamePromptShown = false;
+                gameTimer.Start();
+                SendGame();
+                await ScanGame();
+                return;
+            }
+        }
+        SendGame();
+    }
+
+    private async Task ScanGame()
+    {
+        if (!gameEnabled || scanRunning) return;
+        int version = documentVersion;
+        var previous = currentGame;
+        scanRunning = true;
+        try
+        {
+            var running = await Task.Run(() => GameDetector.FindRunningGame(previous));
+            if (version != documentVersion || !gameEnabled || currentGame == running) return;
+            currentGame = running;
+            gameSince = running == null ? null : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            SendGame();
+        }
+        catch (Win32Exception) { /* A later interval retries if Windows cannot list processes. */ }
+        finally { scanRunning = false; }
     }
 
     bool SameOrigin(string value) => origin != null && Uri.TryCreate(value, UriKind.Absolute, out var uri)
