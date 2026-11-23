@@ -1,3 +1,4 @@
+import { readMemberVolumes, saveMemberVolume } from "./member-volumes.js";
 import { bindVoiceDiagnostics } from "./connection.js";
 import { mountDirectory } from "./directory.js";
 const $ = (id) => document.getElementById(id);
@@ -132,7 +133,7 @@ $("audio-panel").ontoggle = () => {
     });
 };
 const peerStates = new Map();
-const volumes = new Map();
+let volumes = readMemberVolumes();
 const invited = new URLSearchParams(location.search).get("room") || "";
 function readNick() {
   try {
@@ -368,6 +369,7 @@ function renderMembers() {
         volumes.set(member.id, Number(slider.value));
         voice?.setVolume(member.id, Number(slider.value) / 100);
       };
+      slider.onchange = () => saveMemberVolume(member.id, Number(slider.value));
       li.append(slider);
     }
     fragment.append(li);
@@ -511,7 +513,7 @@ function resetRoom() {
   microphoneUpdate = Promise.resolve();
   $("voice-measurements").replaceChildren();
   peerStates.clear();
-  volumes.clear();
+  volumes = readMemberVolumes();
   $("mic").textContent = "Activar micrófono";
   $("mic").setAttribute("aria-pressed", "false");
   $("mic").disabled = true;

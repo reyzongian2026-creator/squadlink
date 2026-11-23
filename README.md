@@ -32,7 +32,7 @@ En **Ajustes → Actualizaciones**, pulsa **Buscar actualizaciones**. La app com
 
 El directorio inicial ocupó 70,0 MiB. Son muestras de la suma de memoria residente de los procesos del cliente en un equipo Windows de cuatro procesadores lógicos. Para la llamada se usaron dos clientes y audio sintético en lugar de micrófono físico. Durante la prueba aumentaron tanto los paquetes como la energía del audio recibido en ambos sentidos al cambiar de perfil. Queda pendiente medir FPS con un juego abierto en hardware de gama baja. [Ver ejecución y resultados](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45124762306).
 
-En **Ajustes → Dispositivos**, cada jugador puede comprobar la reducción de ruido y la ganancia automática que informa su micrófono activo. Antes de entrar a una sala, **Grabar prueba de 4 segundos** permite escuchar una muestra local con la entrada elegida. El **Volumen de las voces que escucho** afecta solo a los altavoces o audífonos locales y conserva el volumen relativo de cada compañero.
+En **Ajustes → Dispositivos**, cada jugador puede comprobar la reducción de ruido y la ganancia automática que informa su micrófono activo. Antes de entrar a una sala, **Grabar prueba de 4 segundos** permite escuchar una muestra local con la entrada elegida. El **Volumen de las voces que escucho** afecta solo a los altavoces o audífonos locales y conserva el volumen relativo de cada compañero. En los controles de sala, el volumen individual se guarda en este equipo. Se recupera al volver a coincidir con el mismo jugador mientras conserve su identidad de sesión; un apodo repetido no hereda el volumen de otra persona.
 
 ### Medir FPS de VALORANT en tu PC
 
