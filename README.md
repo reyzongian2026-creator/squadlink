@@ -4,7 +4,15 @@
 
 Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte un código y conversa mientras juegan. En la espera de una partida pueden abrir Reflejos o Memoria sin salir de la sala.
 
-## Edición de escritorio en pruebas
+## Squadlink Moderno para Windows
+
+La nueva edición de prueba usa Electron y React. El inicio muestra la sala activa, las salas públicas y accesos a Amigos, Mi jugador, Minijuegos y Clasificación. Crear una sala o entrar con código abre una ventana de escritorio. Las herramientas comparten el motor de voz y los ajustes de audio durante la llamada. Los perfiles se cambian desde **Ajustes**.
+
+Con tu sesión de GitHub abierta, entra en la última compilación correcta y elige **Squadlink-Electron-Windows-x64**. Extrae el ZIP y ejecuta `Squadlink-Moderno-Setup-x64.exe`. Las capturas de la instalación están en **Capturas-Squadlink-Moderno**. [Compilaciones de Squadlink Moderno](https://github.com/reyzongian2026-creator/squadlink/actions/workflows/electron.yml?query=branch%3Apreview%2Felectron-escritorio)
+
+El instalador crea el acceso **Squadlink Moderno** y utiliza un perfil propio. Para compilar la interfaz desde el código, usa Node.js 24 y ejecuta `npm install`, `npm run build` y `npm start` en `electron/`.
+
+## Edición ligera de Windows Forms
 
 **Squadlink Preview 0.4.0-preview.9** abre con un inicio de Windows Forms. Los botones de Salas, Jugadores y Ajustes están visibles a la vez. Cada opción abre una ventana con título propio. El directorio, los formularios de crear y unirse, los dispositivos de audio, el servidor, el rendimiento y las actualizaciones usan controles nativos. El audio, las vistas detalladas y los minijuegos comparten una instancia de WebView2. La llamada continúa al cerrar una ventana de opciones. Cerrar Inicio sale de la aplicación.
 

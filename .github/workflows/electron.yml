@@ -1,0 +1,57 @@
+name: Squadlink moderno para Windows
+on:
+  workflow_dispatch:
+  push:
+    branches: ['preview/electron-escritorio']
+    paths: ['electron/**','public/**','windows/Desktop/**','.github/workflows/electron.yml']
+permissions:
+  contents: read
+jobs:
+  escritorio:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verificar el lobby y la sesión
+        run: |
+          npm test
+          node --test electron/gateway.test.cjs
+      - name: Compilar la interfaz de Electron y React
+        working-directory: electron
+        run: |
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE) {exit $LASTEXITCODE}
+          node build.cjs
+          if ($LASTEXITCODE) {exit $LASTEXITCODE}
+          $electron = node -p "require('electron')"
+          if ($LASTEXITCODE -or !(Test-Path $electron)) { npx --no-install electron install; $electron = node -p "require('electron')" }
+          $dist = Split-Path $electron
+          New-Item -ItemType Directory ../artifacts/portable -Force | Out-Null
+          Copy-Item "$dist/*" ../artifacts/portable -Recurse
+          Rename-Item ../artifacts/portable/electron.exe Squadlink.exe
+          Copy-Item stage ../artifacts/portable/resources/app -Recurse
+      - name: Instalar y probar llamadas en Windows
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" electron/setup.iss
+          if ($LASTEXITCODE) {exit $LASTEXITCODE}
+          $setup=(Resolve-Path artifacts/electron/Squadlink-Moderno-Setup-x64.exe).Path
+          $target=Join-Path $env:RUNNER_TEMP 'Squadlink Moderno'
+          $result=Start-Process $setup -ArgumentList "/VERYSILENT /NORESTART /DIR=`"$target`"" -Wait -PassThru
+          if ($result.ExitCode) {throw 'Falló la instalación'}
+          node electron/smoke.cjs (Join-Path $target 'Squadlink.exe')
+          if ($LASTEXITCODE) {exit $LASTEXITCODE}
+          $remove=Start-Process (Join-Path $target 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
+          if ($remove.ExitCode -or (Test-Path (Join-Path $target 'Squadlink.exe'))) {throw 'Falló la desinstalación'}
+          (Get-FileHash $setup).Hash+'  Squadlink-Moderno-Setup-x64.exe' | Set-Content artifacts/electron/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Squadlink-Electron-Windows-x64
+          path: artifacts/electron/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Capturas-Squadlink-Moderno
+          path: artifacts/capturas/

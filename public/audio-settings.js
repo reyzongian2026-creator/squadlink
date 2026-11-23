@@ -62,7 +62,7 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   refresh.textContent = 'Actualizar dispositivos';
   const status = document.createElement('p');
   status.setAttribute('role', 'status');
-  const host = window.chrome?.webview;
+  const host = window.squadBridge ?? window.chrome?.webview;
   const sampleButton = testArea.querySelector('button');
   const sampleStatus = testArea.querySelector('[role="status"]');
   function notifyHost() {

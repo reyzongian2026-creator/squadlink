@@ -52,7 +52,7 @@ let self,
   gameRequest = 0;
 const desktopClient = Boolean(document.querySelector('script[src="/desktop.js"]'));
 // Windows owns the room directory and refreshes it only when visible.
-const directory = desktopClient ? { reload() {}, draw() {} } : mountDirectory({
+const directory = desktopClient && !window.squadBridge ? { reload() {}, draw() {} } : mountDirectory({
   api,
   getRoom: () => room,
   join: (code) => openEntry("join", { code }),
@@ -619,7 +619,7 @@ async function copy(value, notice) {
 }
 $("copy").onclick = () => copy(room.code, "Código copiado.");
 $("invite").onclick = () => {
-  const link = new URL(location.pathname, location.origin);
+  const link = new URL(location.pathname, window.squadBridge ? new URLSearchParams(location.search).get("server") : location.origin);
   link.searchParams.set("room", room.code);
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(link.hostname);
   const notice = local

@@ -1,6 +1,6 @@
 import { desktopNickname, enterFromWindows, onConfirmedGuest, canReleaseGuestWorkspace, openDesktopProgress } from './app.js';
 const byId = id => document.getElementById(id);
-const bridge = window.chrome.webview;
+const bridge = window.squadBridge ?? window.chrome.webview;
 byId('hero-title').textContent = 'Mi sala';
 const occupants = document.createElement('aside');
 occupants.id = 'desktop-members';
@@ -23,6 +23,7 @@ const pages = {
   settings: ['desktop-settings']
 };
 
+if (window.squadBridge) pages.rooms = ['directory'];
 const settings = document.createElement('section');
 settings.id = 'desktop-settings';
 const heading = document.createElement('h2');

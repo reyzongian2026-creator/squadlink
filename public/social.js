@@ -59,7 +59,7 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom, onUnauthoriz
     detected = "",
     manual = "",
     detectionVersion = 0;
-  const bridge = window.chrome?.webview;
+  const bridge = window.squadBridge ?? window.chrome?.webview;
   const roots = [
     "friends",
     "friend-requests",

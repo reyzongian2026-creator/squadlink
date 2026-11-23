@@ -79,7 +79,7 @@ export function mountMicTest(container, constraints, preferences) {
   const panel = document.getElementById('audio-panel');
   const closePanel = () => { if (!panel?.open) cancel(); };
   const hidden = () => { if (document.hidden) cancel(); };
-  const host = window.chrome?.webview;
+  const host = window.squadBridge ?? window.chrome?.webview;
   const navigate = ({data}) => { if (data?.type === 'desktop:action' && data.action !== 'settings') cancel(); };
   cancel();
   if (typeof MediaRecorder !== 'function' || !navigator.mediaDevices?.getUserMedia) {
