@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createServer } from '../server.mjs';
 
-export async function browserSmoke(chromium) {
-  const server = createServer();
+export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLINK_TEST_ORIGIN) {
+  const server = sharedOrigin ? null : createServer();
   let browser;
   try {
-    server.listen(0, '127.0.0.1');
-    await once(server, 'listening');
-    const origin = 'http://127.0.0.1:' + server.address().port;
+    if (server) {
+      server.listen(0, '127.0.0.1');
+      await once(server, 'listening');
+    }
+    const origin = sharedOrigin || 'http://127.0.0.1:' + server.address().port;
     browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
     const errors = [];
     async function client() {
@@ -96,8 +98,10 @@ export async function browserSmoke(chromium) {
     console.log(JSON.stringify({ initial, during, browser: browser.version() }));
   } finally {
     await browser?.close();
-    server.closeAllConnections();
-    await new Promise(resolve => server.close(resolve));
+    if (server) {
+      server.closeAllConnections();
+      await new Promise(resolve => server.close(resolve));
+    }
   }
 }
 
