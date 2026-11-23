@@ -47,6 +47,13 @@ function Find-TypedControl($root, $name, $type) {
   Write-Host ($labels -join ' | ')
   throw "No se encontró $type con nombre '$name'."
 }
+function Set-Mode($root, $name) {
+  Invoke-Control $root 'Ajustes'
+  $mode = Find-TypedControl $root $name ([System.Windows.Automation.ControlType]::RadioButton)
+  if (!$mode.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) {
+    $mode.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+  }
+}
 function Get-ClientProcesses([int]$rootId) {
   $tree = Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId
   $ids = [Collections.Generic.HashSet[int]]::new()
@@ -70,7 +77,7 @@ function Measure-Idle($label) {
   $mib = [Math]::Round(($last | Measure-Object WorkingSet64 -Sum).Sum/1MB,1)
   $children = @($last | Where-Object ProcessName -eq 'msedgewebview2').Count
   Write-Output "METRICA $label | RAM_MiB=$mib CPU_pct=$cpuPercent WebView2=$children Cores=$([Environment]::ProcessorCount)"
-  if ($label.StartsWith('directorio-') -and $children -ne 0) { throw 'El directorio inició WebView2.' }
+  if (($label.StartsWith('directorio-') -or $label -eq 'amigos-invitado-bajo') -and $children -ne 0) { throw 'El directorio inició WebView2.' }
 }
 function Save-Window($handle) {
   Add-Type -AssemblyName System.Drawing
@@ -120,14 +127,23 @@ try {
   Save-Window $app.MainWindowHandle
   Invoke-Control $root 'Comunidad'
   Find-Control $root 'Elegir mi apodo' | Out-Null
-  Measure-Idle 'amigos-sin-llamada'
+  Measure-Idle 'amigos-invitado-bajo'
+  Invoke-Control $root 'Elegir mi apodo'
+  Find-Control $root 'Tu apodo' | Out-Null
+  Set-Mode $root 'Experiencia completa'
+  Invoke-Control $root 'Comunidad'
+  Find-Control $root 'Elegir mi apodo' | Out-Null
+  Measure-Idle 'amigos-completo'
+  Set-Mode $root 'Bajo consumo'
+  Invoke-Control $root 'Comunidad'
   Invoke-Control $root 'Mi jugador'
   Find-Control $root 'Editar mi apodo' | Out-Null
   Invoke-Control $root 'Juegos'
   Find-Control $root 'Reflejos' $true | Out-Null
   Invoke-Control $root 'Clasificación'
   Find-Control $root 'Ranking arcade' | Out-Null
-  Invoke-Control $root 'Preferencias'
+  Invoke-Control $root 'Ajustes'
+  Invoke-Control $root 'Dispositivos'
   Find-Control $root 'Ajustes de voz' | Out-Null
   Invoke-Control $root 'Servidor'
   Find-Control $root 'Servidor del grupo' | Out-Null
@@ -151,8 +167,13 @@ try {
   Write-Host 'Apodo y nombre de sala ingresados'
   $submit = Find-TypedControl $root 'Crear sala' ([System.Windows.Automation.ControlType]::Button)
   $submit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+  Find-Control $root 'Abrir controles de sala' | Out-Null
+  Measure-Idle 'sala-bajo-sin-microfono'
+  Set-Mode $root 'Experiencia completa'
+  Invoke-Control $root 'Voz'
+  Invoke-Control $root 'Mi sala'
   Find-Control $root 'Participantes' | Out-Null
-  Measure-Idle 'en-sala-sin-microfono'
+  Measure-Idle 'sala-completo-sin-microfono'
   Invoke-Control $root 'Juegos'
   Find-Control $root 'Reflejos' $true | Out-Null
   Find-Control $root 'Canal de prueba' | Out-Null
@@ -161,6 +182,20 @@ try {
   if (!(Find-Control $root 'Salir de sala').Current.IsEnabled) { throw 'Se perdió la llamada al volver al directorio.' }
   Invoke-Control $root 'Salir de sala'
   Find-Control $root 'Sin sala' | Out-Null
+  $app.CloseMainWindow() | Out-Null
+  if (!$app.WaitForExit(10000)) { throw 'La aplicación no cerró correctamente.' }
+  $app = Start-Process $Executable -PassThru
+  $until = [DateTime]::UtcNow.AddSeconds(30)
+  do {
+    $app.Refresh()
+    if ($app.MainWindowHandle -ne [IntPtr]::Zero) {break}
+    Start-Sleep -Milliseconds 200
+  } while ([DateTime]::UtcNow -lt $until)
+  $root = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+  Invoke-Control $root 'Ajustes'
+  $saved = Find-TypedControl $root 'Experiencia completa' ([System.Windows.Automation.ControlType]::RadioButton)
+  if (!$saved.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) { throw 'No se conservó el perfil de rendimiento.' }
+  Write-Output 'Perfiles, memoria, continuidad de sala y persistencia tras reinicio verificados.'
   Write-Output 'Verificados directorio, grupos, secciones, perfil, clasificación, audio y entrada por código.'
 } finally {
   if ($app -and !$app.HasExited) { $app.Kill(); $app.WaitForExit() }

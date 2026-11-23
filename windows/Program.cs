@@ -27,6 +27,9 @@ internal sealed class LobbyWindow : Form
     private readonly Panel workspace = new() {Dock = DockStyle.Fill, BackColor = DesktopNavigation.Canvas};
     private readonly Label loading = DesktopNavigation.Caption("Abriendo sección…", 14, FontStyle.Regular);
     private readonly RoomDirectory directory;
+    private readonly PerformanceSettings performance;
+    private readonly LightWorkspace lite = new();
+    private bool nativePage;
     private string page = "rooms";
     private string? pendingAction, pendingCode;
     private bool opening, ready, hasProfile;
@@ -51,6 +54,10 @@ internal sealed class LobbyWindow : Form
         Size = new Size(1120, 730);
         BackColor = DesktopNavigation.Canvas;
         view.DefaultBackgroundColor = BackColor;
+        performance = new PerformanceSettings(dataDir);
+        performance.Changed += async () => await Navigate("performance");
+        lite.DetailRequested += async action => await Navigate(action);
+        workspace.Controls.Add(performance); workspace.Controls.Add(lite);
         directory = new RoomDirectory(() => origin);
         serverSettings.Dock = DockStyle.Fill;
         serverSettings.Padding = new Padding(24);
@@ -75,7 +82,7 @@ internal sealed class LobbyWindow : Form
                 "Cambiar servidor", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
             try { Directory.CreateDirectory(dataDir); File.WriteAllText(Path.Combine(dataDir, "server.txt"), address.AbsoluteUri); }
             catch (IOException ex) { MessageBox.Show(this, ex.Message); return; }
-            origin = address; ready = false; hasProfile = false;
+            origin = address; ready = false; hasProfile = false; lite.ResetSnapshot();
             if (view.CoreWebView2 != null) { navigation.ResetState(); directory.SetJoined(false); view.CoreWebView2.Navigate(address.AbsoluteUri); }
             await Navigate("rooms");
         };
@@ -112,18 +119,25 @@ internal sealed class LobbyWindow : Form
     {
         if (action is "mic" or "leave") { if (ready) Post(action); return; }
         visit++;
-        page = action is "create" or "join" ? "lobby" : action;
+        page = action switch {
+            "create" or "join" or "room-detail" => "lobby",
+            "login" or "friends-detail" => "friends",
+            _ => action
+        };
         navigation.SelectPage(page);
         pendingAction = null; pendingCode = null;
-        if (ready && view.CoreWebView2 != null)
-            view.CoreWebView2.MemoryUsageTargetLevel = (page is "rooms" or "server") && !navigation.Joined
-                ? CoreWebView2MemoryUsageTargetLevel.Low : CoreWebView2MemoryUsageTargetLevel.Normal;
-        if (page is "rooms" or "server")
+        bool useLite = performance.Low && (action == "friends" || (action == "lobby" && navigation.Joined));
+        nativePage = useLite || page is "rooms" or "server" or "performance";
+        SetMemoryTarget();
+        if (nativePage)
         {
             if (ready) Post("background");
+            if (useLite) { lite.ShowPage(page == "friends"); Present(lite); return; }
+            if (page == "performance") { Present(performance); return; }
             if (page == "server") { Present(serverSettings); return; }
             Present(directory); await directory.Reload(); return;
         }
+        action = action switch { "friends-detail" => "friends", "room-detail" => "lobby", _ => action };
         if (ready) { Present(view); Post(action,code); return; }
         pendingAction = action; pendingCode = code;
         Present(loading);
@@ -132,10 +146,17 @@ internal sealed class LobbyWindow : Form
         try { await Connect(); } finally { opening = false; }
     }
 
+    private void SetMemoryTarget()
+    {
+        if (ready && view.CoreWebView2 != null)
+            view.CoreWebView2.MemoryUsageTargetLevel = performance.Low
+                ? CoreWebView2MemoryUsageTargetLevel.Low : CoreWebView2MemoryUsageTargetLevel.Normal;
+    }
+
     private void Post(string action, string? code = null)
     {
         if (view.CoreWebView2 != null && SameOrigin(view.CoreWebView2.Source))
-            view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "desktop:action", action, code, visit }));
+            view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "desktop:action", action, code, visit, low = performance.Low }));
     }
 
     async Task Connect()
@@ -210,7 +231,7 @@ internal sealed class LobbyWindow : Form
     {
         if (view.CoreWebView2 == null || !SameOrigin(e.Source) || !SameOrigin(view.CoreWebView2.Source)) return;
         var raw = e.WebMessageAsJson;
-        if (raw.Length > 2048) return;
+        if (raw.Length > 32768) return;
         using var document = JsonDocument.Parse(raw);
         var msg = document.RootElement;
         if (msg.ValueKind != JsonValueKind.Object || !msg.TryGetProperty("type", out var kind) ||
@@ -220,7 +241,7 @@ internal sealed class LobbyWindow : Form
         {
             BeginInvoke(new Action(() =>
             {
-                if (expected != visit || page is not ("rooms" or "server") || navigation.Joined || hasProfile || !ready) return;
+                if (expected != visit || !nativePage || !performance.Low || navigation.Joined || hasProfile || !ready) return;
                 ready = false; ResetDetector(); view.Dispose();
                 view = new WebView2 {Dock = DockStyle.Fill, DefaultBackgroundColor = BackColor};
             }));
@@ -235,14 +256,15 @@ internal sealed class LobbyWindow : Form
             }
             bool wasJoined = navigation.Joined;
             navigation.UpdateState(msg);
+            lite.UpdateSnapshot(msg);
             directory.SetJoined(navigation.Joined);
             if (!ready)
             {
-                ready = true;
+                ready = true; SetMemoryTarget();
                 if (pendingAction != null) {
                     string action = pendingAction; pendingAction = null;
                     Present(view); Post(action, pendingCode); pendingCode = null;
-                } else if (page is "rooms" or "server") { Post("background"); }
+                } else if (nativePage) { Post("background"); }
             }
             if (wasJoined != navigation.Joined && (navigation.Joined || page == "lobby"))
                 await Navigate(navigation.Joined ? "lobby" : "rooms");

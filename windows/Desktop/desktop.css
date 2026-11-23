@@ -34,3 +34,5 @@ body[data-workspace=ranking] .kit-editor, body[data-workspace=ranking] .kit-head
 
 #entry { max-height: calc(100dvh - 32px); overflow-y: auto; }
 #entry #submit-entry { position: sticky; bottom: 0; z-index: 1; }
+
+.low-power *, .low-power *::before, .low-power *::after { transition-duration: 0s !important; scroll-behavior: auto !important; }

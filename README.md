@@ -6,7 +6,7 @@ Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte
 
 ## Edición de escritorio en pruebas
 
-**Squadlink Preview 0.4.0-preview.2** abre con un directorio de salas nativo de Windows. La primera columna cambia de espacio y la segunda muestra las opciones del espacio elegido. El directorio permite buscar salas, consultar el juego y los cupos, crear una sala o entrar con código. Un perfil nuevo puede usar el directorio sin iniciar WebView2. Al entrar en una llamada se conserva una sola sesión de voz entre secciones.
+**Squadlink Preview 0.4.0-preview.3** abre con un directorio de salas nativo de Windows. La primera columna cambia de espacio y la segunda muestra las opciones del espacio elegido. El directorio permite buscar salas, consultar el juego y los cupos, crear una sala o entrar con código. Un perfil nuevo puede usar el directorio sin iniciar WebView2. Al entrar en una llamada se conserva una sola sesión de voz entre secciones.
 
 Para probarla, abre una [compilación correcta de Windows en la rama de prueba](https://github.com/reyzongian2026-creator/squadlink/actions/workflows/windows.yml?query=branch%3Apreview%2Fwindows-escritorio) y descarga **Squadlink-Windows-x64** en *Artifacts* con tu sesión de GitHub. Descomprime el ZIP y ejecuta `Squadlink-Setup-x64.exe`. El archivo `SHA256.txt` permite verificar el instalador. La edición Preview tiene su propio acceso directo, directorio de instalación y perfil de jugador. Puede convivir con la versión estable.
 
@@ -15,7 +15,9 @@ Para probarla, abre una [compilación correcta de Windows en la rama de prueba](
 | Voz | Explorar salas y Mi sala. Durante una llamada puedes ver los participantes y ajustar su volumen. |
 | Comunidad | Amigos y Mi jugador. |
 | Juegos | Minijuegos y Clasificación. |
-| Preferencias | Dispositivos y Servidor. |
+| Ajustes | Rendimiento, Dispositivos y Servidor. |
+
+En **Ajustes → Rendimiento** puedes cambiar de perfil durante una sesión. **Bajo consumo** es el valor inicial. Usa paneles nativos para consultar amigos y participantes, y pide a WebView2 reducir memoria cuando se necesita para voz o funciones detalladas. **Experiencia completa** abre los paneles detallados y conserva el motor listo al cambiar de sección. Windows recuerda la elección al volver a abrir la app. Ambos perfiles mantienen la misma configuración de audio.
 
 La aplicación mantiene la presencia de un perfil vinculado. Si un invitado vuelve al directorio tras salir de un panel, el cliente libera el motor cuando ha terminado cualquier entrada a una sala. El artefacto incluye una captura del directorio con dos salas de prueba. El registro de compilación muestra la memoria del árbol de procesos y el porcentaje de CPU en reposo, medidos en un equipo de prueba de Windows.
 

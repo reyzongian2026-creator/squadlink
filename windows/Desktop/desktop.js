@@ -62,6 +62,13 @@ function sync() {
   }
   const state = {
     type: 'desktop:state', section, joined, identified: /^[A-F0-9]{16}$/i.test(byId('friend-id').textContent),
+    code: joined ? byId('room-code').textContent : '',
+    voiceStatus: joined ? byId('voice-status').textContent.slice(0,140) : '',
+    contacts: [...byId('friends').querySelectorAll('.social-row')].slice(0,25).map(row =>
+      (row.querySelector('strong')?.textContent || '') + ' · ' +
+      (row.querySelector('.dot.online') ? 'En línea' : 'Desconectado')),
+    members: [...byId('members').querySelectorAll('li')].map(row =>
+      (row.querySelector('strong')?.textContent || '') + ' · ' + (row.querySelector('small')?.textContent || '')),
     name: joined ? byId('room-name').textContent : '',
     mic: byId('mic').getAttribute('aria-pressed') === 'true',
     canMic: joined && !byId('mic').disabled,
@@ -71,18 +78,23 @@ function sync() {
   if (key !== previous) { previous = key; bridge.postMessage(state); }
 }
 const observer = new MutationObserver(sync);
-for (const id of ['room', 'mic', 'leave', 'room-name', 'friend-id']) {
-  observer.observe(byId(id), {attributes:true, attributeFilter:['hidden','disabled','aria-pressed'], childList:true, characterData:true, subtree:id === 'room-name' || id === 'friend-id'});
+for (const id of ['room', 'mic', 'leave', 'room-name', 'friend-id', 'members', 'friends', 'room-code', 'voice-status']) {
+  observer.observe(byId(id), {attributes:true, attributeFilter:['hidden','disabled','aria-pressed'], childList:true, characterData:true, subtree:!['room','mic','leave'].includes(id)});
 }
 let releaseTimer;
 bridge.addEventListener('message', ({data}) => {
   if (data?.type !== 'desktop:action') return;
+  document.body.classList.toggle("low-power", data.low === true);
   clearTimeout(releaseTimer);
   if (data.action === 'background') {
     for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+    if (!data.low) return;
     releaseTimer = setTimeout(async () => {
       if (await canReleaseGuestWorkspace()) bridge.postMessage({type:'desktop:release', visit:data.visit});
     }, 3000);
+  } else if (data.action === 'login') {
+    show('friends');
+    if (!byId('social-login').hidden && !byId('entry').open) byId('social-login').click();
   } else if (['create','join'].includes(data.action)) {
     show('lobby');
     if (!inRoom) {
