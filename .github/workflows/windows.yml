@@ -1,0 +1,65 @@
+name: Windows installer
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/windows.yml'
+      - 'windows/**'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm test
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish desktop client
+        run: dotnet publish windows/Squadlink.csproj -c Release -r win-x64 --self-contained true -o artifacts/app
+      - name: Build and verify per-user installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $compiler)) { throw 'Inno Setup compiler unavailable' }
+          & $compiler windows/setup.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $setup = (Resolve-Path artifacts/installer/Squadlink-Setup-x64.exe).Path
+          $dir = Join-Path $env:RUNNER_TEMP 'Squadlink-install-test'
+          $install = Start-Process $setup -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"$dir`"" -Wait -PassThru
+          if ($install.ExitCode) { throw "Install failed: $($install.ExitCode)" }
+          $app = Start-Process (Join-Path $dir 'Squadlink.exe') -PassThru
+          try {
+            if (!$app.WaitForInputIdle(20000) -or $app.HasExited) { throw 'Client did not start' }
+          } finally { if (!$app.HasExited) { $app.Kill(); $app.WaitForExit() } }
+          $remove = Start-Process (Join-Path $dir 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
+          if ($remove.ExitCode -or (Test-Path (Join-Path $dir 'Squadlink.exe'))) { throw 'Uninstall failed' }
+          (Get-FileHash $setup -Algorithm SHA256).Hash + '  Squadlink-Setup-x64.exe' | Set-Content artifacts/installer/SHA256.txt -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Squadlink-Windows-x64
+          path: artifacts/installer/
+          if-no-files-found: error
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Squadlink-Windows-x64
+          path: installer
+      - name: Publish verified installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="windows-0.1.0-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" installer/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Squadlink para Windows x64" --notes "Instalador por usuario. Requiere WebView2 y la dirección de un servidor Squadlink. Incluye suma SHA-256."
