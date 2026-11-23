@@ -4,9 +4,15 @@
 
 Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte un código y conversa mientras juegan. En la espera de una partida pueden abrir Reflejos o Memoria sin salir de la sala.
 
-**[Descargar el instalador de Windows x64](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/Squadlink-Setup-x64.exe)** · **[Abrir el lobby web](https://squadlink-lobby.onrender.com/)** · [Versiones y SHA-256](https://github.com/reyzongian2026-creator/squadlink/releases/latest)
+## Edición de escritorio en pruebas
 
-El instalador es público y se puede descargar sin iniciar sesión en GitHub. Tus amigos también pueden entrar desde el enlace web. El cliente de Windows se instala para el usuario actual, utiliza Microsoft Edge WebView2 Runtime y abre el lobby compartido. Los jugadores de Windows y del navegador pueden estar en la misma sala.
+Esta rama contiene **Squadlink Preview 0.4.0 para Windows x64**. La barra lateral y los controles de llamada son nativos de Windows. Cada sección abre en la misma ventana. WebView2 carga desde la instalación los paneles de salas, amigos, arcade, jugador y audio. El servidor sigue gestionando sesiones, presencia y señalización de voz.
+
+Para probarla, abre una [compilación correcta de Windows en la rama de prueba](https://github.com/reyzongian2026-creator/squadlink/actions/workflows/windows.yml?query=branch%3Apreview%2Fwindows-escritorio) y descarga **Squadlink-Windows-x64** en *Artifacts* con tu sesión de GitHub. Descomprime el ZIP y ejecuta `Squadlink-Setup-x64.exe`. El archivo `SHA256.txt` permite verificar el instalador. La edición Preview tiene su propio acceso directo, directorio de instalación y perfil de jugador. Puede convivir con la versión estable.
+
+- **Mi sala** permite crear una sala o entrar con código. Los controles de micrófono y salida de la sala siguen accesibles al abrir otra sección.
+- **Explorar salas**, **Amigos**, **Arcade** y **Mi jugador** muestran cada actividad por separado.
+- En **Ajustes** puedes cambiar dispositivos, reducción de ruido y servidor. Si cambias de servidor durante una llamada, la aplicación te pedirá confirmación.
 
 ## La primera partida
 
