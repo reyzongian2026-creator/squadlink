@@ -1,11 +1,12 @@
-.arcade-status {min-height:2.8em;color:#cbc8d8;line-height:1.4}
-.arcade-board {display:grid;gap:1rem}
+.arcade-status {color:#cbc8d8;line-height:1.45;margin-bottom:.75rem;overflow-wrap:anywhere}
+.arcade-status:empty {margin:0}
+.arcade-board {display:grid;grid-template-columns:minmax(0,1fr);gap:.75rem}
 .arcade-board button {cursor:pointer}
 .arcade-board [hidden] {display:none}
 .reflex-pad,.sequence-pad {border:1px solid #565366;border-radius:10px;color:#faf9ff;background:#302d3f;font:700 1.3rem system-ui;padding:1rem}
 .reflex-pad {min-height:130px}
 .reflex-pad[data-phase=wait] {background:#473147}
 .reflex-pad[data-phase=go] {background:#c0f65d;color:#19251a}
-.sequence-grid {display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sequence-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .sequence-pad:disabled {opacity:1;cursor:default}
 .sequence-pad[data-lit],.sequence-pad:active:enabled {background:#c0f65d;color:#161924;outline:2px solid white;outline-offset:-5px}

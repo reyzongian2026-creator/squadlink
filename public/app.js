@@ -2,6 +2,8 @@ import { bindVoiceDiagnostics } from "./connection.js";
 import { mountDirectory } from "./directory.js";
 const $ = (id) => document.getElementById(id);
 const paths = {
+  player: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4 21a8 8 0 0 1 16 0",
+  guide: "M4 4h6l2 2 2-2h6v15h-6l-2 2-2-2H4z M12 6v15",
   directory: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   search: "M10 3a7 7 0 1 0 .01 0 M15 15l6 6",
   refresh: "M20 5v5h-5 M4 19v-5h5 M20 10a8 8 0 0 0-14-4 M4 14a8 8 0 0 0 14 4",
@@ -48,6 +50,7 @@ let self,
   toastTimer,
   generation = 0,
   gameRequest = 0;
+const desktopClient = Boolean(document.querySelector('script[src="/desktop.js"]'));
 const directory = mountDirectory({
   api,
   getRoom: () => room,
@@ -139,6 +142,8 @@ function readNick() {
 }
 function showGuest(nick) {
   $("profile").textContent = nick || "Invitado";
+  $("profile").title = nick ? "Editar mi apodo" : "Elegir mi apodo";
+  $("profile").setAttribute("aria-label", $("profile").textContent + " · " + $("profile").title);
   $("avatar").textContent = [...(nick || "S")][0].toUpperCase();
 }
 function applySession(result) {
@@ -227,6 +232,7 @@ function openEntry(next, preset = {}) {
   $("code").required = join;
   $("code").value = join ? (preset.code || invited).toUpperCase() : "";
   $("password-field").hidden = !create && !join;
+  $("password-hint").textContent = join ? "(si la sala la requiere)" : "(opcional)";
   $("password").value = "";
   $("entry").showModal();
   const first =
@@ -384,7 +390,8 @@ function setConnection(text, connected) {
   $("connection").lastChild.textContent = text;
   $("connection").classList.toggle("connected", connected);
 }
-async function enterRoom(snapshot) {
+async function enterRoom(snapshot, restoring = false) {
+  if (!desktopClient && !restoring && document.body.dataset.channel !== "main") location.hash = "main";
   resetRoom();
   const attempt = generation;
   $("room").hidden = false;
@@ -480,6 +487,7 @@ function resetRoom() {
   $("home").hidden = false;
   document.body.classList.remove("in-match");
   $("compact").textContent = "Modo partida";
+  $("compact").setAttribute("aria-pressed", "false");
   $("leave").textContent = "Salir de la sala";
   setConnection("Sin sala", false);
 }
@@ -539,6 +547,7 @@ $("leave").onclick = async () => {
 $("compact").onclick = () => {
   const compact = document.body.classList.toggle("in-match");
   $("compact").textContent = compact ? "Volver al lobby" : "Modo partida";
+  $("compact").setAttribute("aria-pressed", String(compact));
 };
 async function copy(value, notice) {
   try {
@@ -581,12 +590,71 @@ $("game-dialog").onclose = () => {
   cleanupGame = null;
   $("game-mount").replaceChildren();
 };
-for (const link of document.querySelectorAll("nav a"))
-  link.onclick = () => {
-    document
-      .querySelectorAll("nav a")
-      .forEach((item) => item.classList.toggle("selected", item === link));
-  };
+function setupWebChannels() {
+  const body = document.body;
+  const toggle = $("channels-toggle");
+  const links = [...$("channel-list").querySelectorAll("a")];
+  const panels = [...document.querySelectorAll("[data-channel-panel]")];
+  const titles = new Map(links.map(link => [link.hash.slice(1), link.textContent.trim()]));
+  const narrow = window.matchMedia("(max-width: 760px)");
+
+  function openMenu(open) {
+    toggle.setAttribute("aria-expanded", String(open));
+    body.classList.toggle("channels-open", open);
+  }
+
+  function selectChannel(moveFocus) {
+    const fragment = location.hash.slice(1);
+    const enclosingPanel = document.getElementById(fragment)?.closest("[data-channel-panel]");
+    const channel = titles.has(fragment) ? fragment
+      : enclosingPanel?.dataset.channelPanel.split(" ")[0] || (fragment.startsWith("kit-") ? "loadout" : "main");
+    if (channel !== "main" && body.classList.contains("in-match")) $("compact").click();
+    body.dataset.channel = channel;
+    for (const panel of panels) {
+      panel.classList.toggle("channel-inactive", !panel.dataset.channelPanel.split(" ").includes(channel));
+    }
+    for (const link of links) {
+      const active = link.hash === "#" + channel;
+      link.classList.toggle("selected", active);
+      if (active) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    }
+    $("channel-title").textContent = titles.get(channel);
+    document.title = titles.get(channel) + " · Squadlink";
+    openMenu(false);
+    if (moveFocus) {
+      $("main").focus({preventScroll: true});
+      window.scrollTo(0, 0);
+    }
+  }
+
+  toggle.hidden = false;
+  body.classList.add("web-client");
+  selectChannel(false);
+  toggle.addEventListener("click", () => openMenu(toggle.getAttribute("aria-expanded") !== "true"));
+  window.addEventListener("hashchange", () => selectChannel(true));
+  narrow.addEventListener("change", () => openMenu(false));
+  for (const link of [...links, document.querySelector(".wordmark")]) {
+    link.addEventListener("click", event => {
+      if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && link.hash === location.hash) {
+        event.preventDefault();
+        selectChannel(true);
+      }
+    });
+  }
+  document.querySelector(".skip").addEventListener("click", event => {
+    event.preventDefault();
+    openMenu(false);
+    $("main").focus();
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && body.classList.contains("channels-open")) {
+      openMenu(false);
+      toggle.focus();
+    }
+  });
+}
+if (!desktopClient) setupWebChannels();
 async function restoreIdentity() {
   const nick = readNick();
   showGuest(nick);
@@ -599,7 +667,7 @@ async function restoreIdentity() {
   }
   if (!result) return;
   applySession(result);
-  if (result.room) await enterRoom(result.room);
+  if (result.room) await enterRoom(result.room, true);
 }
 const identityReady = restoreIdentity().catch((error) => tell(error.message));
 async function boot() {

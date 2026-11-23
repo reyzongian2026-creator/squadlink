@@ -4,6 +4,43 @@ import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { createServer } from '../server.mjs';
 
+async function openChannel(page, channel) {
+  const link = page.locator('#channel-list a[href="#' + channel + '"]');
+  if (!await link.isVisible()) await page.locator('#channels-toggle').click();
+  await link.click();
+  await page.waitForFunction(id => document.body.dataset.channel === id, channel);
+  assert.equal(await link.getAttribute('aria-current'), 'page');
+}
+
+async function footerLayout(page) {
+  await openChannel(page, 'social');
+  assert.ok(await page.evaluate(() => {
+    const footer = document.querySelector('body > footer.site-footer');
+    return Math.abs(footer.getBoundingClientRect().bottom - document.documentElement.clientHeight) <= 1;
+  }), 'el pie llega al fondo de una pantalla corta');
+  await openChannel(page, 'directory');
+  // Populate only this browser DOM. The shared pilot directory receives no test rooms.
+  const belowResults = await page.evaluate(() => {
+    const list = document.getElementById('directory-list');
+    const samples = Array.from({ length: 70 }, (_, index) => {
+      const card = document.createElement('article');
+      card.className = 'directory-card';
+      card.textContent = 'Sala para verificar el desplazamiento ' + (index + 1);
+      return card;
+    });
+    list.append(...samples);
+    try {
+      const bottom = samples.at(-1).getBoundingClientRect().bottom;
+      const footer = document.querySelector('body > footer.site-footer').getBoundingClientRect();
+      return footer.top >= bottom && bottom > document.documentElement.clientHeight;
+    } finally {
+      samples.forEach(card => card.remove());
+    }
+  });
+  assert.ok(belowResults, 'el pie queda después del último resultado cuando hay desplazamiento');
+  await openChannel(page, 'main');
+}
+
 async function socialSmoke(host, guest, spectator) {
   const socialWait = { timeout: 45000 };
   const refresh = page => page.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -18,6 +55,7 @@ async function socialSmoke(host, guest, spectator) {
     await to.locator('#friends').getByText('Gian', { exact: true }).waitFor(socialWait);
     await refresh(from);
   }
+  for (const page of [host, guest, spectator]) await openChannel(page, 'social');
   await addFriend(host, guest);
   await spectator.locator('#social-login').click();
   await spectator.getByLabel('Tu apodo').fill('Luz');
@@ -40,6 +78,7 @@ async function socialSmoke(host, guest, spectator) {
   await refresh(host);
 
   // Waiting for the owner's decision must not expose the room or its members.
+  await openChannel(host, 'main');
   await host.locator('#room-requests [data-action="admit"]').first().waitFor(socialWait);
   assert.ok(!await guest.locator('#room').isVisible(), 'petición pendiente aún fuera de sala');
   await host.locator('#room-requests [data-action="admit"]').first().click();
@@ -51,7 +90,9 @@ async function socialSmoke(host, guest, spectator) {
 
   // Reload the profile holding the friend grant, then verify the same friend is still rendered.
   await guest.reload();
+  await openChannel(guest, 'social');
   await guest.locator('#friends').getByText('Gian', { exact: true }).waitFor(socialWait);
+  await openChannel(guest, 'main');
   await guest.getByRole('heading', { name: 'Grupo de prueba', exact: true }).waitFor(socialWait);
 }
 
@@ -59,9 +100,13 @@ async function directorySmoke(host, visitor, roomCode) {
   const description = 'Práctica QA ' + randomUUID().slice(0, 8);
   const gameCode = 'QA-' + randomUUID().slice(0, 8);
   const cardButton = visitor.locator('#directory-list [data-room-code="' + roomCode + '"]');
-  const openEditor = () => host.locator('#edit-room-fields').click();
+  const openEditor = async () => {
+    await openChannel(host, 'main');
+    await host.locator('#edit-room-fields').click();
+  };
 
   async function refreshDirectory() {
+    await openChannel(visitor, 'directory');
     await Promise.all([
       visitor.waitForResponse(response => new URL(response.url()).pathname === '/api/directory' && response.request().method() === 'GET'),
       visitor.locator('#directory-refresh').click()
@@ -113,6 +158,7 @@ async function directorySmoke(host, visitor, roomCode) {
 }
 
 async function progressionSmoke(player, observer, playForRank) {
+  await openChannel(player, 'loadout');
   await player.getByText(/Menor tiempo/).waitFor();
   await player.locator('#kit-options').getByRole('button', { name: 'Gorra', exact: true }).click();
   await player.locator('#kit-save').click();
@@ -130,6 +176,7 @@ async function progressionSmoke(player, observer, playForRank) {
     return;
   }
 
+  await openChannel(player, 'arcade');
   await player.locator('[data-game="reflex"]').click();
   await player.locator('#game-dialog').getByRole('button', { name: 'Empezar' }).click();
   const target = player.locator('#game-dialog').getByRole('button', { name: '¡Ahora!' });
@@ -142,12 +189,14 @@ async function progressionSmoke(player, observer, playForRank) {
   assert.ok(earned > 0 && profile.xp >= earned && profile.best.reflex >= 80);
   await player.getByRole('button', { name: 'Cerrar minijuego' }).click();
   await player.waitForFunction(xp => document.querySelector('#kit-xp-label')?.textContent.includes(xp + ' XP totales'), profile.xp);
+  await openChannel(observer, 'loadout');
   await observer.locator('[data-rank="reflex"]').click();
   await observer.locator('#kit-ranking li').filter({ has: observer.getByText('Luz', { exact: true }) })
     .getByText(profile.best.reflex + ' ms', { exact: true }).waitFor();
 }
 
 async function audioPreferencesSmoke(page) {
+  await openChannel(page, 'main');
   const settings = page.locator('#audio-panel');
   const openSettings = async () => {
     await settings.waitFor();
@@ -203,6 +252,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     const b = await client();
     for (const width of [360, 390, 1440]) {
       await a.setViewportSize({ width, height: 900 });
+      await footerLayout(a);
       assert.ok(await a.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'desborde horizontal a ' + width);
     }
     const eagerResources = await a.evaluate(() => performance.getEntriesByType('resource').map(e => new URL(e.name).pathname));
@@ -248,12 +298,14 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     const initial = await Promise.all([inbound(a), inbound(b)]);
     await a.getByRole('button', { name: 'Medir conexión de voz' }).click();
     await a.locator('#voice-measurements').getByText(/Ana.*(Directa|Por retransmisor)/).waitFor();
+    await openChannel(a, 'arcade');
     await a.locator('[data-game="reflex"]').click();
     await a.locator('#game-dialog[open]').waitFor();
     const activeGame = a.locator('#game-mount button').first();
     await activeGame.click();
     const during = await inbound(a, initial[0].bytes);
     await a.getByRole('button', { name: 'Cerrar minijuego' }).click();
+    await openChannel(a, 'main');
     await a.locator('#mic').click();
     await a.waitForFunction(() => window.qaTracks.length > 0 && window.qaTracks.every(t => t.readyState === 'ended'));
     await b.getByRole('button', { name: 'Salir de la sala' }).click();

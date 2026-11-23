@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#111019" />
+    <meta name="theme-color" content="#202126" />
     <meta
       name="description"
       content="Crea una sala de voz para tus amigos, comparte el código y abre el arcade mientras esperas la partida."
@@ -32,12 +32,17 @@
             ><i></i><i></i><i></i></span
           >SQUAD<span>LINK</span></a
         >
-        <nav aria-label="Navegación">
-          <a href="#main" class="selected"><i data-icon="lobby"></i>Lobby</a
-          ><a href="#directory"><i data-icon="directory"></i>Salas</a
-          ><a href="#social"><i data-icon="friends"></i>Amigos</a
-          ><a href="#arcade"><i data-icon="game"></i>Arcade</a
-          ><a href="#loadout">Mi jugador</a>
+        <button id="channels-toggle" class="channel-toggle" type="button" aria-expanded="false" aria-controls="channel-list" hidden>
+          <span aria-hidden="true">☰</span> Canales
+        </button>
+        <nav id="channel-list" aria-label="Canales">
+          <span class="channel-list-title" aria-hidden="true">Canales</span>
+          <a href="#main" class="selected" aria-current="page"><i data-icon="headphones"></i>Lobby de voz</a>
+          <a href="#directory"><i data-icon="directory"></i>Salas</a>
+          <a href="#social"><i data-icon="friends"></i>Amigos</a>
+          <a href="#loadout"><i data-icon="player"></i>Mi personaje</a>
+          <a href="#arcade"><i data-icon="game"></i>Arcade</a>
+          <a href="#news"><i data-icon="guide"></i>Guía de sala</a>
         </nav>
         <div class="identity">
           <button id="install-app" class="secondary small" hidden>
@@ -47,7 +52,8 @@
             id="profile"
             class="profile-button"
             type="button"
-            title="Editar mi apodo"
+            title="Elegir mi apodo"
+            aria-haspopup="dialog"
           >
             Invitado
           </button>
@@ -56,36 +62,30 @@
     </header>
     <main id="main" tabindex="-1" class="wrap">
       <div class="title-row">
-        <div>
-          <span class="eyebrow"
-            ><b class="section-mark"></b> CENTRO DE JUEGO</span
-          >
-          <h1>Tu lobby<span>.</span></h1>
-        </div>
-        <span id="connection" class="connection"><b></b>Sin sala</span>
+        <h1 id="channel-title">Lobby de voz</h1>
+        <span id="connection" class="connection" role="status"><b></b>Sin sala</span>
       </div>
-      <section class="hero" id="home" aria-labelledby="hero-title">
+      <section class="hero" id="home" data-channel-panel="main" aria-labelledby="hero-title">
         <div class="landscape" aria-hidden="true"></div>
         <div class="hero-copy">
-          <div class="label"><i data-icon="headphones"></i> CHAT DE VOZ</div>
-          <h2 id="hero-title">Reúne a tu <em>squad.</em></h2>
-          <p>Abre una sala de voz y comparte el código con tus amigos.</p>
+          <h2 id="hero-title">Una sala para tu <em>equipo.</em></h2>
+          <p>Habla con hasta cuatro amigos. Comparte el código para invitarlos.</p>
           <div class="actions">
-            <button class="primary" id="create">
+            <button class="primary" id="create" aria-haspopup="dialog">
               <i data-icon="plus"></i>Crear sala</button
-            ><button class="secondary" id="join">
+            ><button class="secondary" id="join" aria-haspopup="dialog">
               <i data-icon="enter"></i>Unirme con código
             </button>
           </div>
         </div>
       </section>
-      <section id="room" class="room-panel" aria-labelledby="room-name" hidden>
+      <section id="room" class="room-panel" data-channel-panel="main" aria-labelledby="room-name" hidden>
         <div class="room-top">
           <div>
             <div class="label"><i data-icon="headphones"></i> SALA DE VOZ</div>
             <h2 id="room-name"></h2>
           </div>
-          <button class="secondary small" id="compact">Modo partida</button>
+          <button class="secondary small" id="compact" aria-pressed="false">Modo partida</button>
         </div>
         <div class="room-info">
           <span id="privacy"></span><span id="count"></span
@@ -136,14 +136,11 @@
       </section>
       <section
         id="directory"
-        class="directory"
+        class="directory" data-channel-panel="directory"
         aria-labelledby="directory-title"
       >
         <div class="directory-head">
           <div class="section-head">
-            <span class="eyebrow"
-              ><b class="section-mark violet"></b> DIRECTORIO</span
-            >
             <h2 id="directory-title">Explorar salas</h2>
           </div>
           <button id="directory-refresh" class="secondary small" type="button">
@@ -155,8 +152,8 @@
           ><input
             type="search"
             id="directory-query"
-            placeholder="Buscar entre las salas cargadas"
-            aria-label="Buscar entre las salas cargadas"
+            placeholder="Buscar por sala, juego o nivel"
+            aria-label="Filtrar las salas cargadas por nombre, juego, nivel o descripción"
             autocomplete="off"
         /></label>
         <div id="directory-list" class="room-grid"></div>
@@ -172,15 +169,12 @@
           Cargando salas…
         </p>
       </section>
-      <section id="social" class="social" aria-labelledby="social-title">
+      <section id="social" class="social" data-channel-panel="social" aria-labelledby="social-title">
         <div class="social-head">
           <div class="section-head">
-            <span class="eyebrow"
-              ><b class="section-mark mint"></b> TU GRUPO</span
-            >
             <h2 id="social-title">Amigos</h2>
           </div>
-          <button id="social-login" class="secondary small">
+          <button id="social-login" class="secondary small" aria-haspopup="dialog">
             Elegir mi apodo
           </button>
           <button id="social-retry" class="secondary small" hidden>
@@ -204,7 +198,7 @@
                 </button>
               </div>
               <form id="friend-form" class="inline-form">
-                <label for="friend-code">Agregar amigo por código</label>
+                <label for="friend-code">Código de tu amigo</label>
                 <div>
                   <input
                     id="friend-code"
@@ -216,7 +210,7 @@
                     autocapitalize="characters"
                     placeholder="Código de 16 caracteres"
                   /><button id="friend-add" class="primary small">
-                    Agregar
+                    Enviar solicitud
                   </button>
                 </div>
               </form>
@@ -228,6 +222,7 @@
                 <div>
                   <input
                     id="player-game"
+                    aria-describedby="game-privacy"
                     maxlength="60"
                     list="game-options"
                     placeholder="Juego actual"
@@ -263,13 +258,10 @@
         </div>
         <p id="social-status" class="status" role="status"></p>
       </section>
-      <section id="loadout" aria-label="Mi jugador"></section>
+      <section id="loadout" data-channel-panel="loadout" aria-label="Mi personaje"></section>
       <div class="lower">
-        <section id="arcade" aria-labelledby="arcade-title">
+        <section id="arcade" data-channel-panel="arcade" aria-labelledby="arcade-title">
           <div class="section-head">
-            <span class="eyebrow"
-              ><b class="section-mark violet"></b> MIENTRAS ESPERAS</span
-            >
             <h2 id="arcade-title">Arcade</h2>
           </div>
           <div class="games">
@@ -278,7 +270,7 @@
                 ><span class="scope"><b></b></span><i class="target-line"></i
               ></span>
               <span class="game-body"
-                ><small>VELOCIDAD</small><strong>Reflejos</strong
+                ><strong>Reflejos</strong
                 ><span>Reacciona a la señal.</span><i data-icon="play"></i
               ></span>
             </button>
@@ -287,26 +279,23 @@
                 ><span class="tiles"><b></b><b></b><b></b><b></b></span
               ></span>
               <span class="game-body"
-                ><small>CONCENTRACIÓN</small><strong>Memoria</strong
+                ><strong>Memoria</strong
                 ><span>Repite la secuencia.</span><i data-icon="play"></i
               ></span>
             </button>
           </div>
         </section>
-        <section id="news" aria-labelledby="news-title">
+        <section id="news" data-channel-panel="news main" aria-labelledby="news-title">
           <div class="section-head">
-            <span class="eyebrow"
-              ><b class="section-mark mint"></b> DEL LOBBY</span
-            >
-            <h2 id="news-title">Novedades</h2>
+            <h2 id="news-title">Cómo usar la sala</h2>
           </div>
           <div class="news-card">
             <div class="news-item">
               <i data-icon="key"></i>
               <div>
-                <h3>Salas bajo llave</h3>
+                <h3>Salas con clave</h3>
                 <p>
-                  Añade una clave al crear tu sala y compártela con tu grupo.
+                  Si creas una sala con clave, tus amigos necesitarán el código y la clave para entrar.
                 </p>
               </div>
             </div>
@@ -315,19 +304,18 @@
               <div>
                 <h3>Modo partida</h3>
                 <p>
-                  Reduce el lobby a los controles de voz cuando comience el
-                  match.
+                  Dentro de la sala, activa el modo partida para tener a mano los controles de voz.
                 </p>
               </div>
             </div>
           </div>
         </section>
       </div>
-      <footer>
+    </main>
+    <footer class="site-footer">
         <span class="footer-logo">SQUADLINK</span
         ><span>Lobby de voz y arcade</span>
-      </footer>
-    </main>
+    </footer>
     <dialog id="entry" aria-labelledby="entry-title">
       <form id="entry-form">
         <button
@@ -338,7 +326,6 @@
         >
           ×
         </button>
-        <div class="label"><i data-icon="headphones"></i> CHAT DE VOZ</div>
         <h2 id="entry-title">Crear sala</h2>
         <div id="nickname-field">
           <label for="nickname">Tu apodo</label
@@ -348,12 +335,12 @@
             autocomplete="nickname"
             maxlength="24"
             required
-            placeholder="Cómo te llaman tus amigos"
+            placeholder="Ej. Luna"
           />
         </div>
         <div id="name-field">
           <label for="name">Nombre de la sala</label
-          ><input id="name" maxlength="48" placeholder="Lobby del squad" />
+          ><input id="name" maxlength="48" placeholder="Ej. Partida del viernes" />
         </div>
         <div id="directory-fields">
           <div class="field-pair">
@@ -391,20 +378,19 @@
             placeholder="¿Qué tipo de partida quieren jugar?"
           ></textarea>
           <label for="directory-game-code"
-            >Código de partida <span>(solo miembros)</span></label
+            >Código del juego <span>(solo para miembros)</span></label
           ><input
             id="directory-game-code"
             maxlength="64"
             autocomplete="off"
-            placeholder="Código del grupo dentro del juego"
+            placeholder="Código que te da el juego"
           />
           <label class="publish-option"
-            ><input id="directory-publish" type="checkbox" />Mostrar sala en el
-            directorio</label
+            ><input id="directory-publish" type="checkbox" />Mostrar mi sala en el directorio público</label
           >
         </div>
         <div id="code-field" hidden>
-          <label for="code">Código de sala</label
+          <label for="code">Código de sala <span>(6 caracteres)</span></label
           ><input
             id="code"
             maxlength="6"
@@ -416,7 +402,7 @@
           />
         </div>
         <div id="password-field">
-          <label for="password">Clave <span>(opcional)</span></label
+          <label for="password">Clave de la sala <span id="password-hint">(opcional)</span></label
           ><input
             id="password"
             type="password"

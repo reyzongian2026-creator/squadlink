@@ -86,9 +86,9 @@ export function mountLoadout({api, getSelf, tell}) {
         <button class="secondary small" type="button" id="kit-save" disabled>Guardar apariencia</button>
         <p id="kit-status" role="status"></p>
       </div></article>
-      <article class="kit-ranking"><div class="kit-ranking-head"><h3>Ranking arcade</h3>
+      <article class="kit-ranking"><div class="kit-ranking-head"><h3>Clasificación del arcade</h3>
       <button class="secondary small" type="button" id="kit-rank-refresh">Actualizar</button></div>
-      <div class="kit-tabs" role="group" aria-label="Ranking por minijuego"><button type="button" data-rank="reflex" aria-pressed="true">Reflejos</button>
+      <div class="kit-tabs" role="group" aria-label="Clasificación por minijuego"><button type="button" data-rank="reflex" aria-pressed="true">Reflejos</button>
       <button type="button" data-rank="sequence" aria-pressed="false">Memoria</button></div>
       <p id="kit-rank-scope"></p><ol id="kit-ranking"></ol><p id="kit-rank-status" role="status"></p></article></div>`;
   const sets = {skin: skins, outfit: outfits, headgear: headgear.map(label => [label])};
@@ -120,7 +120,10 @@ export function mountLoadout({api, getSelf, tell}) {
     $('kit-level').textContent = 'Nivel ' + (profile?.level || 1);
     $('kit-xp-label').textContent = (xp % 100) + ' / 100 XP · ' + xp + ' XP totales';
     $('kit-xp').value = xp % 100;
-    $('kit-save').disabled = saving || !profile || !dirty;
+    const guest = !getSelf();
+    $('kit-save').textContent = guest ? 'Elegir apodo' : 'Guardar apariencia';
+    $('kit-save').disabled = !guest && (saving || !profile || !dirty);
+    $('kit-rank-refresh').textContent = guest ? 'Elegir apodo' : 'Actualizar';
     $('kit-voxel').innerHTML = voxelAvatar(draft);
     for (const [key, buttons] of Object.entries(selectors)) {
       buttons.forEach((btn, i) => btn.setAttribute('aria-pressed', String(i === draft[key])));
@@ -141,12 +144,12 @@ export function mountLoadout({api, getSelf, tell}) {
     const game = selectedGame;
     $('kit-ranking').replaceChildren();
     $('kit-rank-scope').textContent = '';
-    if (!profile) { $('kit-rank-status').textContent = 'Entra con tu apodo para ver las marcas.'; return; }
+    if (!profile) { $('kit-rank-status').textContent = 'Elige un apodo para ver las mejores marcas.'; return; }
     $('kit-rank-status').textContent = 'Cargando marcas…';
     try {
       const data = await api('progress/ranking', {game});
       if (version !== rankVersion) return;
-      const scope = {local: 'Esta instancia', session: 'Esta sesión del servidor', global: 'Comunidad'};
+      const scope = {local: 'Este servidor', session: 'Esta sesión del servidor', global: 'Comunidad'};
       $('kit-rank-scope').textContent = (scope[data.scope] || 'Comunidad') + ' · ' +
         (game === 'reflex' ? 'Menor tiempo' : 'Más rondas seguidas');
       data.players.forEach((p, i) => {
@@ -183,6 +186,7 @@ export function mountLoadout({api, getSelf, tell}) {
     } catch (error) { if (version === profileVersion) $('kit-status').textContent = error.message; }
   }
   $('kit-save').onclick = async () => {
+    if (!getSelf()) { $('profile').click(); return; }
     const saved = {...draft};
     saving = true; render();
     try {
@@ -198,7 +202,11 @@ export function mountLoadout({api, getSelf, tell}) {
     for (const other of tabs) other.setAttribute('aria-pressed', String(other === tab));
     void leaderboard();
   };
-  $('kit-rank-refresh').onclick = () => profile ? leaderboard() : refresh();
+  $('kit-rank-refresh').onclick = () => {
+    if (!getSelf()) $('profile').click();
+    else if (profile) leaderboard();
+    else refresh();
+  };
   render();
   return {
     refresh, ranked: () => Boolean(profile),
