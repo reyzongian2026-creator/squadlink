@@ -1482,6 +1482,9 @@ dialog textarea {
   color: var(--muted);
 }
 .web-client .site-footer .footer-logo { color: #dcdfeb; }
+.footer-downloads { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.footer-downloads a { display: inline-flex; align-items: center; min-height: 26px; color: #dcdfeb; text-decoration: underline; text-underline-offset: 3px; }
+.footer-downloads a:hover { color: #fff; }
 .web-client #directory {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

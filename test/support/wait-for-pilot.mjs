@@ -2,15 +2,19 @@
 import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 
-const file = 'app.js';
-const expected = await readFile(new URL('../../public/' + file, import.meta.url), 'utf8');
+const files = ['index.html', 'app.js', 'style.css'];
+const expected = await Promise.all(files.map(file => readFile(new URL('../../public/' + file, import.meta.url), 'utf8')));
+async function matches(file, index) {
+  const url = new URL('/' + file, 'https://squadlink-lobby.onrender.com');
+  url.searchParams.set('revision', process.env.GITHUB_SHA ?? 'local');
+  const response = await fetch(url, { signal: AbortSignal.timeout(15000), cache: 'no-store' });
+  return response.ok && await response.text() === expected[index];
+}
+
 const deadline = Date.now() + 180_000;
 while (true) {
   try {
-    const url = new URL('/' + file, 'https://squadlink-lobby.onrender.com');
-    url.searchParams.set('revision', process.env.GITHUB_SHA ?? 'local');
-    const response = await fetch(url, {signal:AbortSignal.timeout(15000), cache:'no-store'});
-    if (response.ok && await response.text() === expected) break;
+    if ((await Promise.all(files.map(matches))).every(Boolean)) break;
   } catch (error) { console.info('Esperando el servicio:', error.message); }
   if (Date.now() >= deadline) throw Error('Render todavía no sirve la revisión de cliente esperada.');
   await delay(5000);
