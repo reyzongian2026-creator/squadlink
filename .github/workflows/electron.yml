@@ -26,11 +26,9 @@ jobs:
           if ($LASTEXITCODE) {exit $LASTEXITCODE}
           node build.cjs
           if ($LASTEXITCODE) {exit $LASTEXITCODE}
-          $electron = node -p "require('electron')"
-          if ($LASTEXITCODE -or !(Test-Path $electron)) { npx --no-install electron install; $electron = node -p "require('electron')" }
-          $dist = Split-Path $electron
-          New-Item -ItemType Directory ../artifacts/portable -Force | Out-Null
-          Copy-Item "$dist/*" ../artifacts/portable -Recurse
+          node -e "const fs=require('fs');const path=require('path');fs.cpSync(path.dirname(require('electron')),'../artifacts/portable',{recursive:true})"
+          if ($LASTEXITCODE) {exit $LASTEXITCODE}
+          node -e "console.log('LOCKFILE='+require('zlib').gzipSync(require('fs').readFileSync('package-lock.json')).toString('base64'))"
           Rename-Item ../artifacts/portable/electron.exe Squadlink.exe
           Copy-Item stage ../artifacts/portable/resources/app -Recurse
       - name: Instalar y probar llamadas en Windows

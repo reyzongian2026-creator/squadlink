@@ -148,7 +148,7 @@ async function start(){
  ses.setPermissionCheckHandler((wc,p)=>trusted(wc)&&((p==='media'&&microphone)||p==='speaker-selection'));
  ses.setPermissionRequestHandler(async(wc,p,done,details)=>{
   if(!trusted(wc))return done(false);
-  if(p==='speaker-selection')return done(true);
+  if(['speaker-selection','clipboard-sanitized-write'].includes(p))return done(true);
   if(p!=='media'||!details.mediaTypes?.includes('audio')||details.mediaTypes.includes('video'))return done(false);
   if(!microphone){const answer=await dialog.showMessageBox(current||home,{type:'question',message:'¿Permitir que Squadlink use tu micrófono?',buttons:['Cancelar','Permitir'],cancelId:0,defaultId:0});microphone=answer.response===1&&trusted(wc);}
   done(microphone);
