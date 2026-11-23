@@ -1,7 +1,7 @@
 [Setup]
 AppId=Squadlink.Desktop
 AppName=Squadlink
-AppVersion=0.2.0
+AppVersion=0.3.0
 DefaultDirName={localappdata}\Programs\Squadlink
 DefaultGroupName=Squadlink
 PrivilegesRequired=lowest

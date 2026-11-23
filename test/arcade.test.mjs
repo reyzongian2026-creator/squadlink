@@ -69,3 +69,65 @@ test('Memoria valida aciertos y fallos, y libera todos sus temporizadores', t =>
   close();
   assert.equal(h.timers.size, 0);
 });
+
+test('Reflejos clasificado envía el intento sin declarar un puntaje local', async t => {
+  const h = harness(t);
+  const sent = [];
+  const progression = {
+    ranked: () => true,
+    start: async game => {
+      assert.equal(game, 'reflex');
+      return {runId:'intento',delayMs:1600};
+    },
+    finish: async body => {
+      sent.push(body);
+      return {earned:12, done:true, score:320};
+    }
+  };
+  const close = openArcade('reflex', h.mount, progression);
+  const [status, board] = h.mount.children;
+  const [target] = board.children;
+  target.click();
+  await Promise.resolve();
+  assert.equal(target.textContent, 'Espera…');
+  h.advance();
+  target.click();
+  await Promise.resolve();
+  assert.deepEqual(sent,[{runId:'intento'}]);
+  assert.match(status.textContent,/320 ms.*12 XP/);
+  close();
+});
+
+test('Memoria clasificada envía la respuesta de cada ronda y termina al fallar', async t => {
+  const h = harness(t);
+  const answers = [];
+  const progression = {
+    ranked: () => true,
+    start: async () => ({runId:'memoria',round:1,sequence:[2]}),
+    finish: async body => {
+      answers.push(body);
+      return body.round === 1
+        ? {earned:5,done:false,score:1,round:2,sequence:[2,3]}
+        : {earned:0,done:true,score:1};
+    }
+  };
+  const close = openArcade('sequence',h.mount,progression);
+  const [status,board] = h.mount.children;
+  const [grid,start] = board.children;
+  start.click();
+  await Promise.resolve();
+  while(h.timers.size) h.advance();
+  grid.children[2].click();
+  await Promise.resolve();
+  assert.match(status.textContent,/5 XP/);
+  while(h.timers.size) h.advance();
+  grid.children[0].click();
+  grid.children[1].click();
+  await Promise.resolve();
+  assert.deepEqual(answers, [
+    {runId:'memoria',round:1,answer:[2]},
+    {runId:'memoria',round:2,answer:[0,1]},
+  ]);
+  assert.match(status.textContent,/Completaste 1/);
+  close();
+});

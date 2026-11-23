@@ -1,5 +1,7 @@
 import http from 'node:http';
 import { createSocial } from './social.mjs';
+import { createProgression } from './progression.mjs';
+import { createPostgresStore } from './postgres-store.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve, extname, sep } from 'node:path';
@@ -66,9 +68,39 @@ function passwordField(data) {
   if (typeof value !== 'string' || value.length > 128) reject(400, 'La clave admite hasta 128 caracteres.');
   return value;
 }
+const directoryDefaults = Object.freeze({published:false, description:'', level:'', game:'', gameCode:''});
+
+function directorySettings(data, previous = directoryDefaults) {
+  if (data === undefined) return {...previous};
+  if (!data || typeof data !== 'object' || Array.isArray(data)) reject(400, 'Configuración de publicación inválida.');
+  if (data.published !== undefined && typeof data.published !== 'boolean') reject(400, 'Visibilidad inválida.');
+  const updated = {...previous, published:data.published ?? previous.published};
+  for (const [field, limit] of [['description',160], ['level',32], ['game',64], ['gameCode',64]]) {
+    if (Object.hasOwn(data, field))
+      updated[field] = textField(data[field], 0, limit, 'El campo ' + field + ' admite hasta ' + limit + ' caracteres.');
+  }
+  return updated;
+}
+
+function publicDirectory(rooms, query) {
+  const rawOffset = query.get('offset') ?? '0';
+  if (!/^\d{1,6}$/.test(rawOffset)) reject(400, 'Posición del directorio inválida.');
+  const offset = Number(rawOffset);
+  const visible = [...rooms.values()].filter(room => room.directory.published).reverse();
+  const page = visible.slice(offset, offset + 100);
+  return {
+    rooms:page.map(({code,name,directory,key,members,createdAt}) => ({
+      code,name,description:directory.description,level:directory.level,game:directory.game,
+      locked:Boolean(key),count:members.size,capacity:5,createdAt
+    })),
+    nextOffset:offset + page.length < visible.length ? offset + page.length : null
+  };
+}
+
 function roomView(room) {
   if (!room) return null;
   return {code:room.code, name:room.name, locked:Boolean(room.key), createdAt:room.createdAt, ownerId:room.ownerId,
+    directory:room.directory,
     members:[...room.members.values()].map(({id,nick,muted,joinedAt,social}) =>
       ({id,nick,muted,joinedAt,game:social?.game || '',since:social?.since ?? null}))};
 }
@@ -128,6 +160,10 @@ function signalPayload(data) {
 export function createServer(options = {}) {
   const clock = options.clock ?? Date.now;
   const social = createSocial({reject, throttle, enter, roomView, broadcastRoom, now:clock});
+  const progressionEnv = options.progression?.env ?? process.env;
+  const database = !options.progression?.store && progressionEnv.SQUADLINK_DATABASE_URL
+    ? createPostgresStore(progressionEnv.SQUADLINK_DATABASE_URL) : null;
+  const progression = createProgression({reject, throttle, now:clock, store:database, ...options.progression});
   const sessions = new Map();
   const rooms = new Map();
   const limits = new Map();
@@ -186,7 +222,8 @@ export function createServer(options = {}) {
     res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('X-Frame-Options','DENY');
     try {
-      const path = new URL(req.url, 'http://local.invalid').pathname;
+      const url = new URL(req.url, 'http://local.invalid');
+      const path = url.pathname;
       if (!path.startsWith('/api/')) return await staticFile(req, res, path);
       const expected = origin ?? ('http://' + req.headers.host);
       if ((req.headers.origin && req.headers.origin !== expected) || req.headers['sec-fetch-site'] === 'cross-site')
@@ -196,6 +233,7 @@ export function createServer(options = {}) {
       const route = req.method + ' ' + path;
       const ip = req.socket.remoteAddress || '';
       const data = req.method === 'POST' ? await jsonBody(req) : null;
+      if (route === 'GET /api/directory') return send(res, 200, publicDirectory(rooms, url.searchParams));
       if (route === 'POST /api/session') {
         const nick = textField(data.nick, 1, 24, 'El apodo debe tener entre 1 y 24 caracteres.');
         if (session) {
@@ -218,18 +256,30 @@ export function createServer(options = {}) {
       if (route === 'GET /api/session') return send(res, 200, {self:{id:session.id,nick:session.nick}, room:roomView(session.room)});
       if (req.method === 'POST' && path.startsWith('/api/social/'))
         return send(res, 200, social.handle(path.slice('/api/social/'.length), session, data));
+      if (req.method === 'POST' && path.startsWith('/api/progress/'))
+        return send(res, 200, await progression.handle(path.slice('/api/progress/'.length), session, data));
+      if (route === 'POST /api/directory') {
+        const room = session.room;
+        if (!room || room.ownerId !== session.id) reject(403, 'Solo el anfitrión puede editar la publicación.');
+        throttle('directory-edit/' + session.id, 40);
+        const directory = directorySettings(data, room.directory);
+        room.directory = directory;
+        broadcastRoom(room);
+        return send(res, 200, {room:roomView(room)});
+      }
       if (route === 'POST /api/rooms') {
         if (session.room) return send(res, 200, {room:roomView(session.room)});
         throttle('create/' + ip, 40);
         const name = textField(data.name, 1, 48, 'El nombre de sala debe tener entre 1 y 48 caracteres.');
         const password = passwordField(data);
+        const directory = directorySettings(data.directory);
         const salt = password ? randomBytes(16) : null;
         const key = password ? await hash(password, salt) : null;
         if (session.room) return send(res, 200, {room:roomView(session.room)});
         let code;
         do { code = Array.from({length:6}, () => alphabet[randomInt(alphabet.length)]).join(''); }
         while (rooms.has(code));
-        const room = {code,name,salt,key,ownerId:session.id,createdAt:clock(),members:new Map()};
+        const room = {code,name,salt,key,directory,ownerId:session.id,createdAt:clock(),members:new Map()};
         rooms.set(code, room);
         enter(session, room);
         return send(res, 201, {room:roomView(room)});
@@ -301,7 +351,10 @@ export function createServer(options = {}) {
     }
   }, 15000);
   timer.unref();
-  server.on('close', () => clearInterval(timer));
+  server.on('close', () => {
+    clearInterval(timer);
+    database?.close().catch(() => console.error('No se pudo cerrar el almacén de progreso.'));
+  });
   return server;
 }
 

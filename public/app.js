@@ -1,6 +1,10 @@
 import { bindVoiceDiagnostics } from "./connection.js";
+import { mountDirectory } from "./directory.js";
 const $ = (id) => document.getElementById(id);
 const paths = {
+  directory: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
+  search: "M10 3a7 7 0 1 0 .01 0 M15 15l6 6",
+  refresh: "M20 5v5h-5 M4 19v-5h5 M20 10a8 8 0 0 0-14-4 M4 14a8 8 0 0 0 14 4",
   friends:
     "M3 21v-2a5 5 0 0 1 10 0v2 M8 4a4 4 0 1 0 .01 0 M16 5a3 3 0 1 1 0 6 M16 14a5 5 0 0 1 5 5v2",
   copy: "M8 8h12v13H8z M4 16V3h12",
@@ -44,6 +48,40 @@ let self,
   toastTimer,
   generation = 0,
   gameRequest = 0;
+const directory = mountDirectory({
+  api,
+  getRoom: () => room,
+  join: (code) => openEntry("join", { code }),
+  create: () => openEntry("create", { published: true }),
+});
+let loadout, loadoutImport;
+function prepareLoadout() {
+  if (!loadoutImport)
+    loadoutImport = import("./progression.js")
+      .then(({ mountLoadout }) => {
+        loadout = mountLoadout({
+          api,
+          getSelf: () => self,
+          getRoom: () => room,
+          getSocialId: () => $("friend-id").textContent,
+          tell,
+        });
+        return loadout;
+      })
+      .catch((error) => {
+        loadoutImport = null;
+        throw error;
+      });
+  return loadoutImport;
+}
+function refreshLoadout() {
+  prepareLoadout()
+    .then((controller) => controller.refresh())
+    .catch(() => {
+      if (!$("loadout").childElementCount)
+        $("loadout").textContent = "No se pudo cargar el perfil de jugador.";
+    });
+}
 let social, socialImport;
 async function setupSocial() {
   if (!socialImport)
@@ -64,6 +102,7 @@ async function setupSocial() {
       });
   const client = await socialImport;
   await client.connect();
+  refreshLoadout();
 }
 function startSocial() {
   setupSocial().catch((error) => {
@@ -72,7 +111,10 @@ function startSocial() {
   });
 }
 $("social-retry").onclick = startSocial;
-$("social-login").onclick = () => openEntry("profile");
+$("social-login").onclick = $("profile").onclick = () => openEntry("profile");
+$("edit-room-fields").onclick = () => openEntry("edit");
+$("copy-match-code").onclick = () =>
+  copy(room.directory.gameCode, "Código de partida copiado.");
 let audioMount;
 $("audio-panel").ontoggle = () => {
   if (!$("audio-panel").open || audioMount) return;
@@ -98,6 +140,14 @@ function readNick() {
 function showGuest(nick) {
   $("profile").textContent = nick || "Invitado";
   $("avatar").textContent = [...(nick || "S")][0].toUpperCase();
+}
+function applySession(result) {
+  self = result.self;
+  showGuest(self.nick);
+  try {
+    localStorage.setItem("squadlink.nick", self.nick);
+  } catch {}
+  startSocial();
 }
 function tell(message) {
   clearTimeout(toastTimer);
@@ -132,29 +182,64 @@ async function api(path, data, signal) {
     );
   return body;
 }
-function openEntry(next) {
+function directoryFields() {
+  return {
+    published: $("directory-publish").checked,
+    description: $("directory-description").value.trim(),
+    game: $("directory-game").value.trim(),
+    level: $("directory-level").value.trim(),
+    gameCode: $("directory-game-code").value.trim(),
+  };
+}
+function openEntry(next, preset = {}) {
   mode = next;
+  const edit = next === "edit",
+    create = next === "create",
+    join = next === "join";
+  const fields = edit ? room.directory || {} : preset;
   $("entry-error").textContent = "";
-  $("entry-title").textContent = $("submit-entry").textContent =
-    next === "create"
-      ? "Crear sala"
-      : next === "join"
-        ? "Unirme a la sala"
-        : "Entrar con mi apodo";
-  $("password-field").hidden = next === "profile";
+  const titles = {
+    create: "Crear sala",
+    join: "Unirme a la sala",
+    profile: "Mi apodo",
+    edit: "Editar detalles",
+  };
+  $("entry-title").textContent = titles[next];
+  $("submit-entry").textContent =
+    edit || (next === "profile" && self)
+      ? "Guardar cambios"
+      : next === "profile"
+        ? "Entrar con mi apodo"
+        : titles[next];
   $("nickname").value = self?.nick || readNick();
+  $("nickname-field").hidden = edit || (next !== "profile" && Boolean(self));
+  $("nickname").disabled = $("nickname-field").hidden;
   $("name").value = "";
-  $("name-field").hidden = next !== "create";
-  $("code-field").hidden = next !== "join";
-  $("code").disabled = next !== "join";
-  $("code").required = next === "join";
-  $("code").value = next === "join" ? invited.toUpperCase() : "";
+  $("name-field").hidden = !create;
+  $("directory-fields").hidden = !create && !edit;
+  $("directory-game").value = fields.game || "";
+  $("directory-level").value = fields.level || "";
+  $("directory-description").value = fields.description || "";
+  $("directory-game-code").value = fields.gameCode || "";
+  $("directory-publish").checked = Boolean(fields.published);
+  $("code-field").hidden = !join;
+  $("code").disabled = !join;
+  $("code").required = join;
+  $("code").value = join ? (preset.code || invited).toUpperCase() : "";
+  $("password-field").hidden = !create && !join;
   $("password").value = "";
   $("entry").showModal();
-  ($("nickname").value && next !== "profile"
-    ? $(next === "create" ? "name" : "code")
-    : $("nickname")
-  ).focus();
+  const first =
+    next === "profile" || !$("nickname").value
+      ? "nickname"
+      : create
+        ? "name"
+        : edit
+          ? "directory-game"
+          : $("code").value
+            ? "password"
+            : "code";
+  $(first).focus();
 }
 $("create").onclick = () => openEntry("create");
 $("join").onclick = () => openEntry("join");
@@ -167,28 +252,40 @@ $("entry-form").onsubmit = async (event) => {
   $("submit-entry").disabled = true;
   $("entry-error").textContent = "";
   try {
-    const login = await api("session", { nick: $("nickname").value.trim() });
-    self = login.self;
-    showGuest(self.nick);
-    try {
-      localStorage.setItem("squadlink.nick", self.nick);
-    } catch {}
-    startSocial();
+    if (mode === "edit") {
+      const { room: updated } = await api("directory", directoryFields());
+      updateRoom(updated);
+      $("entry").close();
+      directory.reload();
+      return;
+    }
+    await identityReady;
+    const nick = $("nickname").value.trim() || self?.nick;
+    if (!self || self.nick !== nick) {
+      applySession(await api("session", { nick }));
+    }
     if (mode === "profile") {
       $("entry").close();
       return;
     }
     const password = $("password").value;
-    const result =
-      mode === "create"
-        ? await api("rooms", {
-            name: $("name").value.trim() || "Lobby de " + self.nick,
-            password,
-          })
-        : await api("join", {
-            code: $("code").value.trim().toUpperCase(),
-            password,
-          });
+    const creating = mode === "create";
+    const endpoint = creating ? "rooms" : "join";
+    const payload = creating
+      ? {
+          name: $("name").value.trim() || "Lobby de " + self.nick,
+          password,
+          directory: directoryFields(),
+        }
+      : { code: $("code").value.trim().toUpperCase(), password };
+    let result;
+    try {
+      result = await api(endpoint, payload);
+    } catch (error) {
+      if (error.status !== 401) throw error;
+      applySession(await api("session", { nick }));
+      result = await api(endpoint, payload);
+    }
     $("entry").close();
     await enterRoom(result.room);
   } catch (error) {
@@ -250,8 +347,25 @@ function renderMembers() {
   $("members").replaceChildren(fragment);
 }
 function updateRoom(snapshot) {
+  const previousCode = room?.code;
   room = snapshot;
   $("room-name").textContent = room.name;
+  const metadata = room.directory || {};
+  for (const [id, value] of [
+    ["room-description", metadata.description],
+    ["room-game", metadata.game],
+    ["room-level", metadata.level],
+  ]) {
+    $(id).textContent = value || "";
+    $(id).hidden = !value;
+  }
+  $("room-published").textContent = metadata.published
+    ? "En el directorio"
+    : "Solo con invitación";
+  $("private-match").hidden = !metadata.gameCode;
+  $("match-code").textContent = metadata.gameCode || "";
+  $("edit-room-fields").hidden = room.ownerId !== self.id;
+  if (previousCode !== room.code) directory.draw();
   $("room-age").textContent = room.createdAt
     ? "Creada a las " +
       new Date(room.createdAt).toLocaleTimeString("es-PE", {
@@ -277,6 +391,7 @@ async function enterRoom(snapshot) {
   $("home").hidden = true;
   setConnection("Conectando", false);
   updateRoom(snapshot);
+  directory.reload();
   try {
     const [{ VoiceRoom }, { iceServers }] = await Promise.all([
       import("./voice.js"),
@@ -348,6 +463,9 @@ function resetRoom() {
   voice?.close();
   voice = null;
   room = null;
+  $("match-code").textContent = $("directory-game-code").value = "";
+  $("password").value = "";
+  directory.draw();
   social?.roomChanged();
   microphone = false;
   $("voice-measurements").replaceChildren();
@@ -406,6 +524,7 @@ $("leave").onclick = async () => {
   try {
     await api("leave", {}, AbortSignal.timeout(8000));
     resetRoom();
+    directory.reload();
     history.replaceState(null, "", location.pathname);
     $("create").focus();
   } catch {
@@ -448,7 +567,7 @@ for (const button of document.querySelectorAll("[data-game]")) {
     try {
       const { openArcade } = await import("./arcade.js");
       if (request === gameRequest && $("game-dialog").open)
-        cleanupGame = openArcade(button.dataset.game, $("game-mount"));
+        cleanupGame = openArcade(button.dataset.game, $("game-mount"), loadout);
     } catch {
       if (request === gameRequest)
         $("game-mount").textContent =
@@ -468,21 +587,27 @@ for (const link of document.querySelectorAll("nav a"))
       .querySelectorAll("nav a")
       .forEach((item) => item.classList.toggle("selected", item === link));
   };
-async function boot() {
-  showGuest(readNick());
+async function restoreIdentity() {
+  const nick = readNick();
+  showGuest(nick);
+  let result;
   try {
-    const result = await api("session");
-    self = result.self;
-    showGuest(self.nick);
-    startSocial();
-    if (result.room) {
-      await enterRoom(result.room);
-      return;
-    }
+    result = await api("session");
   } catch (error) {
-    if (error.status !== 401) tell(error.message);
+    if (error.status !== 401) throw error;
+    if (nick) result = await api("session", { nick });
   }
-  if (/^[a-z0-9]{6}$/i.test(invited) && !$("entry").open) openEntry("join");
+  if (!result) return;
+  applySession(result);
+  if (result.room) await enterRoom(result.room);
+}
+const identityReady = restoreIdentity().catch((error) => tell(error.message));
+async function boot() {
+  directory.reload();
+  await identityReady;
+  if (!self) refreshLoadout();
+  if (!room && /^[a-z0-9]{6}$/i.test(invited) && !$("entry").open)
+    openEntry("join");
 }
 bindVoiceDiagnostics(
   () => voice,

@@ -1,0 +1,30 @@
+#loadout {margin-block:2rem; scroll-margin-top:1.5rem}
+.kit-heading,.kit-ranking-head {display:flex;align-items:center;justify-content:space-between;gap:.8rem}
+.kit-heading h2,.kit-panels h3 {margin:0}
+.kit-heading {margin-bottom:.8rem}
+#kit-level {color:var(--lime);font:600 .79rem var(--mono)}
+.kit-panels {display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:1rem}
+.kit-editor,.kit-ranking {border:1px solid var(--border);border-radius:16px;background:var(--panel);overflow:hidden}
+.kit-editor {display:grid;grid-template-columns:minmax(105px,.75fr) minmax(0,1.4fr)}
+.kit-stage {display:grid;align-items:center;justify-items:center;background-color:#232130;background-image:linear-gradient(#39364580 1px,transparent 1px),linear-gradient(90deg,#39364580 1px,transparent 1px);background-size:18px 18px}
+#kit-voxel {width:100%;max-width:190px;filter:drop-shadow(0 8px 8px #11101b77)}
+#kit-voxel svg {width:100%;display:block}
+.kit-controls,.kit-ranking {padding:clamp(12px,2.5vw,24px)}
+.kit-controls fieldset {border:0;padding:0;margin:0 0 .6rem;display:flex;gap:.25rem;flex-wrap:wrap}
+.kit-controls legend,#kit-xp-label,#kit-rank-scope {color:var(--muted);font-size:.75rem}
+.kit-controls legend {padding:0;margin-bottom:.22rem}
+.kit-controls fieldset button,.kit-tabs button {font:inherit;font-size:.72rem;border:1px solid #504b60;border-radius:5px;color:var(--ink);background:transparent;padding:.23rem .42rem}
+.kit-controls fieldset .kit-swatch {background:var(--sample);height:1.55rem;width:1.55rem;padding:0}
+.kit-controls fieldset [aria-pressed=true],.kit-tabs [aria-pressed=true] {outline:2px solid var(--lime);outline-offset:0}
+.kit-xp {display:grid;gap:.3rem;margin:.35rem 0 .8rem}
+#kit-xp {width:100%;height:6px;accent-color:var(--lime)}
+#kit-status,#kit-rank-status {font-size:.8rem;color:var(--muted);margin:.5rem 0 0}
+.kit-tabs {display:flex;gap:.4rem;margin:1.1rem 0}
+.kit-tabs button {font-size:.83rem;padding:.4rem .8rem}
+#kit-ranking {padding:0;margin:0;max-height:14rem;overflow:auto}
+#kit-ranking li {display:grid;grid-template-columns:2rem 1fr auto;align-items:center;gap:.5rem;padding:.5rem 0;border-bottom:1px solid var(--border);font-size:.85rem}
+#kit-ranking .place {font:11px var(--mono);color:var(--muted)}
+#kit-ranking .name {overflow-wrap:anywhere}
+#kit-ranking .mark {color:var(--lime);font:600 .8rem var(--mono)}
+@media(max-width:810px) {.kit-panels {grid-template-columns:1fr}}
+@media(max-width:400px) {.kit-editor {grid-template-columns:90px minmax(0,1fr)}}

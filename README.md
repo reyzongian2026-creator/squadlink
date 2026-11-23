@@ -12,6 +12,14 @@ Comparte tu código de amigo y acepta la solicitud. Tus amigos pueden ver si est
 
 En el cliente de Windows puedes activar la detección de juegos compatibles. En el navegador puedes indicar el juego manualmente. Dentro de la sala, los ajustes de voz permiten elegir micrófono y salida, y activar la reducción de ruido según el dispositivo. El diagnóstico de conexión muestra la ruta y el tiempo de ida y vuelta cuando WebRTC los reporta.
 
+## Directorio, personaje y clasificación
+
+Un anfitrión puede publicar su sala en el directorio con una descripción, el juego y el nivel que busca. Puede retirar la publicación en cualquier momento. La clave de entrada sigue siendo obligatoria para salas protegidas. El código de partida del juego se comparte con quienes ya están dentro.
+
+El apodo y la identidad del jugador se recuperan en el mismo navegador o perfil de Windows. Cada personaje admite personalización de piel, ropa y accesorios. Las partidas clasificadas de Reflejos y Memoria otorgan XP y tienen tablas de posiciones independientes. Se sube un nivel cada 100 XP. El servidor valida las rondas y el cliente guarda un respaldo firmado del progreso.
+
+El piloto usa PostgreSQL en la red privada de Render. El plan gratuito de esta base expira el 22 de diciembre de 2026. Para conservar la clasificación completa, migrar la base antes de esa fecha y mantener el secreto de firma. Ver [persistencia y migración](docs/architecture/progreso.md) y [relay en Santiago](ops/santiago/README.md).
+
 ## Probar en este equipo
 
 Descomprime la carpeta. Con Node.js 22 o superior instalado, abre **Iniciar-Squadlink.cmd** en Windows o **Squadlink.command** en macOS. El lanzador inicia el servidor local y abre el navegador. Mantén la consola abierta mientras pruebas.

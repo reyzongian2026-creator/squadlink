@@ -1,6 +1,7 @@
 // Requires Playwright on the test machine only. A single process owns this isolated server.
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import { randomUUID } from 'node:crypto';
 import { createServer } from '../server.mjs';
 
 async function socialSmoke(host, guest, spectator) {
@@ -54,6 +55,94 @@ async function socialSmoke(host, guest, spectator) {
   await guest.getByRole('heading', { name: 'Grupo de prueba', exact: true }).waitFor(socialWait);
 }
 
+async function directorySmoke(host, visitor, roomCode) {
+  const description = 'Práctica QA ' + randomUUID().slice(0, 8);
+  const gameCode = 'QA-' + randomUUID().slice(0, 8);
+  const cardButton = visitor.locator('#directory-list [data-room-code="' + roomCode + '"]');
+  const openEditor = () => host.locator('#edit-room-fields').click();
+
+  async function refreshDirectory() {
+    await Promise.all([
+      visitor.waitForResponse(response => new URL(response.url()).pathname === '/api/directory' && response.request().method() === 'GET'),
+      visitor.locator('#directory-refresh').click()
+    ]);
+  }
+  await refreshDirectory();
+  assert.equal(await cardButton.count(), 0, 'una sala privada queda fuera del directorio');
+  await openEditor();
+  await host.locator('#directory-publish').check();
+  await host.locator('#directory-description').fill(description);
+  await host.locator('#directory-game').fill('VALORANT');
+  await host.locator('#directory-level').fill('Intermedio');
+  await host.locator('#directory-game-code').fill(gameCode);
+  await host.locator('#submit-entry').click();
+  await host.waitForFunction(code => document.querySelector('#match-code')?.textContent.trim() === code, gameCode);
+  await refreshDirectory();
+  await cardButton.waitFor();
+  await visitor.locator('#directory-query').fill('Juego inexistente ' + randomUUID());
+  await cardButton.waitFor({ state: 'hidden' });
+  await visitor.locator('#directory-query').fill('Intermedio');
+  await cardButton.waitFor();
+  assert.ok(!(await visitor.locator('#directory-list').innerText()).includes(gameCode), 'el directorio oculta el código de juego');
+  await cardButton.click();
+  assert.equal(await visitor.locator('#code').inputValue(), roomCode);
+  await visitor.locator('#password').fill('incorrecta');
+  await visitor.locator('#submit-entry').click();
+  await visitor.waitForFunction(() => Boolean(document.querySelector('#entry-error').textContent.trim()));
+  assert.ok(!await visitor.locator('#room').isVisible());
+  await visitor.locator('#password').fill('solo-para-prueba');
+  await visitor.locator('#submit-entry').click();
+  await visitor.waitForFunction(code => document.querySelector('#match-code')?.textContent.trim() === code, gameCode);
+  await visitor.getByRole('button', { name: 'Salir de la sala' }).click();
+  await visitor.locator('#room').waitFor({ state: 'hidden' });
+  await openEditor();
+  await host.locator('#directory-publish').uncheck();
+  await host.locator('#submit-entry').click();
+  await host.locator('#entry').waitFor({ state: 'hidden' });
+  await refreshDirectory();
+  await cardButton.waitFor({ state: 'detached' });
+
+  // Simulate an expired session while preserving the player's own local profile.
+  await visitor.context().clearCookies();
+  const restored = visitor.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/session' && response.request().method() === 'POST' && response.ok());
+  await visitor.reload();
+  const body = await (await restored).json();
+  assert.equal(body.self.nick, 'Luz');
+  assert.equal(await visitor.locator('#profile').innerText(), 'Luz');
+}
+
+async function progressionSmoke(player, observer, playForRank) {
+  await player.getByText(/Menor tiempo/).waitFor();
+  await player.locator('#kit-options').getByRole('button', { name: 'Gorra', exact: true }).click();
+  await player.locator('#kit-save').click();
+  await player.getByText('Apariencia guardada.', { exact: true }).waitFor();
+  await player.reload();
+  await player.waitForFunction(() =>
+    document.querySelector('#kit-options [aria-label="Gorra"]')?.getAttribute('aria-pressed') === 'true');
+  assert.equal(await player.locator('#kit-nick').innerText(), 'Luz');
+
+  await player.locator('[data-rank="sequence"]').click();
+  await player.getByText(/Más rondas seguidas/).waitFor();
+  if (!playForRank) return;
+
+  await player.locator('[data-game="reflex"]').click();
+  await player.locator('#game-dialog').getByRole('button', { name: 'Empezar' }).click();
+  const target = player.locator('#game-dialog').getByRole('button', { name: '¡Ahora!' });
+  const finished = player.waitForResponse(response => new URL(response.url()).pathname === '/api/progress/finish');
+  // A realistic press duration keeps the test within the server's accepted reaction window.
+  await target.click({ delay: 180 });
+  const response = await finished;
+  assert.ok(response.ok(), 'el servidor aceptó la ronda completada en el arcade');
+  const { earned, profile } = await response.json();
+  assert.ok(earned > 0 && profile.xp >= earned && profile.best.reflex >= 80);
+  await player.getByRole('button', { name: 'Cerrar minijuego' }).click();
+  await player.waitForFunction(xp => document.querySelector('#kit-xp-label')?.textContent.includes(xp + ' XP totales'), profile.xp);
+  await observer.locator('[data-rank="reflex"]').click();
+  await observer.locator('#kit-ranking li').filter({ has: observer.getByText('Luz', { exact: true }) })
+    .getByText(profile.best.reflex + ' ms', { exact: true }).waitFor();
+}
+
 async function audioPreferencesSmoke(page) {
   const settings = page.locator('#audio-panel');
   const openSettings = async () => {
@@ -74,7 +163,7 @@ async function audioPreferencesSmoke(page) {
 
 
 export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLINK_TEST_ORIGIN) {
-  const server = sharedOrigin ? null : createServer();
+  const server = sharedOrigin ? null : createServer({ progression: { env: { RENDER: 'true', SQUADLINK_RECEIPT_SECRET: randomUUID() } } });
   let browser;
   try {
     if (server) {
@@ -166,7 +255,10 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     await b.getByRole('button', { name: 'Salir de la sala' }).click();
     await b.waitForFunction(() => window.qaTracks.length > 0 && window.qaTracks.every(t => t.readyState === 'ended') && window.qaPeers.every(p => p.connectionState === 'closed'));
     await a.waitForFunction(() => !document.querySelector('#members').textContent.includes('Ana'));
-    await socialSmoke(a, b, await client());
+    const spectator = await client();
+    await socialSmoke(a, b, spectator);
+    await directorySmoke(a, spectator, code);
+    await progressionSmoke(spectator, b, !sharedOrigin);
     await audioPreferencesSmoke(a);
     assert.deepEqual(errors, []);
     console.log(JSON.stringify({ initial, during, browser: browser.version() }));

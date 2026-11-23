@@ -34,15 +34,23 @@
         >
         <nav aria-label="Navegación">
           <a href="#main" class="selected"><i data-icon="lobby"></i>Lobby</a
+          ><a href="#directory"><i data-icon="directory"></i>Salas</a
           ><a href="#social"><i data-icon="friends"></i>Amigos</a
           ><a href="#arcade"><i data-icon="game"></i>Arcade</a
-          ><a href="#news"><i data-icon="signal"></i>Novedades</a>
+          ><a href="#loadout">Mi jugador</a>
         </nav>
         <div class="identity">
           <button id="install-app" class="secondary small" hidden>
             Instalar app</button
           ><span id="avatar" aria-hidden="true">S</span
-          ><span id="profile">Invitado</span>
+          ><button
+            id="profile"
+            class="profile-button"
+            type="button"
+            title="Editar mi apodo"
+          >
+            Invitado
+          </button>
         </div>
       </div>
     </header>
@@ -83,6 +91,21 @@
           <span id="privacy"></span><span id="count"></span
           ><span id="room-age"></span>
         </div>
+        <p id="room-description" class="room-description" hidden></p>
+        <div class="room-meta">
+          <span id="room-game" class="tag" hidden></span
+          ><span id="room-level" class="tag" hidden></span
+          ><span id="room-published" class="tag"></span
+          ><button type="button" id="edit-room-fields" class="minor" hidden>
+            Editar detalles
+          </button>
+        </div>
+        <div id="private-match" class="match-info" hidden>
+          <span>Código de partida</span><strong id="match-code"></strong
+          ><button id="copy-match-code" class="secondary small">
+            Copiar código de partida
+          </button>
+        </div>
         <div class="invite">
           <span>Código de sala <strong id="room-code"></strong></span
           ><button class="secondary small" id="copy">Copiar código</button
@@ -110,6 +133,44 @@
           aria-live="polite"
           hidden
         ></div>
+      </section>
+      <section
+        id="directory"
+        class="directory"
+        aria-labelledby="directory-title"
+      >
+        <div class="directory-head">
+          <div class="section-head">
+            <span class="eyebrow"
+              ><b class="section-mark violet"></b> DIRECTORIO</span
+            >
+            <h2 id="directory-title">Explorar salas</h2>
+          </div>
+          <button id="directory-refresh" class="secondary small" type="button">
+            <i data-icon="refresh"></i>Actualizar
+          </button>
+        </div>
+        <label class="directory-search" for="directory-query"
+          ><i data-icon="search"></i
+          ><input
+            type="search"
+            id="directory-query"
+            placeholder="Buscar entre las salas cargadas"
+            aria-label="Buscar entre las salas cargadas"
+            autocomplete="off"
+        /></label>
+        <div id="directory-list" class="room-grid"></div>
+        <button
+          id="directory-more"
+          type="button"
+          class="secondary small"
+          hidden
+        >
+          Mostrar más salas
+        </button>
+        <p id="directory-status" class="status" role="status">
+          Cargando salas…
+        </p>
       </section>
       <section id="social" class="social" aria-labelledby="social-title">
         <div class="social-head">
@@ -192,7 +253,8 @@
                 Detectar juego en Windows
               </button>
               <p id="game-privacy" class="status">
-                Tus amigos y los participantes de tu sala pueden ver tu actividad.
+                Tus amigos y los participantes de tu sala pueden ver tu
+                actividad.
               </p>
             </div>
           </div>
@@ -201,6 +263,7 @@
         </div>
         <p id="social-status" class="status" role="status"></p>
       </section>
+      <section id="loadout" aria-label="Mi jugador"></section>
       <div class="lower">
         <section id="arcade" aria-labelledby="arcade-title">
           <div class="section-head">
@@ -277,18 +340,68 @@
         </button>
         <div class="label"><i data-icon="headphones"></i> CHAT DE VOZ</div>
         <h2 id="entry-title">Crear sala</h2>
-        <label for="nickname">Tu apodo</label
-        ><input
-          id="nickname"
-          name="nick"
-          autocomplete="nickname"
-          maxlength="24"
-          required
-          placeholder="Cómo te llaman tus amigos"
-        />
+        <div id="nickname-field">
+          <label for="nickname">Tu apodo</label
+          ><input
+            id="nickname"
+            name="nick"
+            autocomplete="nickname"
+            maxlength="24"
+            required
+            placeholder="Cómo te llaman tus amigos"
+          />
+        </div>
         <div id="name-field">
           <label for="name">Nombre de la sala</label
           ><input id="name" maxlength="48" placeholder="Lobby del squad" />
+        </div>
+        <div id="directory-fields">
+          <div class="field-pair">
+            <div>
+              <label for="directory-game">Juego</label
+              ><input
+                id="directory-game"
+                list="game-options"
+                maxlength="64"
+                placeholder="Ej. VALORANT"
+              />
+            </div>
+            <div>
+              <label for="directory-level">Nivel</label
+              ><input
+                id="directory-level"
+                list="rank-options"
+                maxlength="32"
+                placeholder="Todos los niveles"
+              /><datalist id="rank-options">
+                <option value="Todos los niveles"></option>
+                <option value="Principiante"></option>
+                <option value="Intermedio"></option>
+                <option value="Avanzado"></option>
+                <option value="Competitivo"></option>
+              </datalist>
+            </div>
+          </div>
+          <label for="directory-description"
+            >Descripción <span>(opcional)</span></label
+          ><textarea
+            id="directory-description"
+            rows="2"
+            maxlength="160"
+            placeholder="¿Qué tipo de partida quieren jugar?"
+          ></textarea>
+          <label for="directory-game-code"
+            >Código de partida <span>(solo miembros)</span></label
+          ><input
+            id="directory-game-code"
+            maxlength="64"
+            autocomplete="off"
+            placeholder="Código del grupo dentro del juego"
+          />
+          <label class="publish-option"
+            ><input id="directory-publish" type="checkbox" />Mostrar sala en el
+            directorio</label
+          >
         </div>
         <div id="code-field" hidden>
           <label for="code">Código de sala</label

@@ -7,7 +7,7 @@ import { fixture } from './support/http.mjs';
 // A DOM emulator validates event handlers and state changes, not layout or media.
 export async function domSmoke(Window) {
   const disposals = [];
-  const f = fixture({ after: callback => disposals.push(callback) });
+  const f = fixture({ after: callback => disposals.push(callback) }, { progression: { env: { RENDER: 'true', SQUADLINK_RECEIPT_SECRET: randomBytes(32).toString('hex') } } });
   const player = f.player();
   const win = new Window({ url: 'http://localhost', settings: {
     disableJavaScriptEvaluation: true, disableCSSFileLoading: true, disableJavaScriptFileLoading: true
@@ -29,8 +29,8 @@ export async function domSmoke(Window) {
     globalThis.EventSource = class extends win.EventTarget { close() {} };
     await import('../public/app.js');
     const el = id => win.document.getElementById(id);
-    async function until(check) {
-      const end = performance.now() + 3000;
+    async function until(check, timeout = 3000) {
+      const end = performance.now() + timeout;
       while (!check()) {
         if (performance.now() >= end) throw Error('No alcanzó el estado esperado');
         await delay(10);
@@ -48,6 +48,35 @@ export async function domSmoke(Window) {
     assert.equal(el('room-name').textContent, 'Sala QA');
     assert.match(el('privacy').textContent, /clave/);
     assert.match(el('members').textContent, /Prueba/);
+
+    await until(() => el('kit-rank-scope')?.textContent.includes('Menor tiempo'));
+    document.querySelector('#kit-options [aria-label="Gorra"]').click();
+    el('kit-save').click();
+    await until(() => el('kit-status').textContent.includes('Apariencia guardada'));
+    assert.equal((await player.hit('progress/profile', {})).data.profile.avatar.headgear, 2);
+    document.querySelector('[data-rank="sequence"]').click();
+    await until(() => el('kit-rank-scope').textContent.includes('Más rondas seguidas'));
+
+    const outsider = f.player();
+    assert.ok(!(await outsider.hit('directory')).data.rooms.some(item => item.code === code));
+    el('edit-room-fields').click();
+    el('directory-game').value = 'VALORANT';
+    el('directory-level').value = 'Intermedio';
+    el('directory-description').value = 'Para practicar en equipo';
+    el('directory-game-code').value = 'QA-PRACTICA';
+    el('directory-publish').checked = true;
+    el('entry-form').requestSubmit();
+    await until(() => !el('entry').open && el('match-code').textContent === 'QA-PRACTICA');
+    const listing = (await outsider.hit('directory')).data.rooms.find(item => item.code === code);
+    assert.ok(listing);
+    assert.equal(listing.description, 'Para practicar en equipo');
+    assert.equal(listing.level, 'Intermedio');
+    assert.ok(!JSON.stringify(listing).includes('QA-PRACTICA'));
+    el('edit-room-fields').click();
+    el('directory-publish').checked = false;
+    el('entry-form').requestSubmit();
+    await until(() => !el('entry').open);
+    assert.ok(!(await outsider.hit('directory')).data.rooms.some(item => item.code === code));
 
     // The owner exercises the UI, while a separately authenticated client signs its own requests.
     await until(() => /^[A-F0-9]{16}$/.test(el('friend-id').textContent));
@@ -81,7 +110,13 @@ export async function domSmoke(Window) {
     document.querySelector('[data-game="reflex"]').click();
     await until(() => el('game-mount').querySelector('.reflex-pad'));
     el('game-mount').querySelector('button').click();
-    assert.match(el('game-mount').textContent, /Espera/);
+    await until(() => el('game-mount').textContent.includes('Espera'));
+    await until(() => el('game-mount').querySelector('button').dataset.phase === 'go', 5000);
+    await delay(180); // Simulate human reaction within the documented 80–3000 ms scoring interval.
+    el('game-mount').querySelector('button').click();
+    await until(() => el('kit-xp').value > 0);
+    const ranking = (await visitor.hit('progress/ranking', { game: 'reflex' })).data;
+    assert.ok(ranking.players.some(profile => profile.nick === 'Prueba' && profile.best.reflex >= 80));
     document.querySelector('[data-dismiss="game-dialog"]').click();
     await until(() => !el('game-dialog').open);
     assert.equal(el('room-code').textContent, code);
@@ -107,7 +142,7 @@ export async function domSmoke(Window) {
     await until(() => el('room-name').textContent === 'Partida de Ana' && !el('room').hidden);
     assert.match(el('members').textContent, /Ana/);
     assert.match(el('members').textContent, /Prueba/);
-    console.log('DOM y HTTP: amistad, actividad, admisión a sala protegida, código manual, arcade, preferencias de apodo y reintento de salida verificados.');
+    console.log('DOM y HTTP: personaje, XP, ranking, publicación y retiro de sala, privacidad del código, amistad, actividad, admisión a sala protegida, código manual, arcade, preferencias de apodo y reintento de salida verificados.');
   } finally {
     for (const dispose of disposals) dispose();
     await win.happyDOM.abort();

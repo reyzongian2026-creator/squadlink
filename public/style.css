@@ -1008,3 +1008,233 @@ summary:focus-visible {
   outline: 2px solid var(--lime);
   outline-offset: 2px;
 }
+.profile-button,
+.minor {
+  border: 0;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  padding: 3px 0;
+}
+.profile-button:hover,
+.minor:hover {
+  color: var(--lime);
+}
+.directory {
+  margin: 32px 0;
+}
+.directory-head,
+.directory-card-top,
+.directory-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.directory-head .section-head {
+  margin: 0;
+}
+.directory-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 9px 13px;
+  border-radius: 7px;
+  max-width: 440px;
+  margin: 16px 0;
+  color: var(--muted);
+}
+.directory-search:focus-within {
+  outline: 2px solid var(--lime);
+  outline-offset: 2px;
+}
+.directory-search input {
+  font: inherit;
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  outline: 0;
+  padding: 2px;
+}
+.directory-search input:focus-visible {
+  outline: 0;
+}
+.room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 285px), 1fr));
+  gap: 12px;
+}
+.directory-card,
+.directory-empty {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 16px 18px;
+  min-width: 0;
+}
+.directory-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 142px;
+}
+.directory-card h3,
+.directory-desc,
+.room-description,
+.directory-game,
+.directory-card-data span {
+  overflow-wrap: anywhere;
+}
+.directory-card h3 {
+  font-size: 1.1rem;
+  letter-spacing: -0.015em;
+}
+.directory-game {
+  font: 600 0.72rem var(--mono);
+  color: #d5bcf3;
+}
+.directory-desc,
+.room-description {
+  color: var(--muted);
+  font-size: 0.87rem;
+}
+.directory-card-foot {
+  margin-top: auto;
+  padding-top: 6px;
+}
+.directory-card-data {
+  display: flex;
+  gap: 3px;
+  flex-direction: column;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.directory-card-data strong {
+  color: var(--ink);
+}
+.directory-empty {
+  position: relative;
+  border-style: dashed;
+  background: linear-gradient(115deg, #22202b, #181720);
+  padding: 21px 24px;
+}
+.directory-empty p {
+  font-size: 0.86rem;
+  color: var(--muted);
+  margin: 3px 0;
+}
+.directory-empty button,
+#directory-more {
+  margin-top: 10px;
+}
+.field-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.field-pair > div {
+  min-width: 0;
+}
+dialog textarea {
+  background: #15121d;
+  border: 1px solid #514a5d;
+  color: var(--ink);
+  border-radius: 6px;
+  resize: vertical;
+  font: inherit;
+  padding: 10px 12px;
+  width: 100%;
+  max-height: 150px;
+}
+.publish-option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.publish-option input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--lime);
+  flex: none;
+}
+.room-meta,
+.match-info {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 8px 0 12px;
+}
+.tag {
+  display: inline-block;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.match-info {
+  background: #26212e;
+  border-radius: 7px;
+  padding: 10px 12px;
+  width: fit-content;
+  max-width: 100%;
+}
+.match-info > span,
+.minor {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.match-info strong {
+  font: 650 0.95rem var(--mono);
+  color: #d6c5ee;
+  overflow-wrap: anywhere;
+}
+.in-match #directory,
+.in-match #loadout,
+.in-match .room-meta,
+.in-match .match-info,
+.in-match .room-description {
+  display: none;
+}
+@media (max-width: 1050px) {
+  .top-inner {
+    gap: 24px;
+  }
+  .top nav {
+    gap: 16px;
+  }
+  .top nav i[data-icon] {
+    display: none;
+  }
+}
+@media (max-width: 740px) {
+  .top nav a[href="#loadout"] {
+    display: none;
+  }
+  .top-inner {
+    gap: 12px;
+  }
+  .top nav {
+    gap: 10px;
+  }
+}
+@media (max-width: 460px) {
+  .top nav a[href="#main"] {
+    display: none;
+  }
+  .field-pair {
+    grid-template-columns: 1fr;
+  }
+  .top nav a {
+    font-size: 0.76rem;
+  }
+}
+.in-match nav a:not([href="#main"]) {
+  display: none;
+}

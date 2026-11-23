@@ -1,5 +1,9 @@
 **
 !server.mjs
 !social.mjs
+!progression.mjs
+!postgres-store.mjs
+!package.json
+!package-lock.json
 !public/
 !public/**
