@@ -124,7 +124,11 @@ async function progressionSmoke(player, observer, playForRank) {
 
   await player.locator('[data-rank="sequence"]').click();
   await player.getByText(/Más rondas seguidas/).waitFor();
-  if (!playForRank) return;
+  if (!playForRank) {
+    assert.match(await player.locator('#kit-rank-scope').innerText(), /Comunidad/,
+      'el piloto debe servir el ranking desde almacenamiento compartido');
+    return;
+  }
 
   await player.locator('[data-game="reflex"]').click();
   await player.locator('#game-dialog').getByRole('button', { name: 'Empezar' }).click();
