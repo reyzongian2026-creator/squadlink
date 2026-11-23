@@ -1,7 +1,7 @@
 [Setup]
 AppId=Squadlink.Desktop.Preview
 AppName=Squadlink Preview
-AppVersion=0.4.0-preview.1
+AppVersion=0.4.0-preview.2
 DefaultDirName={localappdata}\Programs\Squadlink Preview
 DefaultGroupName=Squadlink Preview
 PrivilegesRequired=lowest

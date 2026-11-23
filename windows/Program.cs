@@ -24,6 +24,12 @@ internal sealed class LobbyWindow : Form
     private readonly DesktopNavigation navigation = new();
     private readonly FlowLayoutPanel serverSettings = new() { Dock = DockStyle.Top, AutoSize = true, Visible = false,
         BackColor = Color.FromArgb(34, 32, 46), ForeColor = Color.WhiteSmoke, Padding = new Padding(8) };
+    private readonly Panel workspace = new() {Dock = DockStyle.Fill, BackColor = DesktopNavigation.Canvas};
+    private readonly Label loading = DesktopNavigation.Caption("Abriendo sección…", 14, FontStyle.Regular);
+    private readonly RoomDirectory directory;
+    private string page = "rooms";
+    private string? pendingAction, pendingCode;
+    private bool opening, ready, hasProfile;
     private Uri? origin;
     private readonly System.Windows.Forms.Timer gameTimer = new() { Interval = 30_000 };
     private bool gameEnabled;
@@ -40,59 +46,103 @@ internal sealed class LobbyWindow : Form
         FormClosed += (_, _) => { ResetDetector(); gameTimer.Dispose(); };
         Text = "Squadlink Preview";
         Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        MinimumSize = new Size(660, 565);
-        Size = new Size(1100, 760);
-        BackColor = Color.FromArgb(22, 21, 30);
+        MinimumSize = new Size(820, 565);
+        Size = new Size(1120, 730);
+        BackColor = DesktopNavigation.Canvas;
         view.DefaultBackgroundColor = BackColor;
-        var workspace = new Panel { Dock = DockStyle.Fill };
-        serverSettings.Controls.Add(new Label { Text = "Servidor del grupo", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
+        directory = new RoomDirectory(() => origin);
+        serverSettings.Dock = DockStyle.Fill;
+        serverSettings.Padding = new Padding(24);
+        serverSettings.FlowDirection = FlowDirection.TopDown;
+        serverSettings.WrapContents = false;
+        serverSettings.Controls.Add(new Label { Text = "Servidor del grupo", AutoSize = true, Font = new Font("Segoe UI",18,FontStyle.Bold) });
         serverSettings.Controls.Add(server);
         serverSettings.Controls.Add(connect);
-        workspace.Controls.Add(view);
+        loading.TextAlign = ContentAlignment.MiddleCenter;
+        workspace.Controls.Add(loading);
+        workspace.Controls.Add(directory);
         workspace.Controls.Add(serverSettings);
-        Controls.Add(workspace);
-        Controls.Add(navigation);
-        navigation.ActionRequested += action =>
-        {
-            if (action == "settings") serverSettings.Visible = true;
-            else if (action != "mic" && action != "leave") serverSettings.Visible = false;
-            if (view.CoreWebView2 != null && SameOrigin(view.CoreWebView2.Source))
-                view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "desktop:action", action }));
-        };
+        Controls.Add(workspace); Controls.Add(navigation);
+        directory.Open += async (action, code) => await Navigate(action, code);
+        navigation.ActionRequested += async action => await Navigate(action);
         connect.Click += async (_, _) =>
         {
-            if (navigation.Joined && MessageBox.Show(this, "Reconectar te desconectará de la sala. ¿Continuar?",
+            var address = ParseServer(server.Text);
+            if (address == null) { MessageBox.Show(this, "Ingresa una dirección HTTPS o un servidor local HTTP."); return; }
+            if (address == origin) { await Navigate("rooms"); return; }
+            if (navigation.Joined && MessageBox.Show(this, "Cambiar de servidor desconectará la llamada. ¿Continuar?",
                 "Cambiar servidor", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
-            await Connect();
+            try { Directory.CreateDirectory(dataDir); File.WriteAllText(Path.Combine(dataDir, "server.txt"), address.AbsoluteUri); }
+            catch (IOException ex) { MessageBox.Show(this, ex.Message); return; }
+            origin = address; ready = false; hasProfile = false;
+            if (view.CoreWebView2 != null) { navigation.ResetState(); directory.SetJoined(false); view.CoreWebView2.Navigate(address.AbsoluteUri); }
+            await Navigate("rooms");
         };
         Shown += async (_, _) =>
         {
-            try
-            {
-                var file = Path.Combine(dataDir, "server.txt");
-                server.Text = File.Exists(file) ? File.ReadAllText(file).Trim() : SharedLobby;
-                if (string.IsNullOrWhiteSpace(server.Text)) server.Text = SharedLobby;
-                await Connect();
-            }
-            catch (IOException) { server.Focus(); }
+            string saved = "";
+            try { var file = Path.Combine(dataDir,"server.txt"); if (File.Exists(file)) saved = File.ReadAllText(file).Trim(); }
+            catch (IOException) { }
+            origin = ParseServer(saved) ?? new Uri(SharedLobby);
+            server.Text = origin.AbsoluteUri;
+            var directoryLoad = Navigate("rooms");
+            try {
+                var remembered = Path.Combine(dataDir,"presence-server.txt");
+                hasProfile = File.Exists(remembered) && File.ReadAllText(remembered) == origin.AbsoluteUri;
+                if (hasProfile && !opening) { opening = true; try { await Connect(); } finally { opening = false; } }
+            } catch (IOException) { }
+            await directoryLoad;
         };
+    }
+
+    private static Uri? ParseServer(string value) =>
+        Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri)
+        && (uri.Scheme == "https" || (uri.Scheme == "http" && uri.IsLoopback))
+        && uri.UserInfo.Length == 0 && uri.PathAndQuery == "/" && uri.Fragment.Length == 0 ? uri : null;
+
+    private void Present(Control selected)
+    {
+        foreach (Control control in workspace.Controls)
+            control.Visible = control == selected;
+        selected.BringToFront();
+    }
+
+    private async Task Navigate(string action, string? code = null)
+    {
+        if (action is "mic" or "leave") { if (ready) Post(action); return; }
+        page = action is "create" or "join" ? "lobby" : action;
+        navigation.SelectPage(page);
+        pendingAction = null; pendingCode = null;
+        if (page is "rooms" or "server")
+        {
+            if (ready) Post("background");
+            if (page == "server") { Present(serverSettings); return; }
+            Present(directory); await directory.Reload(); return;
+        }
+        if (ready) { Present(view); Post(action,code); return; }
+        pendingAction = action; pendingCode = code;
+        Present(loading);
+        if (opening || view.CoreWebView2 != null) return;
+        opening = true;
+        try { await Connect(); } finally { opening = false; }
+    }
+
+    private void Post(string action, string? code = null)
+    {
+        if (view.CoreWebView2 != null && SameOrigin(view.CoreWebView2.Source))
+            view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "desktop:action", action, code }));
     }
 
     async Task Connect()
     {
-        if (!Uri.TryCreate(server.Text.Trim(), UriKind.Absolute, out var address)
-            || !(address.Scheme == "https" || (address.Scheme == "http" && address.IsLoopback))
-            || address.UserInfo.Length != 0 || address.PathAndQuery != "/" || address.Fragment.Length != 0)
-        {
-            MessageBox.Show(this, "Ingresa la dirección HTTPS del servidor del grupo. Para pruebas locales puedes usar http://localhost:4179.");
-            return;
-        }
+        if (origin == null) return;
         connect.Enabled = false;
         try
         {
             Directory.CreateDirectory(dataDir);
             if (view.CoreWebView2 == null)
             {
+                if (view.Parent == null) { workspace.Controls.Add(view); view.Visible = false; }
                 var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(dataDir, "WebView2"));
                 await view.EnsureCoreWebView2Async(env);
                 var core = view.CoreWebView2;
@@ -107,7 +157,7 @@ internal sealed class LobbyWindow : Form
                 view.CoreWebView2.NavigationStarting += (_, e) =>
                 {
                     if (!SameOrigin(e.Uri) || new Uri(e.Uri).AbsolutePath != "/") e.Cancel = true;
-                    else { ResetDetector(); navigation.ResetState(); }
+                    else { ResetDetector(); ready = false; }
                 };
                 view.CoreWebView2.WebMessageReceived += OnWebMessage;
                 view.CoreWebView2.PermissionRequested += (_, e) =>
@@ -122,14 +172,11 @@ internal sealed class LobbyWindow : Form
                         MessageBox.Show(this, "No se pudo cargar el lobby. Revisa la dirección y que el servidor esté encendido.");
                 };
             }
-            origin = address;
-            File.WriteAllText(Path.Combine(dataDir, "server.txt"), address.GetLeftPart(UriPartial.Authority));
-            serverSettings.Visible = false;
-            view.CoreWebView2.Navigate(address.AbsoluteUri);
+            view.CoreWebView2.Navigate(origin.AbsoluteUri);
         }
         catch (Exception ex)
         {
-            serverSettings.Visible = true;
+            navigation.SelectPage("server"); Present(serverSettings);
             MessageBox.Show(this, "No se pudo abrir el lobby. Comprueba que Microsoft Edge WebView2 Runtime esté instalado.\n" + ex.Message);
         }
         finally { connect.Enabled = true; }
@@ -166,9 +213,24 @@ internal sealed class LobbyWindow : Form
         var type = kind.GetString();
         if (type == "desktop:state")
         {
+            if (!hasProfile && origin != null && msg.TryGetProperty("identified", out var identified) && identified.ValueKind == JsonValueKind.True)
+            {
+                try { File.WriteAllText(Path.Combine(dataDir,"presence-server.txt"), origin.AbsoluteUri); hasProfile = true; }
+                catch (IOException) { }
+            }
+            bool wasJoined = navigation.Joined;
             navigation.UpdateState(msg);
-            if (msg.TryGetProperty("section", out var section) && section.ValueKind == JsonValueKind.String)
-                serverSettings.Visible = section.GetString() == "settings";
+            directory.SetJoined(navigation.Joined);
+            if (!ready)
+            {
+                ready = true;
+                if (pendingAction != null) {
+                    string action = pendingAction; pendingAction = null;
+                    Present(view); Post(action, pendingCode); pendingCode = null;
+                }
+            }
+            if (wasJoined != navigation.Joined && (navigation.Joined || page == "lobby"))
+                await Navigate(navigation.Joined ? "lobby" : "rooms");
             return;
         }
         if (type == "squadlink:game:status") { SendGame(); return; }

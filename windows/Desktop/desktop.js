@@ -1,8 +1,10 @@
 const byId = id => document.getElementById(id);
 const bridge = window.chrome.webview;
+byId('hero-title').textContent = 'Mi sala';
+
 const pages = {
-  lobby: ['home', 'room', 'news'],
-  rooms: ['directory'],
+  lobby: ['home', 'room'],
+  ranking: ['loadout'],
   friends: ['social'],
   arcade: ['arcade'],
   player: ['loadout'],
@@ -27,13 +29,14 @@ let section = 'lobby';
 function show(next) {
   if (!Object.hasOwn(pages, next)) return;
   section = next;
-  for (const [page, ids] of Object.entries(pages)) {
-    for (const id of ids) byId(id).classList.toggle('desktop-inactive', page !== next);
+  document.body.dataset.workspace = next;
+  for (const id of new Set(Object.values(pages).flat())) {
+    byId(id).classList.toggle('desktop-inactive', !pages[next].includes(id));
   }
   profile.hidden = next !== 'player';
   if (next !== 'lobby' && document.body.classList.contains('in-match')) byId('compact').click();
   if (next === 'settings') byId('audio-panel').open = true;
-  if (next === 'rooms') byId('directory-refresh').click();
+
   document.scrollingElement.scrollTop = 0;
 }
 
@@ -46,7 +49,7 @@ function sync() {
     show('lobby');
   }
   const state = {
-    type: 'desktop:state', section, joined,
+    type: 'desktop:state', section, joined, identified: /^[A-F0-9]{16}$/i.test(byId('friend-id').textContent),
     name: joined ? byId('room-name').textContent : '',
     mic: byId('mic').getAttribute('aria-pressed') === 'true',
     canMic: joined && !byId('mic').disabled,
@@ -56,12 +59,20 @@ function sync() {
   if (key !== previous) { previous = key; bridge.postMessage(state); }
 }
 const observer = new MutationObserver(sync);
-for (const id of ['room', 'mic', 'leave', 'room-name']) {
-  observer.observe(byId(id), {attributes:true, attributeFilter:['hidden','disabled','aria-pressed'], childList:true, characterData:true, subtree:id === 'room-name'});
+for (const id of ['room', 'mic', 'leave', 'room-name', 'friend-id']) {
+  observer.observe(byId(id), {attributes:true, attributeFilter:['hidden','disabled','aria-pressed'], childList:true, characterData:true, subtree:id === 'room-name' || id === 'friend-id'});
 }
 bridge.addEventListener('message', ({data}) => {
   if (data?.type !== 'desktop:action') return;
-  if (Object.hasOwn(pages, data.action)) {
+  if (data.action === 'background') {
+    for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+  } else if (['create','join'].includes(data.action)) {
+    show('lobby');
+    if (!inRoom) {
+      byId(data.action).click();
+      if (data.action === 'join' && /^[A-Z0-9]{6}$/.test(data.code || '')) byId('code').value = data.code;
+    }
+  } else if (Object.hasOwn(pages, data.action)) {
     for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     show(data.action);
   } else if (inRoom && ['mic','leave'].includes(data.action)) {

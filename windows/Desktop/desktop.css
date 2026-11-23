@@ -8,3 +8,15 @@ main > :first-child, #home, #room, #directory, #social, #loadout, .lower { margi
 #desktop-settings h2 { margin-top: 0; }
 #desktop-settings summary { cursor: pointer; }
 [data-desktop-page=player] { margin-bottom: 12px; }
+#news, #directory, .eyebrow, #compact, #room .actions #mic, #room .actions #leave { display: none !important; }
+body, :root { background: #252631; }
+main.wrap { width: 100%; max-width: 1040px; padding: 23px 26px; }
+#social, #room, #loadout, #arcade { border: 0; box-shadow: none; background: transparent; padding: 0; }
+#home { min-height: 0; background: none; border: 0; border-radius: 0; }
+#home .landscape, #home .label, #home p { display: none; }
+#home .hero-copy { padding: 0; }
+#home .hero-copy h2 { font-size: 26px; }
+.lower { margin: 0 !important; }
+body[data-workspace=ranking] .kit-editor, body[data-workspace=ranking] .kit-heading, body[data-workspace=player] .kit-ranking { display: none; }
+#loadout .kit-panels { grid-template-columns: 1fr; }
+#room #listen:not([hidden]) { display: inline-block; }
