@@ -6,7 +6,7 @@ Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte
 
 ## Edición de escritorio en pruebas
 
-**Squadlink Preview 0.4.0-preview.8** abre con un directorio de salas nativo de Windows. La primera columna cambia de espacio y la segunda muestra las opciones del espacio elegido. El directorio permite buscar salas, consultar el juego y los cupos, crear una sala o entrar con código. Un perfil nuevo puede usar el directorio sin iniciar WebView2. Al entrar en una llamada se conserva una sola sesión de voz entre secciones.
+**Squadlink Preview 0.4.0-preview.9** abre con un inicio de Windows Forms. Los botones de Salas, Jugadores y Ajustes están visibles a la vez. Cada opción abre una ventana con título propio. El directorio, los formularios de crear y unirse, el servidor, el rendimiento y las actualizaciones usan controles nativos. Las vistas detalladas, los dispositivos de audio y los minijuegos comparten una instancia de WebView2. La llamada continúa al cerrar una ventana de opciones. Cerrar Inicio sale de la aplicación.
 
 Para probarla, abre una [compilación correcta de Windows en la rama de prueba](https://github.com/reyzongian2026-creator/squadlink/actions/workflows/windows.yml?query=branch%3Apreview%2Fwindows-escritorio) y descarga **Squadlink-Windows-x64** en *Artifacts* con tu sesión de GitHub. Descomprime el ZIP y ejecuta `Squadlink-Setup-x64.exe`. El archivo `SHA256.txt` permite verificar el instalador. La edición Preview tiene su propio acceso directo, directorio de instalación y perfil de jugador. Puede convivir con la versión estable.
 

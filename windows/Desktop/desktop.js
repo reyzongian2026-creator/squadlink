@@ -1,4 +1,4 @@
-import { onConfirmedGuest, canReleaseGuestWorkspace, openDesktopProgress } from './app.js';
+import { desktopNickname, enterFromWindows, onConfirmedGuest, canReleaseGuestWorkspace, openDesktopProgress } from './app.js';
 const byId = id => document.getElementById(id);
 const bridge = window.chrome.webview;
 byId('hero-title').textContent = 'Mi sala';
@@ -110,7 +110,7 @@ function sync(records = observer.takeRecords()) {
     show('lobby');
   }
   const state = {
-    type: 'desktop:state', section, joined, identified: /^[A-F0-9]{16}$/i.test(byId('friend-id').textContent),
+    type: 'desktop:state', section, joined, nickname: desktopNickname(), identified: /^[A-F0-9]{16}$/i.test(byId('friend-id').textContent),
     requests,
     code: joined ? byId('room-code').textContent : '',
     voiceStatus: joined ? byId('voice-status').textContent.slice(0,140) : '',
@@ -137,6 +137,14 @@ observer.observe(friendRows, {...textChanges, attributeFilter: ['class']});
 observer.observe(requestRows, {childList: true, subtree: true, attributeFilter: ['data-action']});
 let releaseTimer;
 bridge.addEventListener('message', ({data}) => {
+  if (data?.type === 'desktop:submit') {
+    clearTimeout(releaseTimer);
+    enterFromWindows(data.data).then(
+      () => bridge.postMessage({type:'desktop:entry-result',token:data.token}),
+      err => bridge.postMessage({type:'desktop:entry-result',token:data.token,error:err.message})
+    );
+    return;
+  }
   if (data?.type !== 'desktop:action') return;
   document.body.classList.toggle("low-power", data.low === true);
   clearTimeout(releaseTimer);

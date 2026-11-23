@@ -5,56 +5,45 @@ internal sealed class DesktopNavigation : UserControl
     internal static readonly Color Rail = Color.FromArgb(22,23,31), Surface = Color.FromArgb(31,32,43),
         Canvas = Color.FromArgb(37,38,49), Active = Color.FromArgb(65,65,85),
         Accent = Color.FromArgb(190,242,106), Muted = Color.FromArgb(185,185,201);
-    private static readonly (string Name, string Glyph, (string Id, string Label)[] Pages)[] Groups = {
-        ("Voz", "\uE720", new[] { ("rooms", "Explorar salas"), ("lobby", "Mi sala") }),
-        ("Comunidad", "\uE716", new[] { ("friends", "Amigos"), ("player", "Mi jugador") }),
-        ("Juegos", "\uE7FC", new[] { ("arcade", "Minijuegos"), ("ranking", "Clasificación") }),
-        ("Ajustes", "\uE713", new[] { ("performance", "Rendimiento"), ("settings", "Dispositivos"), ("server", "Servidor"), ("updates", "Actualizaciones") })
-    };
-    private readonly TableLayoutPanel rail = Stack(Rail), channels = Stack(Surface);
-    private readonly Panel context = new() {Dock = DockStyle.Fill, BackColor = Surface, Padding = new Padding(12, 0, 12, 10)};
-    private readonly Label groupName = Caption("", 14, FontStyle.Bold);
-    private readonly Label voiceName = Caption("Sin sala", 10, FontStyle.Bold);
+    private readonly Label voiceName = Caption("Sin sala", 11, FontStyle.Bold);
     private readonly Button mic = ActionButton("Activar micrófono"), leave = ActionButton("Salir de sala");
-    private const string MicShortcut = "Ctrl+Mayús+M";
-    private readonly ToolTip tips = new();
-    private readonly List<Button> groupButtons = new();
-    private readonly Dictionary<string, Button> pageButtons = new();
-    private int shownGroup = -1;
+    private readonly Button create = ActionButton("Crear sala"), join = ActionButton("Unirme con código");
     public bool Joined { get; private set; }
     public event Action<string>? ActionRequested;
 
     public DesktopNavigation()
     {
-        Width = 262; Dock = DockStyle.Left; BackColor = Rail;
-        var strip = new Panel {Dock = DockStyle.Left, Width = 62, BackColor = Rail};
-        strip.Controls.Add(rail);
-        rail.Padding = new Padding(7, 0, 7, 0);
-        var brand = Caption("SL", 16, FontStyle.Bold); brand.ForeColor = Accent; brand.TextAlign = ContentAlignment.MiddleCenter;
-        Row(rail, brand, 62);
-        foreach (var group in Groups)
-        {
-            var button = ActionButton(group.Glyph);
-            button.Font = new Font("Segoe MDL2 Assets", 16);
-            button.TextAlign = ContentAlignment.MiddleCenter; button.Padding = Padding.Empty;
-            button.AccessibleName = group.Name; tips.SetToolTip(button, group.Name);
-            button.PreviewKeyDown += MarkArrowKey; button.KeyDown += MoveWithinGroup;
-            button.Click += (_, _) => ActionRequested?.Invoke(group.Pages[0].Id);
-            groupButtons.Add(button); Row(rail, button, 50);
+        Dock = DockStyle.Fill;
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Canvas, Padding = new Padding(24,16,24,16), ColumnCount = 1, RowCount = 5 };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,44));
+        for (int i = 0; i < 3; i++) layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f/3));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute,47));
+        layout.Controls.Add(Caption("Squadlink", 21, FontStyle.Bold), 0, 0);
+        Button Option(string name, string action, Button? existing = null) {
+            var button = existing ?? ActionButton(name);
+            button.Padding = new Padding(11,0,4,0); button.Margin = new Padding(3);
+            button.Click += (_,_) => ActionRequested?.Invoke(action); return button;
         }
-        groupName.Height = 62; groupName.Dock = DockStyle.Top;
-        var call = Stack(Surface); call.Dock = DockStyle.Bottom; call.Height = 150;
-        var shortcutHint = Caption(MicShortcut, 9, FontStyle.Regular);
-        shortcutHint.ForeColor = Muted; shortcutHint.Padding = new Padding(9, 0, 0, 0);
-        mic.AccessibleDescription = $"Atajo en los controles de Windows: {MicShortcut}.";
-        tips.SetToolTip(mic, mic.AccessibleDescription);
-        Row(call, voiceName, 38); Row(call, mic, 38); Row(call, shortcutHint, 20); Row(call, leave, 38);
-        mic.Click += (_, _) => ActionRequested?.Invoke("mic"); leave.Click += (_, _) => ActionRequested?.Invoke("leave");
-        context.Controls.Add(channels); context.Controls.Add(groupName); context.Controls.Add(call);
-        Controls.Add(context); Controls.Add(strip);
-        ResetState(); SelectPage("rooms");
+        void Group(int row, string title, params Button[] buttons) {
+            var group = new GroupBox {Text=title, Dock=DockStyle.Fill, ForeColor=Muted, Padding=new Padding(8,5,8,9), Margin=new Padding(0,3,0,5),
+                Font=new Font("Segoe UI",10,FontStyle.Bold)};
+            var grid = new TableLayoutPanel {Dock=DockStyle.Fill, RowCount=1, ColumnCount=buttons.Length};
+            grid.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+            for(int i=0;i<buttons.Length;i++) { grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100f/buttons.Length)); grid.Controls.Add(buttons[i],i,0); }
+            group.Controls.Add(grid); layout.Controls.Add(group,0,row);
+        }
+        create.BackColor = Accent; create.ForeColor = Color.FromArgb(24,31,18);
+        create.FlatAppearance.MouseOverBackColor = Color.FromArgb(212,252,149);
+        Group(1,"Salas",Option("Crear sala","create",create),Option("Unirme con código","join",join),Option("Explorar salas","rooms"),Option("Mi sala","lobby"));
+        Group(2,"Jugadores",Option("Amigos","friends"),Option("Mi jugador","player"),Option("Minijuegos","arcade"),Option("Clasificación","ranking"));
+        Group(3,"Ajustes",Option("Dispositivos","settings"),Option("Rendimiento","performance"),Option("Servidor","server"),Option("Actualizaciones","updates"));
+        var call = new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=3,RowCount=1};
+        call.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); call.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,175)); call.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,145));
+        call.Controls.Add(voiceName,0,0); call.Controls.Add(Option("","mic",mic),1,0); call.Controls.Add(Option("","leave",leave),2,0);
+        mic.AccessibleDescription="Activar o silenciar con Ctrl+Mayús+M.";
+        layout.Controls.Add(call,0,4); Controls.Add(layout); ResetState();
     }
-
     public static Button ActionButton(string text)
     {
         var button = new Button {Text = text, AutoEllipsis = true, Dock = DockStyle.Fill, Padding = new Padding(9,0,5,0),
@@ -67,72 +56,6 @@ internal sealed class DesktopNavigation : UserControl
     public static Label Caption(string text, float size, FontStyle style) => new() {
         Text = text, AutoEllipsis = true, UseMnemonic = false, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.WhiteSmoke,
         Font = new Font("Segoe UI", size, style), Dock = DockStyle.Fill, Margin = Padding.Empty };
-    private static TableLayoutPanel Stack(Color color)
-    {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, BackColor = color };
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); return panel;
-    }
-    private static void Row(TableLayoutPanel panel, Control control, int height)
-    {
-        int row = panel.RowStyles.Count; panel.RowCount = row + 1;
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute,height)); panel.Controls.Add(control,0,row);
-    }
-
-    public void SelectPage(string page)
-    {
-        int idx = Array.FindIndex(Groups, g => g.Pages.Any(p => p.Id == page));
-        if (idx < 0) return;
-        if (shownGroup != idx)
-        {
-            shownGroup = idx; groupName.Text = Groups[idx].Name;
-            for (int i=0;i<groupButtons.Count;i++) {
-                groupButtons[i].BackColor = i == idx ? Active : Rail;
-                groupButtons[i].ForeColor = i == idx ? Accent : Muted;
-            }
-            channels.SuspendLayout();
-            foreach (var old in pageButtons.Values) old.Dispose();
-            pageButtons.Clear(); channels.RowStyles.Clear(); channels.RowCount = 0;
-            foreach (var section in Groups[idx].Pages)
-            {
-                var button = ActionButton(section.Label);
-                button.Click += (_, _) => ActionRequested?.Invoke(section.Id);
-                button.PreviewKeyDown += MarkArrowKey; button.KeyDown += MoveWithinGroup;
-                pageButtons[section.Id] = button; Row(channels, button, 40);
-            }
-            channels.ResumeLayout();
-        }
-        foreach (var pair in pageButtons)
-        {
-            bool selected = pair.Key == page;
-            pair.Value.BackColor = selected ? Active : Surface;
-            pair.Value.ForeColor = selected ? Accent : Color.WhiteSmoke;
-            pair.Value.AccessibleDescription = selected ? "Sección abierta" : null;
-        }
-    }
-
-    private static void MarkArrowKey(object? sender, PreviewKeyDownEventArgs e)
-    {
-        if (e.KeyCode is Keys.Up or Keys.Down or Keys.Home or Keys.End) e.IsInputKey = true;
-    }
-
-    private void MoveWithinGroup(object? sender, KeyEventArgs e)
-    {
-        if (e.Modifiers != Keys.None || sender is not Button button ||
-            e.KeyCode is not (Keys.Up or Keys.Down or Keys.Home or Keys.End)) return;
-        var buttons = groupButtons.Contains(button) ? groupButtons : pageButtons.Values.ToList();
-        int index = buttons.IndexOf(button);
-        if (index < 0) return;
-        int next = e.KeyCode switch {
-            Keys.Home => 0,
-            Keys.End => buttons.Count - 1,
-            Keys.Down => (index + 1) % buttons.Count,
-            _ => (index + buttons.Count - 1) % buttons.Count
-        };
-        buttons[next].Focus();
-        e.Handled = true;
-        e.SuppressKeyPress = true;
-    }
-
     internal bool TryMicrophoneShortcut(Keys keyData, IntPtr keyFlags)
     {
         if (keyData != (Keys.Control | Keys.Shift | Keys.M) || !Joined || !mic.Enabled || !mic.Visible)
@@ -145,15 +68,14 @@ internal sealed class DesktopNavigation : UserControl
 
     public void ResetState()
     {
-        Joined = false; voiceName.Text = "Sin sala"; mic.Text = "Activar micrófono"; mic.Enabled = leave.Enabled = false;
+        Joined = false; create.Enabled = join.Enabled = true; voiceName.Text = "Sin sala"; mic.Text = "Activar micrófono"; mic.Enabled = leave.Enabled = false;
     }
     public void UpdateState(JsonElement state)
     {
         bool Flag(string key) => state.TryGetProperty(key, out var f) && f.ValueKind == JsonValueKind.True;
-        Joined = Flag("joined");
+        Joined = Flag("joined"); create.Enabled = join.Enabled = !Joined;
         voiceName.Text = Joined ? state.GetProperty("name").GetString() : "Sin sala";
         mic.Text = Flag("mic") ? "Silenciar micrófono" : "Activar micrófono";
         mic.Enabled = Joined && Flag("canMic"); leave.Enabled = Joined && Flag("canLeave");
     }
-    protected override void Dispose(bool disposing) { if (disposing) tips.Dispose(); base.Dispose(disposing); }
 }

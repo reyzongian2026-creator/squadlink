@@ -57,8 +57,24 @@ public static class NativeRadioInput {
   [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
 }
 "@
+function Get-FeatureRoot($name) {
+  $criteria = [System.Windows.Automation.AndCondition]::new(
+    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, [int]$app.Id),
+    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $name))
+  $until = [DateTime]::UtcNow.AddSeconds(30)
+  do {
+    $form = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $criteria)
+    if ($form -and !$form.Current.IsOffscreen) { return $form }
+    Start-Sleep -Milliseconds 150
+  } while ([DateTime]::UtcNow -lt $until)
+  throw "Falta la ventana de Windows '$name'."
+}
+function Open-Option($name, $title) {
+  Invoke-Control $homeRoot $name
+  return Get-FeatureRoot $title
+}
 function Set-Mode($root, $name) {
-  Invoke-Control $root 'Ajustes'
+  $root = Open-Option 'Rendimiento' 'Rendimiento · Squadlink'
   $mode = Find-TypedControl $root $name ([System.Windows.Automation.ControlType]::RadioButton)
   $file = Join-Path $profileDir 'performance.txt'
   $expected = if ($name -eq 'Experiencia completa') { 'full' } else { 'low' }
@@ -182,19 +198,26 @@ try {
     if ($app.MainWindowHandle -ne [IntPtr]::Zero) { break }
     Start-Sleep -Milliseconds 200
   } while ([DateTime]::UtcNow -lt $deadline)
-  $root = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+  $homeRoot = Get-FeatureRoot 'Squadlink Preview'
+  foreach ($option in @('Crear sala','Unirme con código','Explorar salas','Mi sala','Amigos','Mi jugador','Minijuegos','Clasificación','Dispositivos','Rendimiento','Servidor','Actualizaciones')) {
+    $button = Find-TypedControl $homeRoot $option ([System.Windows.Automation.ControlType]::Button)
+    if ($button.Current.IsOffscreen) { throw "Opción fuera del inicio: $option" }
+  }
+  Save-Window ([IntPtr]$homeRoot.Current.NativeWindowHandle) 'Inicio-Windows.png'
+  $root = Open-Option 'Explorar salas' 'Explorar salas · Squadlink'
   Find-Control $root 'Andes Five' | Out-Null
   Find-Control $root 'Crear sala' | Out-Null
   $until = [DateTime]::UtcNow.AddSeconds(30)
   while ((Test-Path $marker) -and [DateTime]::UtcNow -lt $until) { Start-Sleep -Milliseconds 150 }
   if (Test-Path $marker) { throw 'La confirmación de invitado conservó una sesión obsoleta.' }
-  Invoke-Control $root 'Ajustes'
-  Invoke-Control $root 'Actualizaciones'
+  $directoryHandle = $root.Current.NativeWindowHandle
+  $root = Open-Option 'Actualizaciones' 'Actualizaciones · Squadlink'
+  if ($directoryHandle -eq $root.Current.NativeWindowHandle -or !(Get-FeatureRoot 'Explorar salas · Squadlink')) { throw 'Se esperaban dos ventanas distintas.' }
   Find-Control $root 'Buscar actualizaciones' | Out-Null
   Find-Control $root 'Buscar al abrir Squadlink' | Out-Null
   $version = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition) | Where-Object { $_.Current.Name -like "*Compilación ${env:GITHUB_RUN_NUMBER}.${env:GITHUB_RUN_ATTEMPT}*" }
   if (!$version) {throw 'La versión instalada carece de identidad de compilación.'}
-  Invoke-Control $root 'Voz'
+  $root = Open-Option 'Explorar salas' 'Explorar salas · Squadlink'
   Find-Control $root 'Andes Five' | Out-Null
   $selectionPattern = [System.Windows.Automation.SelectionItemPattern]::Pattern
   (Find-Control $root 'Andes Five').GetCurrentPattern($selectionPattern).Select()
@@ -231,8 +254,8 @@ try {
   Invoke-Control $root 'Actualizar'
   Find-Control $root 'Andes Five' | Out-Null
   Measure-Idle 'directorio-nativo'
-  Save-Window $app.MainWindowHandle
-  Invoke-Control $root 'Comunidad'
+  Save-Window ([IntPtr]$root.Current.NativeWindowHandle)
+  $root = Open-Option 'Amigos' 'Amigos · Squadlink'
   Find-Control $root 'Elegir mi apodo' | Out-Null
   Measure-Idle 'amigos-invitado-bajo'
   # Reproduce incomplete local assets in the isolated copy and recover in the same process.
@@ -240,6 +263,7 @@ try {
   Move-Item $testClient $held
   try {
     Invoke-Control $root 'Elegir mi apodo'
+    $root = Get-FeatureRoot 'Amigos · Detalles · Squadlink'
     Find-Control $root 'Reintentar sección' | Out-Null
     [IO.File]::WriteAllText($testClient, '// Fixture: the desktop bridge never starts.')
     Invoke-Control $root 'Reintentar sección'
@@ -253,40 +277,40 @@ try {
   Find-Control $root 'Tu apodo' | Out-Null
   Write-Output 'La ventana nativa recuperó la sección tras restaurar el recurso local.'
   Set-Mode $root 'Experiencia completa'
-  Save-Window $app.MainWindowHandle 'Ajustes-rendimiento.png'
-  Invoke-Control $root 'Comunidad'
+  $root = Get-FeatureRoot 'Rendimiento · Squadlink'
+  Save-Window ([IntPtr]$root.Current.NativeWindowHandle) 'Ajustes-rendimiento.png'
+  $root = Open-Option 'Amigos' 'Amigos · Detalles · Squadlink'
   Find-Control $root 'Elegir mi apodo' | Out-Null
   Measure-Idle 'amigos-completo'
   Set-Mode $root 'Bajo consumo'
-  Invoke-Control $root 'Comunidad'
-  Invoke-Control $root 'Mi jugador'
+  $root = Open-Option 'Mi jugador' 'Mi jugador · Squadlink'
   Find-Control $root 'Editar mi apodo' | Out-Null
-  Invoke-Control $root 'Juegos'
+  $root = Open-Option 'Minijuegos' 'Minijuegos · Squadlink'
   Find-Control $root 'Reflejos' $true | Out-Null
-  Invoke-Control $root 'Clasificación'
+  $root = Open-Option 'Clasificación' 'Clasificación · Squadlink'
   Find-Control $root 'Ranking arcade' | Out-Null
-  Invoke-Control $root 'Ajustes'
-  Invoke-Control $root 'Dispositivos'
+  $root = Open-Option 'Dispositivos' 'Dispositivos · Squadlink'
   Find-Control $root 'Ajustes de voz' | Out-Null
   Find-Control $root 'Ganancia automática del micrófono' | Out-Null
   Find-Control $root 'Volumen de las voces que escucho' | Out-Null
   Invoke-Control $root 'Grabar prueba de 4 segundos'
   Invoke-Control $root 'Escuchar mi prueba'
   Find-Control $root 'Prueba terminada.' | Out-Null
-  Invoke-Control $root 'Servidor'
+  $root = Open-Option 'Servidor' 'Servidor · Squadlink'
   Find-Control $root 'Servidor del grupo' | Out-Null
-  Invoke-Control $root 'Voz'
+  $root = Open-Option 'Explorar salas' 'Explorar salas · Squadlink'
   Find-Control $root 'Andes Five' | Out-Null
-  Invoke-Control $root 'Unirme con código'
+  $root = Open-Option 'Unirme con código' 'Unirme con código'
   Find-Control $root 'Código de sala' | Out-Null
-  Invoke-Control $root 'Explorar salas'
+  $root.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close()
+  $root = Open-Option 'Explorar salas' 'Explorar salas · Squadlink'
   Find-Control $root 'Andes Five' | Out-Null
   Start-Sleep -Seconds 4
   Measure-Idle 'directorio-tras-volver'
-  Invoke-Control $root 'Juegos'
+  $root = Open-Option 'Minijuegos' 'Minijuegos · Squadlink'
   Find-Control $root 'Reflejos' $true | Out-Null
-  Invoke-Control $root 'Voz'
-  Invoke-Control $root 'Crear sala'
+  $root = Open-Option 'Explorar salas' 'Explorar salas · Squadlink'
+  $root = Open-Option 'Crear sala' 'Crear sala'
   Write-Host 'Formulario de creación abierto'
   $nick = Find-TypedControl $root 'Tu apodo' ([System.Windows.Automation.ControlType]::Edit)
   $nick.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue('Prueba')
@@ -295,6 +319,7 @@ try {
   Write-Host 'Apodo y nombre de sala ingresados'
   $submit = Find-TypedControl $root 'Crear sala' ([System.Windows.Automation.ControlType]::Button)
   $submit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+  $root = Get-FeatureRoot 'Mi sala · Squadlink'
   Find-Control $root 'Abrir controles de sala' | Out-Null
   Measure-Idle 'sala-bajo-sin-microfono'
   $label = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | Where-Object { $_.Current.Name -match '^Código de sala: ([A-Z0-9]{6})' } | Select-Object -First 1
@@ -311,7 +336,7 @@ try {
   $participants.SetFocus()
   Add-Type -AssemblyName System.Windows.Forms
   [System.Windows.Forms.SendKeys]::SendWait('^+m')
-  Find-Control $root 'Silenciar micrófono' | Out-Null
+  Find-Control $homeRoot 'Silenciar micrófono' | Out-Null
   $voicePeer = Start-Process node -ArgumentList ('test/windows/live-voice.mjs ' + $roomCode + ' "' + $sync + '"') -PassThru -RedirectStandardOutput (Join-Path $sync 'peer.log') -RedirectStandardError (Join-Path $sync 'peer.err')
   $deadline = [DateTime]::UtcNow.AddSeconds(80)
   while (!(Test-Path (Join-Path $sync 'connected')) -and !$voicePeer.HasExited -and [DateTime]::UtcNow -lt $deadline) {Start-Sleep -Milliseconds 200}
@@ -320,22 +345,22 @@ try {
   if (!$selectedOwner -or !$selectedOwner.GetCurrentPattern($selectionPattern).Current.IsSelected) { throw 'El cambio de micrófono perdió la selección del anfitrión.' }
   Measure-Idle 'voz-activa-bajo'
   Set-Mode $root 'Experiencia completa'
-  Invoke-Control $root 'Voz'
-  Invoke-Control $root 'Mi sala'
+  $root = Open-Option 'Explorar salas' 'Explorar salas · Squadlink'
+  $root = Open-Option 'Mi sala' 'Mi sala · Detalles · Squadlink'
   Find-Control $root 'Participantes' | Out-Null
   Measure-Idle 'voz-activa-completo'
   'done' | Set-Content (Join-Path $sync 'finish')
   if (!$voicePeer.WaitForExit(15000) -or $voicePeer.ExitCode -ne 0) {Get-Content (Join-Path $sync 'peer.err'); throw 'Falló la comprobación de voz tras cambiar el perfil.'}
   Get-Content (Join-Path $sync 'peer.log')
-  Invoke-Control $root 'Juegos'
+  $root = Open-Option 'Minijuegos' 'Minijuegos · Squadlink'
   Find-Control $root 'Reflejos' $true | Out-Null
-  Find-Control $root 'Canal de prueba' | Out-Null
-  Invoke-Control $root 'Voz'
+  Find-Control $homeRoot 'Canal de prueba' | Out-Null
+  $root = Open-Option 'Explorar salas' 'Explorar salas · Squadlink'
   Start-Sleep -Seconds 4
-  if (!(Find-Control $root 'Salir de sala').Current.IsEnabled) { throw 'Se perdió la llamada al volver al directorio.' }
-  Invoke-Control $root 'Salir de sala'
-  Find-Control $root 'Sin sala' | Out-Null
-  $app.CloseMainWindow() | Out-Null
+  if (!(Find-Control $homeRoot 'Salir de sala').Current.IsEnabled) { throw 'Se perdió la llamada al volver al directorio.' }
+  Invoke-Control $homeRoot 'Salir de sala'
+  Find-Control $homeRoot 'Sin sala' | Out-Null
+  $homeRoot.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close()
   if (!$app.WaitForExit(10000)) { throw 'La aplicación no cerró correctamente.' }
   $app = Start-Process $installedExe -PassThru
   $until = [DateTime]::UtcNow.AddSeconds(30)
@@ -344,8 +369,8 @@ try {
     if ($app.MainWindowHandle -ne [IntPtr]::Zero) {break}
     Start-Sleep -Milliseconds 200
   } while ([DateTime]::UtcNow -lt $until)
-  $root = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
-  Invoke-Control $root 'Ajustes'
+  $homeRoot = Get-FeatureRoot 'Squadlink Preview'
+  $root = Open-Option 'Rendimiento' 'Rendimiento · Squadlink'
   $saved = Find-TypedControl $root 'Experiencia completa' ([System.Windows.Automation.ControlType]::RadioButton)
   if (!$saved.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) { throw 'No se conservó el perfil de rendimiento.' }
   Write-Output 'Perfiles, memoria, continuidad de sala y persistencia tras reinicio verificados.'

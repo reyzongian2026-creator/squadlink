@@ -299,7 +299,6 @@ $("entry-form").onsubmit = async (event) => {
     }
     const password = $("password").value;
     const creating = mode === "create";
-    const endpoint = creating ? "rooms" : "join";
     const payload = creating
       ? {
           name: $("name").value.trim() || "Lobby de " + self.nick,
@@ -307,14 +306,7 @@ $("entry-form").onsubmit = async (event) => {
           directory: directoryFields(),
         }
       : { code: $("code").value.trim().toUpperCase(), password };
-    let result;
-    try {
-      result = await api(endpoint, payload);
-    } catch (error) {
-      if (error.status !== 401) throw error;
-      applySession(await api("session", { nick }));
-      result = await api(endpoint, payload);
-    }
+    const result = await submitRoom(creating, nick, payload);
     $("entry").close();
     await enterRoom(result.room);
   } catch (error) {
@@ -324,6 +316,31 @@ $("entry-form").onsubmit = async (event) => {
     $("submit-entry").disabled = false;
   }
 };
+async function submitRoom(creating, nick, payload) {
+  const endpoint = creating ? "rooms" : "join";
+  try { return await api(endpoint, payload); }
+  catch (error) {
+    if (error.status !== 401) throw error;
+    applySession(await api("session", { nick }));
+    return api(endpoint, payload);
+  }
+}
+
+export function desktopNickname() { return self?.nick || readNick(); }
+
+export async function enterFromWindows(data) {
+  await identityReady;
+  if (room) throw Error("Ya estás en una sala.");
+  const nick = data.nick || desktopNickname();
+  if (!nick) throw Error("Escribe tu apodo para continuar.");
+  if (!self || self.nick !== nick) applySession(await api("session", { nick }));
+  const payload = data.creating
+    ? {name: data.name || "Lobby de " + nick, password: data.password, directory: data.directory}
+    : {code: data.code, password: data.password};
+  const result = await submitRoom(data.creating, nick, payload);
+  await enterRoom(result.room);
+}
+
 function renderMembers() {
   const fragment = document.createDocumentFragment();
   for (const member of room.members) {

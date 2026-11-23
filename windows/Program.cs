@@ -34,7 +34,13 @@ internal sealed class LobbyWindow : Form
     private bool closing;
     private readonly PerformanceSettings performance;
     private readonly UpdateSettings updates;
-    private readonly LightWorkspace lite = new();
+    private readonly LightWorkspace lite = new(), friendsPanel = new();
+    private readonly Dictionary<string,FeatureWindow> windows = new();
+    private FeatureWindow? detailWindow;
+    private RoomEntryWindow? entryWindow;
+    private object? entryData;
+    private string? entryToken;
+    private string rememberedNick = "";
     private bool nativePage;
     private string page = "rooms";
     private string? pendingAction, pendingCode;
@@ -56,17 +62,18 @@ internal sealed class LobbyWindow : Form
         FormClosed += (_, _) => { closing = true; StopStartupWatch(); ResetDetector(); gameTimer.Dispose(); };
         Text = "Squadlink Preview";
         Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        MinimumSize = new Size(820, 565);
-        Size = new Size(1120, 730);
+        MinimumSize = new Size(720, 420);
+        ClientSize = new Size(870, 472);
         BackColor = DesktopNavigation.Canvas;
         view.DefaultBackgroundColor = BackColor;
         updates = new UpdateSettings(dataDir);
         updates.AvailabilityChanged += found => Text = found ? "Squadlink Preview · Actualización disponible" : "Squadlink Preview";
-        workspace.Controls.Add(updates);
+
         performance = new PerformanceSettings(dataDir);
-        performance.Changed += async () => await Navigate("performance");
+        performance.Changed += () => SetMemoryTarget();
         lite.DetailRequested += async action => await Navigate(action);
-        workspace.Controls.Add(performance); workspace.Controls.Add(lite);
+        friendsPanel.DetailRequested += async action => await Navigate(action);
+        friendsPanel.ShowPage(true); lite.ShowPage(false);
         directory = new RoomDirectory(() => origin);
         serverSettings.Dock = DockStyle.Fill;
         serverSettings.Padding = new Padding(24);
@@ -85,9 +92,8 @@ internal sealed class LobbyWindow : Form
         workspace.Controls.Add(recovery);
         loading.TextAlign = ContentAlignment.MiddleCenter;
         workspace.Controls.Add(loading);
-        workspace.Controls.Add(directory);
-        workspace.Controls.Add(serverSettings);
-        Controls.Add(workspace); Controls.Add(navigation);
+        Controls.Add(navigation);
+        FormClosing += (_,_) => { closing=true; entryWindow?.Complete(); foreach (var window in windows.Values) window.Dispose(); workspace.Dispose(); };
         directory.Open += async (action, code) => await Navigate(action, code);
         navigation.ActionRequested += async action => await Navigate(action);
         connect.Click += async (_, _) =>
@@ -102,7 +108,7 @@ internal sealed class LobbyWindow : Form
             ResetClient();
             navigation.ResetState();
             directory.SetJoined(false);
-            lite.ResetSnapshot();
+            lite.ResetSnapshot(); friendsPanel.ResetSnapshot(); rememberedNick="";
             origin = address;
             server.Text = address.AbsoluteUri;
             await OpenDirectory();
@@ -126,9 +132,8 @@ internal sealed class LobbyWindow : Form
             var remembered = Path.Combine(dataDir,"presence-server.txt");
             hasProfile = File.Exists(remembered) && File.ReadAllText(remembered) == origin?.AbsoluteUri;
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
-        var directoryLoad = Navigate("rooms");
-        if (hasProfile) await Connect();
-        await directoryLoad;
+        nativePage=true;
+        if (hasProfile) { EnsureEngineWindow(); await Connect(); }
     }
 
     private void RememberProfile(bool present)
@@ -157,6 +162,75 @@ internal sealed class LobbyWindow : Form
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
+    private void Home()
+    {
+        if (closing) return;
+        if (WindowState==FormWindowState.Minimized) WindowState=FormWindowState.Normal;
+        Show(); Activate(); navigation.Focus();
+    }
+    private FeatureWindow WindowFor(string key, string title)
+    {
+        if (windows.TryGetValue(key, out var existing)) return existing;
+        var window=new FeatureWindow(title,Home,(keys,flags)=>!view.ContainsFocus && navigation.TryMicrophoneShortcut(keys,flags));
+        window.Icon=Icon;
+        window.FormClosing+=(_,e)=>{
+            if (closing || e.CloseReason!=CloseReason.UserClosing) return;
+            e.Cancel=true; window.Hide();
+            if (window==detailWindow) {
+                nativePage=true; visit++; pendingAction=pendingCode=null;
+                if (ready) Post("background");
+            }
+            Home();
+        };
+        windows[key]=window; return window;
+    }
+    private void EnsureEngineWindow()
+    {
+        if (workspace.Parent==null) { var engine=WindowFor("lobby-detail","Mi sala"); engine.Content.Controls.Add(workspace); _=engine.Handle; _=workspace.Handle; }
+    }
+    private static void Reveal(Form window)
+    {
+        if (window.WindowState==FormWindowState.Minimized) window.WindowState=FormWindowState.Normal;
+        window.Show(); window.Activate();
+    }
+    private void NativeWindow(string key,string title,Control panel)
+    {
+        var window=WindowFor(key,title);
+        if (panel.Parent!=window.Content) window.Content.Controls.Add(panel);
+        panel.Visible=true; Reveal(window);
+    }
+    private void DetailWindow(string key,string title)
+    {
+        var window=WindowFor(key,title);
+        if (detailWindow!=null && detailWindow!=window) detailWindow.Hide();
+        detailWindow=window;
+        if (workspace.Parent!=window.Content) window.Content.Controls.Add(workspace);
+        Reveal(window);
+    }
+    private void OpenEntry(bool creating,string? code)
+    {
+        if (navigation.Joined) return;
+        if (entryWindow!=null && !entryWindow.IsDisposed) {
+            if (entryWindow.Busy || entryWindow.Creating==creating) { Reveal(entryWindow); return; }
+            entryWindow.Close();
+        }
+        var form = new RoomEntryWindow(creating,code,rememberedNick) { Icon=Icon };
+        entryWindow=form;
+        form.Submitted+=async data=>{
+            entryData=data; entryToken=Guid.NewGuid().ToString("N");
+            if (ready) SendEntry();
+            else { EnsureEngineWindow(); await Connect(); }
+        };
+        form.FormClosed+=(_,_)=>{entryWindow=null; entryToken=null; entryData=null;};
+        Reveal(form);
+    }
+    private void SendEntry()
+    {
+        if (entryData==null || entryToken==null || !ready) return;
+        var data=entryData; entryData=null;
+        view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new {type="desktop:submit",token=entryToken,data}));
+    }
+
     private void Present(Control selected)
     {
         foreach (Control control in workspace.Controls)
@@ -167,26 +241,30 @@ internal sealed class LobbyWindow : Form
     private async Task Navigate(string action, string? code = null)
     {
         if (action is "mic" or "leave") { if (ready) Post(action); return; }
+        if (action is "create" or "join") { OpenEntry(action=="create",code); return; }
+        if (action=="lobby" && !navigation.Joined) { await Navigate("rooms"); return; }
         visit++;
         page = action switch {
             "create" or "join" or "room-detail" => "lobby",
             "login" or "friends-detail" => "friends",
             _ => action
         };
-        navigation.SelectPage(page);
         pendingAction = null; pendingCode = null;
         bool useLite = performance.Low && (action == "friends" || (action == "lobby" && navigation.Joined));
         nativePage = useLite || page is "rooms" or "server" or "performance" or "updates";
         SetMemoryTarget();
         if (nativePage)
         {
+            if (detailWindow?.Visible==true) detailWindow.Hide();
             if (ready) Post("background");
-            if (useLite) { lite.ShowPage(page == "friends"); Present(lite); return; }
-            if (page == "updates") { Present(updates); return; }
-            if (page == "performance") { Present(performance); return; }
-            if (page == "server") { Present(serverSettings); return; }
-            Present(directory); await directory.Reload(); return;
+            if (useLite) { bool friends=page=="friends"; var panel=friends?friendsPanel:lite; NativeWindow(friends?"friends":"lobby",friends?"Amigos":"Mi sala",panel); panel.ShowPage(friends); return; }
+            if (page=="updates") { NativeWindow(page,"Actualizaciones",updates); return; }
+            if (page=="performance") { NativeWindow(page,"Rendimiento",performance); return; }
+            if (page=="server") { serverSettings.Visible=true; NativeWindow(page,"Servidor",serverSettings); return; }
+            NativeWindow("rooms","Explorar salas",directory); await directory.Reload(); return;
         }
+        var title = page switch { "friends"=>"Amigos · Detalles","settings"=>"Dispositivos","player"=>"Mi jugador","ranking"=>"Clasificación","arcade"=>"Minijuegos",_=>"Mi sala · Detalles" };
+        DetailWindow(page+"-detail", title);
         action = action switch { "friends-detail" => "friends", "room-detail" => "lobby", _ => action };
         if (ready) { Present(view); Post(action,code); return; }
         pendingAction = action; pendingCode = code;
@@ -293,7 +371,8 @@ internal sealed class LobbyWindow : Form
     {
         if (!IsCurrent(failed)) return;
         ResetClient();
-        navigation.ResetState(); directory.SetJoined(false); lite.ResetSnapshot();
+        navigation.ResetState(); directory.SetJoined(false); lite.ResetSnapshot(); friendsPanel.ResetSnapshot();
+        entryData=null; entryWindow?.Error("No se pudo abrir la conexión. Vuelve a intentarlo.");
         if (!nativePage) Present(recovery);
     }
 
@@ -326,6 +405,12 @@ internal sealed class LobbyWindow : Form
         if (msg.ValueKind != JsonValueKind.Object || !msg.TryGetProperty("type", out var kind) ||
             kind.ValueKind != JsonValueKind.String) return;
         var type = kind.GetString();
+        if (type=="desktop:entry-result" && msg.TryGetProperty("token",out var requestId) && requestId.GetString()==entryToken)
+        {
+            if (msg.TryGetProperty("error",out var error)) entryWindow?.Error(error.GetString() ?? "Revisa los datos de la sala.");
+            else entryWindow?.Complete();
+            return;
+        }
         if (type == "desktop:session" && msg.TryGetProperty("status", out var sessionStatus)
             && sessionStatus.ValueKind == JsonValueKind.String && sessionStatus.GetString() == "guest")
         {
@@ -338,7 +423,7 @@ internal sealed class LobbyWindow : Form
             var releasing = view;
             BeginInvoke(new Action(() =>
             {
-                if (!IsCurrent(releasing) || expected != visit || !nativePage || !performance.Low || navigation.Joined || hasProfile || !ready) return;
+                if (!IsCurrent(releasing) || expected != visit || !nativePage || entryWindow?.Busy==true || !performance.Low || navigation.Joined || hasProfile || !ready) return;
                 ResetClient();
             }));
             return;
@@ -349,7 +434,8 @@ internal sealed class LobbyWindow : Form
                 RememberProfile(true);
             bool wasJoined = navigation.Joined;
             navigation.UpdateState(msg);
-            lite.UpdateSnapshot(msg);
+            if (msg.TryGetProperty("nickname",out var nick)) rememberedNick=nick.GetString() ?? "";
+            lite.UpdateSnapshot(msg); friendsPanel.UpdateSnapshot(msg);
             directory.SetJoined(navigation.Joined);
             if (!ready)
             {
@@ -359,6 +445,7 @@ internal sealed class LobbyWindow : Form
                     Present(view); Post(action, pendingCode); pendingCode = null;
                 } else if (nativePage) { Post("background"); }
             }
+            SendEntry();
             if (wasJoined != navigation.Joined && (navigation.Joined || page == "lobby"))
                 await Navigate(navigation.Joined ? "lobby" : "rooms");
             return;
