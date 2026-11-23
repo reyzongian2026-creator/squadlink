@@ -5,11 +5,10 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 $profileDir = Join-Path $env:LOCALAPPDATA 'Squadlink Preview'
 New-Item -ItemType Directory -Force $profileDir | Out-Null
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-address=127.0.0.1 --remote-debugging-port=9227 --use-fake-device-for-media-stream --use-fake-ui-for-media-stream --autoplay-policy=no-user-gesture-required'
 $env:HOST = '127.0.0.1'
 $env:PORT = '4179'
 'http://127.0.0.1:4179' | Set-Content (Join-Path $profileDir 'server.txt')
-$serverProcess = Start-Process node -ArgumentList 'server.mjs' -PassThru -WindowStyle Hidden
+$serverProcess = Start-Process node -ArgumentList 'test/windows/voice-lobby.mjs' -PassThru -WindowStyle Hidden
 $app = $null
 $voicePeer = $null
 function Find-Control($root, $name, [bool]$partial = $false) {
@@ -114,6 +113,16 @@ try {
     Invoke-RestMethod -Uri 'http://127.0.0.1:4179/api/session' -Method Post -ContentType 'application/json' -Body (@{nick='Jugador QA'}|ConvertTo-Json) -WebSession $fixture | Out-Null
     Invoke-RestMethod -Uri 'http://127.0.0.1:4179/api/rooms' -Method Post -ContentType 'application/json' -Body (@{name=$example[0];directory=@{published=$true;game=$example[1];level=$example[2]}}|ConvertTo-Json) -WebSession $fixture | Out-Null
   }
+  # Keep the installer and its installed directory intact. Supply only the audio input
+  # and RTP counters in a private test copy of the published desktop client.
+  $fixtureDir = Join-Path $env:RUNNER_TEMP 'squadlink-synthetic-audio'
+  Copy-Item -Path (Split-Path $Executable) -Destination $fixtureDir -Recurse
+  $testClient = Join-Path $fixtureDir 'Client/desktop.js'
+  $fixture = Get-Content test/windows/audio-fixture.js -Raw
+  $original = Get-Content $testClient -Raw
+  [IO.File]::WriteAllText($testClient, $fixture + [Environment]::NewLine + $original)
+  $installedExe = $Executable
+  $Executable = Join-Path $fixtureDir 'Squadlink.exe'
   $app = Start-Process $Executable -PassThru
   if (!$app.WaitForInputIdle(20000)) { throw 'La ventana no inició.' }
   $deadline = [DateTime]::UtcNow.AddSeconds(30)
@@ -179,9 +188,6 @@ try {
   $sync = Join-Path $env:RUNNER_TEMP 'squadlink-voice-bench'
   New-Item -ItemType Directory -Force $sync | Out-Null
   $voicePeer = Start-Process node -ArgumentList ('test/windows/live-voice.mjs ' + $roomCode + ' "' + $sync + '"') -PassThru -RedirectStandardOutput (Join-Path $sync 'peer.log') -RedirectStandardError (Join-Path $sync 'peer.err')
-  $deadline = [DateTime]::UtcNow.AddSeconds(40)
-  while (!(Test-Path (Join-Path $sync 'source-ready')) -and !$voicePeer.HasExited -and [DateTime]::UtcNow -lt $deadline) {Start-Sleep -Milliseconds 200}
-  if (!(Test-Path (Join-Path $sync 'source-ready'))) {Get-Content (Join-Path $sync 'peer.err'); throw 'No se pudo preparar la fuente sintética de audio.'}
   Invoke-Control $root 'Activar micrófono'
   Find-Control $root 'Silenciar micrófono' | Out-Null
   $deadline = [DateTime]::UtcNow.AddSeconds(80)
@@ -206,7 +212,7 @@ try {
   Find-Control $root 'Sin sala' | Out-Null
   $app.CloseMainWindow() | Out-Null
   if (!$app.WaitForExit(10000)) { throw 'La aplicación no cerró correctamente.' }
-  $app = Start-Process $Executable -PassThru
+  $app = Start-Process $installedExe -PassThru
   $until = [DateTime]::UtcNow.AddSeconds(30)
   do {
     $app.Refresh()
