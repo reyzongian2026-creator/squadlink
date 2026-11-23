@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: squadlink-lobby
+    runtime: node
+    plan: free
+    region: virginia
+    buildCommand: node --check server.mjs
+    startCommand: HOST=0.0.0.0 PUBLIC_ORIGIN="$RENDER_EXTERNAL_URL" node server.mjs
+    healthCheckPath: /manifest.webmanifest
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: ICE_SERVERS_JSON
+        value: '[{"urls":"stun:stun.cloudflare.com:3478"}]'
