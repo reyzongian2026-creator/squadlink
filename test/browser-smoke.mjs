@@ -60,7 +60,9 @@ export async function browserSmoke(chromium) {
     await a.locator('#members').getByText('Ana', { exact: true }).waitFor();
     for (const page of [a,b]) await page.getByRole('button', { name: 'Activar micrófono' }).click();
     async function inbound(page, minBytes = 0) {
-      const handle = await page.waitForFunction(async min => {
+      const deadline = Date.now() + 30000;
+      while (Date.now() < deadline) {
+        const sample = await page.evaluate(async min => {
         for (const pc of window.qaPeers) {
           if (pc.connectionState !== 'connected') continue;
           const stats = await pc.getStats();
@@ -72,8 +74,11 @@ export async function browserSmoke(chromium) {
           }
         }
         return false;
-      }, minBytes, { timeout: 30000 });
-      return handle.jsonValue();
+        }, minBytes);
+        if (sample && sample.energy > 0 && sample.bytes > minBytes && sample.packets > 0) return sample;
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      throw Error('Sin evidencia de paquetes de voz recibidos con energía audible');
     }
     const initial = await Promise.all([inbound(a), inbound(b)]);
     await a.locator('[data-game="reflex"]').click();
