@@ -67,14 +67,15 @@ function Get-ClientProcesses([int]$rootId) {
 }
 function Measure-Idle($label) {
   Start-Sleep -Seconds 2
-  $first = @(Get-ClientProcesses $app.Id)
+  $first = @(Get-ClientProcesses $app.Id | Select-Object Id, CPU)
   $timer = [Diagnostics.Stopwatch]::StartNew()
   Start-Sleep -Seconds 8
-  $last = @(Get-ClientProcesses $app.Id)
+  $last = @(Get-ClientProcesses $app.Id | Select-Object Id, CPU, WorkingSet64, ProcessName)
   $timer.Stop()
   $startCpu = ($first | Measure-Object CPU -Sum).Sum
   $endCpu = ($last | Measure-Object CPU -Sum).Sum
   $cpuPercent = [Math]::Round(100*($endCpu-$startCpu)/$timer.Elapsed.TotalSeconds/[Environment]::ProcessorCount,2)
+  if (Compare-Object @($first.Id | Sort-Object) @($last.Id | Sort-Object)) { $cpuPercent = 'N/D (cambio de procesos)' }
   $mib = [Math]::Round(($last | Measure-Object WorkingSet64 -Sum).Sum/1MB,1)
   $children = @($last | Where-Object ProcessName -eq 'msedgewebview2').Count
   Write-Output "METRICA $label | RAM_MiB=$mib CPU_pct=$cpuPercent WebView2=$children Cores=$([Environment]::ProcessorCount)"
@@ -155,6 +156,28 @@ try {
     Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4179/api/test-directory?fail=0' | Out-Null
   }
   Invoke-Control $root 'Actualizar'
+  $fixtureEndpoint = 'http://127.0.0.1:4179/api/test-directory'
+  Invoke-RestMethod -Method Post -Uri ($fixtureEndpoint + '?pages=normal') | Out-Null
+  try {
+    Invoke-Control $root 'Actualizar'
+    Find-Control $root 'Sala norte' | Out-Null
+    Invoke-Control $root 'Cargar más'
+    (Find-Control $root 'Sala centro').GetCurrentPattern($selectionPattern).Select()
+    Invoke-RestMethod -Method Post -Uri ($fixtureEndpoint + '?pages=partial-error') | Out-Null
+    Invoke-Control $root 'Actualizar'
+    Find-Control $root 'No se pudo cargar el directorio. Pulsa Actualizar para reintentar.' | Out-Null
+    if (!(Find-Control $root 'Sala centro').GetCurrentPattern($selectionPattern).Current.IsSelected) { throw 'Se perdió la selección al fallar la segunda página.' }
+    Invoke-RestMethod -Method Post -Uri ($fixtureEndpoint + '?pages=normal') | Out-Null
+    Invoke-Control $root 'Actualizar'
+    Find-Control $root 'Sala de prueba' | Out-Null
+    if (!(Find-Control $root 'Sala centro').GetCurrentPattern($selectionPattern).Current.IsSelected) { throw 'La segunda página se perdió al actualizar el directorio.' }
+    Invoke-Control $root 'Cargar más'
+    Find-Control $root 'Sala sur' | Out-Null
+  } finally {
+    Invoke-RestMethod -Method Post -Uri $fixtureEndpoint | Out-Null
+  }
+  Invoke-Control $root 'Actualizar'
+  Find-Control $root 'Andes Five' | Out-Null
   Measure-Idle 'directorio-nativo'
   Save-Window $app.MainWindowHandle
   Invoke-Control $root 'Comunidad'
@@ -166,7 +189,11 @@ try {
   try {
     Invoke-Control $root 'Elegir mi apodo'
     Find-Control $root 'Reintentar sección' | Out-Null
-  } finally { Move-Item $held $testClient }
+    [IO.File]::WriteAllText($testClient, '// Fixture: the desktop bridge never starts.')
+    Invoke-Control $root 'Reintentar sección'
+    Find-Control $root 'Abriendo sección…' | Out-Null
+    Find-Control $root 'Reintentar sección' | Out-Null
+  } finally { Move-Item $held $testClient -Force }
   Invoke-Control $root 'Reintentar sección'
   Find-Control $root 'Tu apodo' | Out-Null
   Write-Output 'La ventana nativa recuperó la sección tras restaurar el recurso local.'

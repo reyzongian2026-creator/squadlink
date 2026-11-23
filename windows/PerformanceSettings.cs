@@ -1,8 +1,10 @@
 internal sealed class PerformanceSettings : FlowLayoutPanel
 {
+    private const string LowDescription = "Para equipos básicos. Usa vistas nativas de amigos y llamada, y libera los paneles de invitados al salir.";
+    private const string FullDescription = "Para equipos con más memoria. Abre las vistas detalladas y conserva los paneles listos para volver.";
     private readonly string file;
-    private readonly RadioButton low = Choice("Bajo consumo");
-    private readonly RadioButton full = Choice("Experiencia completa");
+    private readonly RadioButton low = Choice("Bajo consumo", LowDescription);
+    private readonly RadioButton full = Choice("Experiencia completa", FullDescription);
     public bool Low => low.Checked;
     public event Action? Changed;
 
@@ -13,9 +15,9 @@ internal sealed class PerformanceSettings : FlowLayoutPanel
         AutoScroll = true; Padding = new Padding(24); BackColor = DesktopNavigation.Canvas;
         Controls.Add(LabelFor("Rendimiento", 20, true));
         Controls.Add(low);
-        Controls.Add(LabelFor("Para equipos básicos. Usa vistas nativas de amigos y llamada, y libera los paneles de invitados al salir.", 10));
+        Controls.Add(LabelFor(LowDescription, 10));
         Controls.Add(full);
-        Controls.Add(LabelFor("Para equipos con más memoria. Abre las vistas detalladas y conserva los paneles listos para volver.", 10));
+        Controls.Add(LabelFor(FullDescription, 10));
         bool detailed = false;
         try { detailed = File.Exists(file) && File.ReadAllText(file).Trim() == "full"; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
@@ -28,7 +30,8 @@ internal sealed class PerformanceSettings : FlowLayoutPanel
         Text = text, AutoSize = true, MaximumSize = new Size(440,0), ForeColor = Color.WhiteSmoke,
         Font = new Font("Segoe UI",size,bold ? FontStyle.Bold : FontStyle.Regular), Margin = new Padding(0,3,0,15)
     };
-    private static RadioButton Choice(string text) => new() {
+    private static RadioButton Choice(string text, string description) => new() {
+        AccessibleDescription = description,
         Text = text, AutoSize = true, ForeColor = DesktopNavigation.Accent, Font = new Font("Segoe UI",12,FontStyle.Bold),
         Margin = new Padding(0,12,0,2)
     };

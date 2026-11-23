@@ -18,6 +18,7 @@ internal sealed class RoomDirectory : UserControl
     private readonly ImageList rowHeight = new() {ImageSize = new Size(1,36)};
     private readonly List<Room> rooms = new();
     private int? next;
+    private int loadedPages;
     private readonly Button refresh = DesktopNavigation.ActionButton("Actualizar");
     private readonly SolidBrush surfaceBrush = new(DesktopNavigation.Surface), activeBrush = new(DesktopNavigation.Active),
         canvasBrush = new(DesktopNavigation.Canvas), accentBrush = new(DesktopNavigation.Accent);
@@ -123,9 +124,10 @@ internal sealed class RoomDirectory : UserControl
     private void DrawRooms()
     {
         var selectedCode = Selected?.Code;
+        var topCode = list.IsHandleCreated && list.Items.Count > 0 ? (list.TopItem?.Tag as Room)?.Code : null;
         var query = search.Text.Trim();
         bool Matches(string? text) => text?.Contains(query, StringComparison.CurrentCultureIgnoreCase) == true;
-        ListViewItem? previous = null;
+        ListViewItem? previous = null, top = null;
         rebuilding = true;
         list.BeginUpdate();
         try {
@@ -137,10 +139,12 @@ internal sealed class RoomDirectory : UserControl
                 };
                 list.Items.Add(item);
                 if (room.Code == selectedCode) previous = item;
+                if (room.Code == topCode) top = item;
             }
         } finally {
             list.EndUpdate();
             if (previous != null) { previous.Selected = true; previous.Focused = true; }
+            if (top != null) list.TopItem = top;
             rebuilding = false;
         }
         UpdateSelection();
@@ -154,7 +158,7 @@ internal sealed class RoomDirectory : UserControl
         request?.Cancel();
         request = null;
         if (origin != listOrigin) {
-            listOrigin = origin; rooms.Clear(); next = null; error = null; DrawRooms();
+            listOrigin = origin; rooms.Clear(); loadedPages = 0; next = null; error = null; DrawRooms();
         }
         if (origin == null) {
             error = "Configura el servidor para ver las salas."; UpdateSelection(); return Task.CompletedTask;
@@ -169,12 +173,24 @@ internal sealed class RoomDirectory : UserControl
     private async Task ReadPage(Uri origin, int offset, bool append, CancellationTokenSource current)
     {
         try {
-            var page = await http.GetFromJsonAsync<Page>(new Uri(origin, "/api/directory?offset=" + offset), current.Token);
-            if (current != request) return;
-            if (page?.Rooms == null) throw new System.Text.Json.JsonException();
+            int requestedPages = append ? 1 : Math.Max(1, loadedPages);
             var seen = append ? rooms.Select(room => room.Code).ToHashSet() : new HashSet<string>();
-            var incoming = page.Rooms.Where(room => room != null && !string.IsNullOrWhiteSpace(room.Code) && seen.Add(room.Code)).ToList();
-            next = page.NextOffset;
+            var incoming = new List<Room>();
+            int read = 0;
+            int? cursor = offset;
+            while (read < requestedPages && cursor is int start) {
+                var page = await http.GetFromJsonAsync<Page>(new Uri(origin, "/api/directory?offset=" + start), current.Token);
+                if (current != request) return;
+                if (page?.Rooms == null || (page.NextOffset is int following && following <= start))
+                    throw new System.Text.Json.JsonException();
+                foreach (var room in page.Rooms)
+                    if (room != null && !string.IsNullOrWhiteSpace(room.Code) && seen.Add(room.Code)) incoming.Add(room);
+                read++;
+                cursor = page.NextOffset;
+            }
+            // Commit only after the complete visible range has been refreshed.
+            loadedPages = append ? loadedPages + read : read;
+            next = cursor;
             if (append ? incoming.Count > 0 : !rooms.SequenceEqual(incoming)) {
                 if (!append) rooms.Clear();
                 rooms.AddRange(incoming);

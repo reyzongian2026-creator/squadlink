@@ -5,6 +5,9 @@ on:
     paths:
       - '.github/workflows/windows.yml'
       - 'windows/**'
+      - 'public/**'
+      - 'test/windows/**'
+      - 'test/update-check/**'
 permissions:
   contents: read
 jobs:
@@ -28,6 +31,20 @@ jobs:
         run: dotnet publish windows/Squadlink.csproj -c Release -r win-x64 --self-contained true -o artifacts/app -p:SquadlinkBuildNumber=${{ github.run_number }} -p:SquadlinkBuildAttempt=${{ github.run_attempt }}
       - name: Prepare the second voice client for the Windows test
         run: npm install --no-save --package-lock=false playwright-core@1.56.1
+      - name: Check out the previous desktop version for the upgrade test
+        uses: actions/checkout@v4
+        with:
+          ref: 74cb13bd8330810e6699de14aacfd159f174d80f
+          path: upgrade-baseline
+          persist-credentials: false
+      - name: Build the previous installer
+        working-directory: upgrade-baseline
+        shell: pwsh
+        run: |
+          dotnet publish windows/Squadlink.csproj -c Release -r win-x64 --self-contained true -o artifacts/app
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" windows/setup.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Build and verify per-user installer
         shell: pwsh
         run: |
@@ -41,8 +58,33 @@ jobs:
           $install = Start-Process $setup -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"$dir`"" -Wait -PassThru
           if ($install.ExitCode) { throw "Install failed: $($install.ExitCode)" }
           & ./windows/DesktopSmoke.ps1 -Executable (Join-Path $dir 'Squadlink.exe')
+          $profileDir = Join-Path $env:LOCALAPPDATA 'Squadlink Preview'
+          $preferences = @('performance.txt', 'server.txt')
+          $savedHashes = @{}
+          foreach ($pref in $preferences) {
+            $savedHashes[$pref] = (Get-FileHash (Join-Path $profileDir $pref)).Hash
+          }
+          $remove = Start-Process (Join-Path $dir 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
+          if ($remove.ExitCode -or (Test-Path (Join-Path $dir 'Squadlink.exe'))) { throw 'Falló la desinstalación limpia.' }
+          $prior = (Resolve-Path 'upgrade-baseline/artifacts/installer/Squadlink-Setup-x64.exe').Path
+          $baseline = Start-Process $prior -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"$dir`"" -Wait -PassThru
+          if ($baseline.ExitCode -or (Get-FileHash (Join-Path $dir 'Squadlink.dll')).Hash -ne (Get-FileHash 'upgrade-baseline/artifacts/app/Squadlink.dll').Hash) { throw 'No se instaló la versión anterior.' }
+          $reinstall = Start-Process $setup -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
+          if ($reinstall.ExitCode) { throw "La reinstalación falló: $($reinstall.ExitCode)" }
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Squadlink.Desktop.Preview_is1'
+          $location = (Get-ItemProperty -LiteralPath $key).InstallLocation
+          if (!$location -or $location.TrimEnd('\') -ne $dir.TrimEnd('\')) { throw 'La reinstalación no reutilizó el directorio elegido.' }
+          if ((Get-FileHash (Join-Path $dir 'Squadlink.exe')).Hash -ne (Get-FileHash 'artifacts/app/Squadlink.exe').Hash) { throw 'El ejecutable instalado no coincide con el compilado.' }
+          if ((Get-FileHash (Join-Path $dir 'Squadlink.dll')).Hash -ne (Get-FileHash 'artifacts/app/Squadlink.dll').Hash) { throw 'No se reemplazó la versión anterior.' }
+          foreach ($pref in $preferences) {
+            if ($savedHashes[$pref] -ne (Get-FileHash (Join-Path $profileDir $pref)).Hash) { throw "La reinstalación alteró $pref." }
+          }
           $remove = Start-Process (Join-Path $dir 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
           if ($remove.ExitCode -or (Test-Path (Join-Path $dir 'Squadlink.exe'))) { throw 'Uninstall failed' }
+          foreach ($pref in $preferences) {
+            if ($savedHashes[$pref] -ne (Get-FileHash (Join-Path $profileDir $pref)).Hash) { throw "La desinstalación alteró $pref." }
+          }
+          Write-Host 'Prueba de actualización de Preview 5 y conservación de preferencias completada.'
           (Get-FileHash $setup -Algorithm SHA256).Hash + '  Squadlink-Setup-x64.exe' | Set-Content artifacts/installer/SHA256.txt -Encoding ascii
       - uses: actions/upload-artifact@v4
         with:

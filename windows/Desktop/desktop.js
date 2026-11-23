@@ -56,6 +56,7 @@ function show(next) {
 
 const friendRows = byId('friends');
 const memberRows = byId('members');
+const requestRows = byId('room-requests');
 
 function sameRows(current, next) {
   return current.length === next.length && current.every((text, index) => text === next[index]);
@@ -64,6 +65,7 @@ function sameRows(current, next) {
 let previous;
 let contacts = [];
 let members = [];
+let requests = 0;
 let inRoom = !byId('room').hidden;
 function sync(records = observer.takeRecords()) {
   if (!previous || records.some(record => friendRows.contains(record.target))) {
@@ -77,6 +79,9 @@ function sync(records = observer.takeRecords()) {
       (row.querySelector('strong')?.textContent || '') + ' · ' + (row.querySelector('small')?.textContent || ''));
     if (!sameRows(members, next)) members = next;
   }
+  if (!previous || records.some(record => requestRows.contains(record.target))) {
+    requests = requestRows.querySelectorAll('[data-action="admit"]').length;
+  }
   const joined = !byId('room').hidden;
   if (joined !== inRoom) {
     inRoom = joined;
@@ -84,7 +89,7 @@ function sync(records = observer.takeRecords()) {
   }
   const state = {
     type: 'desktop:state', section, joined, identified: /^[A-F0-9]{16}$/i.test(byId('friend-id').textContent),
-    requests: byId('room-requests').querySelectorAll('[data-action="admit"]').length,
+    requests,
     code: joined ? byId('room-code').textContent : '',
     voiceStatus: joined ? byId('voice-status').textContent.slice(0,140) : '',
     contacts, members,
@@ -99,9 +104,15 @@ function sync(records = observer.takeRecords()) {
   }
 }
 const observer = new MutationObserver(sync);
-for (const id of ['room', 'mic', 'leave', 'room-name', 'friend-id', 'members', 'friends', 'room-code', 'voice-status', 'room-requests']) {
-  observer.observe(byId(id), {attributes:true, attributeFilter:id === 'friends' ? ['class'] : ['hidden','disabled','aria-pressed'], childList:true, characterData:true, subtree:!['room','mic','leave'].includes(id)});
+observer.observe(roomPanel, {attributeFilter: ['hidden']});
+observer.observe(byId('mic'), {attributeFilter: ['disabled', 'aria-pressed']});
+observer.observe(byId('leave'), {attributeFilter: ['disabled']});
+const textChanges = {childList: true, characterData: true, subtree: true};
+for (const id of ['room-name', 'friend-id', 'members', 'room-code', 'voice-status']) {
+  observer.observe(byId(id), textChanges);
 }
+observer.observe(friendRows, {...textChanges, attributeFilter: ['class']});
+observer.observe(requestRows, {childList: true, subtree: true, attributeFilter: ['data-action']});
 let releaseTimer;
 bridge.addEventListener('message', ({data}) => {
   if (data?.type !== 'desktop:action') return;

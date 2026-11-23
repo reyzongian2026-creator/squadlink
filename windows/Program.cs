@@ -29,14 +29,16 @@ internal sealed class LobbyWindow : Form
     private readonly RoomDirectory directory;
     private readonly FlowLayoutPanel recovery = new() { Dock=DockStyle.Fill, FlowDirection=FlowDirection.TopDown,
         Padding=new Padding(24), BackColor=DesktopNavigation.Canvas };
-    private readonly System.Windows.Forms.Timer clientStartup = new() {Interval=20000};
+    private System.Windows.Forms.Timer? clientStartup;
+    private WebView2? openingClient;
+    private bool closing;
     private readonly PerformanceSettings performance;
     private readonly UpdateSettings updates;
     private readonly LightWorkspace lite = new();
     private bool nativePage;
     private string page = "rooms";
     private string? pendingAction, pendingCode;
-    private bool opening, ready, hasProfile;
+    private bool ready, hasProfile;
     private int visit;
     private Uri? origin;
     private readonly System.Windows.Forms.Timer gameTimer = new() { Interval = 30_000 };
@@ -51,7 +53,7 @@ internal sealed class LobbyWindow : Form
     public LobbyWindow()
     {
         gameTimer.Tick += async (_, _) => await ScanGame();
-        FormClosed += (_, _) => { clientStartup.Dispose(); ResetDetector(); gameTimer.Dispose(); };
+        FormClosed += (_, _) => { closing = true; StopStartupWatch(); ResetDetector(); gameTimer.Dispose(); };
         Text = "Squadlink Preview";
         Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         MinimumSize = new Size(820, 565);
@@ -80,7 +82,6 @@ internal sealed class LobbyWindow : Form
         var retry = DesktopNavigation.ActionButton("Reintentar sección");
         retry.Dock=DockStyle.None; retry.Size=new Size(175,42); recovery.Controls.Add(retry);
         retry.Click += async (_,_) => await Navigate(pendingAction ?? "lobby",pendingCode);
-        clientStartup.Tick += (_,_) => ClientFailed(view);
         workspace.Controls.Add(recovery);
         loading.TextAlign = ContentAlignment.MiddleCenter;
         workspace.Controls.Add(loading);
@@ -97,27 +98,37 @@ internal sealed class LobbyWindow : Form
             if (navigation.Joined && MessageBox.Show(this, "Cambiar de servidor desconectará la llamada. ¿Continuar?",
                 "Cambiar servidor", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
             try { Directory.CreateDirectory(dataDir); File.WriteAllText(Path.Combine(dataDir, "server.txt"), address.AbsoluteUri); }
-            catch (IOException ex) { MessageBox.Show(this, ex.Message); return; }
-            origin = address; ready = false; hasProfile = false; lite.ResetSnapshot();
-            if (view.CoreWebView2 != null) { navigation.ResetState(); directory.SetJoined(false); clientStartup.Start(); view.CoreWebView2.Navigate(address.AbsoluteUri); }
-            await Navigate("rooms");
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { MessageBox.Show(this, ex.Message); return; }
+            ResetClient();
+            navigation.ResetState();
+            directory.SetJoined(false);
+            lite.ResetSnapshot();
+            origin = address;
+            server.Text = address.AbsoluteUri;
+            await OpenDirectory();
         };
         Shown += async (_, _) =>
         {
             string saved = "";
             try { var file = Path.Combine(dataDir,"server.txt"); if (File.Exists(file)) saved = File.ReadAllText(file).Trim(); }
-            catch (IOException) { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             origin = ParseServer(saved) ?? new Uri(SharedLobby);
             server.Text = origin.AbsoluteUri;
-            var directoryLoad = Navigate("rooms");
             _ = updates.CheckAtStartup();
-            try {
-                var remembered = Path.Combine(dataDir,"presence-server.txt");
-                hasProfile = File.Exists(remembered) && File.ReadAllText(remembered) == origin.AbsoluteUri;
-                if (hasProfile && !opening) { opening = true; try { await Connect(); } finally { opening = false; } }
-            } catch (IOException) { }
-            await directoryLoad;
+            await OpenDirectory();
         };
+    }
+
+    private async Task OpenDirectory()
+    {
+        hasProfile = false;
+        try {
+            var remembered = Path.Combine(dataDir,"presence-server.txt");
+            hasProfile = File.Exists(remembered) && File.ReadAllText(remembered) == origin?.AbsoluteUri;
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        var directoryLoad = Navigate("rooms");
+        if (hasProfile) await Connect();
+        await directoryLoad;
     }
 
     private static Uri? ParseServer(string value) =>
@@ -159,9 +170,7 @@ internal sealed class LobbyWindow : Form
         if (ready) { Present(view); Post(action,code); return; }
         pendingAction = action; pendingCode = code;
         Present(loading);
-        if (opening || view.CoreWebView2 != null) return;
-        opening = true;
-        try { await Connect(); } finally { opening = false; }
+        await Connect();
     }
 
     private void SetMemoryTarget()
@@ -179,61 +188,91 @@ internal sealed class LobbyWindow : Form
 
     async Task Connect()
     {
-        if (origin == null) return;
-        connect.Enabled = false;
+        var client = view;
+        var address = origin;
+        if (address == null || !IsCurrent(client) || openingClient == client || client.CoreWebView2 != null) return;
+        openingClient = client;
+        WatchStartup(client);
         try
         {
             Directory.CreateDirectory(dataDir);
-            if (view.CoreWebView2 == null)
+            if (client.Parent == null) { workspace.Controls.Add(client); client.Visible = false; }
+            var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(dataDir, "WebView2"));
+            if (!IsCurrent(client)) return;
+            await client.EnsureCoreWebView2Async(env);
+            if (!IsCurrent(client)) return;
+            var core = client.CoreWebView2;
+            var assets = new DesktopAssets();
+            await core.CallDevToolsProtocolMethodAsync("Network.setBypassServiceWorker", "{\"bypass\":true}");
+            if (!IsCurrent(client)) return;
+            core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+            core.WebResourceRequested += (_, e) =>
             {
-                if (view.Parent == null) { workspace.Controls.Add(view); view.Visible = false; }
-                var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(dataDir, "WebView2"));
-                await view.EnsureCoreWebView2Async(env);
-                var core = view.CoreWebView2;
-                var assets = new DesktopAssets();
-                await core.CallDevToolsProtocolMethodAsync("Network.setBypassServiceWorker", "{\"bypass\":true}");
-                core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
-                core.WebResourceRequested += (_, e) =>
-                {
-                    if (SameOrigin(e.Request.Uri)) assets.Respond(core, e, new Uri(e.Request.Uri));
-                };
-                view.CoreWebView2.NewWindowRequested += (_, e) => e.Handled = true;
-                view.CoreWebView2.NavigationStarting += (_, e) =>
-                {
-                    if (!SameOrigin(e.Uri) || new Uri(e.Uri).AbsolutePath != "/") e.Cancel = true;
-                    else { ResetDetector(); ready = false; }
-                };
-                view.CoreWebView2.WebMessageReceived += OnWebMessage;
-                view.CoreWebView2.PermissionRequested += (_, e) =>
-                {
-                    if (!SameOrigin(e.Uri) || e.PermissionKind != CoreWebView2PermissionKind.Microphone)
-                        e.State = CoreWebView2PermissionState.Deny;
-                    // WebView2 asks the player for microphone permission on the selected origin.
-                };
-                var initializedView = view;
-                view.CoreWebView2.NavigationCompleted += (_, e) =>
-                {
-                    if (!e.IsSuccess && e.WebErrorStatus != CoreWebView2WebErrorStatus.OperationCanceled)
-                        BeginInvoke(new Action(() => ClientFailed(initializedView)));
-                };
-            }
-            clientStartup.Start();
-            view.CoreWebView2.Navigate(origin.AbsoluteUri);
+                if (IsCurrent(client) && SameOrigin(e.Request.Uri)) assets.Respond(core, e, new Uri(e.Request.Uri));
+            };
+            core.NewWindowRequested += (_, e) => e.Handled = true;
+            ulong navigationId = 0;
+            core.NavigationStarting += (_, e) =>
+            {
+                if (!IsCurrent(client) || !SameOrigin(e.Uri) || new Uri(e.Uri).AbsolutePath != "/") e.Cancel = true;
+                else { navigationId = e.NavigationId; ResetDetector(); ready = false; WatchStartup(client); }
+            };
+            core.WebMessageReceived += (sender, e) => { if (IsCurrent(client)) OnWebMessage(sender, e); };
+            core.PermissionRequested += (_, e) =>
+            {
+                if (!IsCurrent(client) || !SameOrigin(e.Uri) || e.PermissionKind != CoreWebView2PermissionKind.Microphone)
+                    e.State = CoreWebView2PermissionState.Deny;
+                // WebView2 asks the player for microphone permission on the selected origin.
+            };
+            core.NavigationCompleted += (_, e) =>
+            {
+                var id = e.NavigationId;
+                if (IsCurrent(client) && id == navigationId && !e.IsSuccess && e.WebErrorStatus != CoreWebView2WebErrorStatus.OperationCanceled)
+                    BeginInvoke(new Action(() => { if (id == navigationId) ClientFailed(client); }));
+            };
+            core.Navigate(address.AbsoluteUri);
         }
         catch (Exception)
         {
-            if (!Disposing && !IsDisposed) ClientFailed(view);
+            ClientFailed(client);
         }
-        finally { if (!IsDisposed) connect.Enabled = true; }
+        finally { if (openingClient == client) openingClient = null; }
+    }
+
+    private bool IsCurrent(WebView2 client) => !closing && !IsDisposed && !Disposing && view == client;
+
+    private void WatchStartup(WebView2 client)
+    {
+        StopStartupWatch();
+        var watch = new System.Windows.Forms.Timer { Interval = 20_000 };
+        clientStartup = watch;
+        watch.Tick += (_, _) => { if (clientStartup == watch) ClientFailed(client); };
+        watch.Start();
+    }
+
+    private void StopStartupWatch()
+    {
+        var watch = clientStartup;
+        clientStartup = null;
+        watch?.Dispose();
+    }
+
+    private void ResetClient()
+    {
+        StopStartupWatch();
+        var previous = view;
+        ready = false;
+        openingClient = null;
+        ResetDetector();
+        view = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = BackColor };
+        previous.Dispose();
     }
 
     private void ClientFailed(WebView2 failed)
     {
-        if (IsDisposed || Disposing || view != failed) return;
-        clientStartup.Stop();
-        ready=false; ResetDetector(); navigation.ResetState(); directory.SetJoined(false); lite.ResetSnapshot();
-        failed.Dispose();
-        view=new WebView2 {Dock=DockStyle.Fill, DefaultBackgroundColor=BackColor};
+        if (!IsCurrent(failed)) return;
+        ResetClient();
+        navigation.ResetState(); directory.SetJoined(false); lite.ResetSnapshot();
         if (!nativePage) Present(recovery);
     }
 
@@ -268,11 +307,11 @@ internal sealed class LobbyWindow : Form
         var type = kind.GetString();
         if (type == "desktop:release" && msg.TryGetProperty("visit", out var token) && token.TryGetInt32(out int expected))
         {
+            var releasing = view;
             BeginInvoke(new Action(() =>
             {
-                if (expected != visit || !nativePage || !performance.Low || navigation.Joined || hasProfile || !ready) return;
-                ready = false; ResetDetector(); view.Dispose();
-                view = new WebView2 {Dock = DockStyle.Fill, DefaultBackgroundColor = BackColor};
+                if (!IsCurrent(releasing) || expected != visit || !nativePage || !performance.Low || navigation.Joined || hasProfile || !ready) return;
+                ResetClient();
             }));
             return;
         }
@@ -281,7 +320,7 @@ internal sealed class LobbyWindow : Form
             if (!hasProfile && origin != null && msg.TryGetProperty("identified", out var identified) && identified.ValueKind == JsonValueKind.True)
             {
                 try { File.WriteAllText(Path.Combine(dataDir,"presence-server.txt"), origin.AbsoluteUri); hasProfile = true; }
-                catch (IOException) { }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             }
             bool wasJoined = navigation.Joined;
             navigation.UpdateState(msg);
@@ -289,7 +328,7 @@ internal sealed class LobbyWindow : Form
             directory.SetJoined(navigation.Joined);
             if (!ready)
             {
-                clientStartup.Stop(); ready = true; SetMemoryTarget();
+                StopStartupWatch(); ready = true; SetMemoryTarget();
                 if (pendingAction != null) {
                     string action = pendingAction; pendingAction = null;
                     Present(view); Post(action, pendingCode); pendingCode = null;

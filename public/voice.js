@@ -2,8 +2,8 @@ import { readAudioSettings, saveAudioSettings } from './audio-settings.js';
 
 // One audio transceiver per pair. Listening does not require microphone access.
 export class VoiceRoom {
-  constructor({ selfId, iceServers = [], sendSignal, onStatus = () => {}, onPeerState = () => {} }) {
-    Object.assign(this, { selfId, iceServers, sendSignal, onStatus, onPeerState });
+  constructor({ selfId, iceServers = [], sendSignal, onStatus = () => {}, onPeerState = () => {}, onMicrophoneEnded = () => {} }) {
+    Object.assign(this, { selfId, iceServers, sendSignal, onStatus, onPeerState, onMicrophoneEnded });
     this.peers = new Map();
     this.members = new Set();
     this.stream = null;
@@ -177,10 +177,20 @@ export class VoiceRoom {
     this.captures.add(next);
     const old = this.stream;
     this.stream = next;
-    try { await this.replaceSenders(next.getAudioTracks()[0], request); }
+    const track = next.getAudioTracks()[0];
+    track.onended = () => this.handleMicrophoneEnded(next);
+    if (track.readyState === 'ended') {
+      this.handleMicrophoneEnded(next);
+      return false;
+    }
+    try { await this.replaceSenders(track, request); }
     catch (err) {
       if (request === this.captureRequest && !this.closed) {
         this.stream = old;
+        if (old?.getAudioTracks()[0]?.readyState === 'ended') {
+          this.handleMicrophoneEnded(old);
+          throw err;
+        }
         try { await this.replaceSenders(old?.getAudioTracks()[0] ?? null, request); } finally { this.releaseCapture(next); }
       } else this.releaseCapture(old);
       throw err;
@@ -189,9 +199,20 @@ export class VoiceRoom {
     return this.stream === next && !this.closed;
   }
 
+  handleMicrophoneEnded(stream) {
+    if (this.closed || this.stream !== stream) return;
+    this.setMicrophone(false).catch(err => {
+      if (!this.closed && !this.wantsMicrophone) this.onStatus(err.message);
+    });
+    this.onMicrophoneEnded();
+  }
+
   releaseCapture(stream) {
     if (this.captures.delete(stream)) {
-      for (const track of stream.getTracks()) track.stop();
+      for (const track of stream.getTracks()) {
+        track.onended = null;
+        track.stop();
+      }
     }
   }
 

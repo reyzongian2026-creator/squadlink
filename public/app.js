@@ -43,6 +43,7 @@ let self,
   stream,
   voice,
   microphone = false,
+  microphoneUpdate = Promise.resolve(),
   mode,
   cleanupGame,
   toastTimer,
@@ -408,6 +409,13 @@ async function enterRoom(snapshot) {
         $("voice-status").textContent = text;
         $("listen").hidden = false;
       },
+      onMicrophoneEnded: () => {
+        if (generation !== attempt) return;
+        $("voice-status").textContent = "El micrófono se desconectó. Conecta uno o elige otra entrada y vuelve a activarlo.";
+        updateMicrophone(false).catch(error => {
+          if (generation === attempt) tell(error.message);
+        });
+      },
       onPeerState: (id, state) => {
         if (room) {
           peerStates.set(id, state);
@@ -470,6 +478,7 @@ function resetRoom() {
   directory.draw();
   social?.roomChanged();
   microphone = false;
+  microphoneUpdate = Promise.resolve();
   $("voice-measurements").replaceChildren();
   peerStates.clear();
   volumes.clear();
@@ -485,20 +494,26 @@ function resetRoom() {
   $("leave").textContent = "Salir de la sala";
   setConnection("Sin sala", false);
 }
+function updateMicrophone(enabled) {
+  const current = voice;
+  microphone = enabled;
+  $("mic").textContent = enabled ? "Silenciar micrófono" : "Activar micrófono";
+  $("mic").setAttribute("aria-pressed", String(enabled));
+  // A device can disconnect while the previous presence update is in flight.
+  microphoneUpdate = microphoneUpdate.catch(() => {}).then(() => {
+    if (current === voice) return api("member", { muted: !enabled });
+  });
+  return microphoneUpdate;
+}
 $("mic").onclick = async () => {
   const current = voice;
   if (!current) return;
   $("mic").disabled = true;
   try {
-    const enabled = await current.setMicrophone(!microphone);
-    if (voice !== current) return;
-    microphone = enabled;
-    $("mic").textContent = microphone
-      ? "Silenciar micrófono"
-      : "Activar micrófono";
-    $("mic").setAttribute("aria-pressed", String(microphone));
+    const requested = !microphone;
     $("voice-status").textContent = "";
-    await api("member", { muted: !microphone });
+    const enabled = await current.setMicrophone(requested);
+    if (voice === current && enabled === requested) await updateMicrophone(enabled);
   } catch (error) {
     if (voice === current) $("voice-status").textContent = error.message;
   } finally {
