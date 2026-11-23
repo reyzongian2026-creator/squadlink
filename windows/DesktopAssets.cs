@@ -30,15 +30,27 @@ internal sealed class DesktopAssets
             ".css" => "text/css; charset=utf-8", ".png" => "image/png", ".webp" => "image/webp",
             _ => "application/octet-stream"
         };
-        Stream body;
-        if (path == "/index.html")
+        try
         {
-            var html = File.ReadAllText(file)
-                .Replace("<link rel=\"manifest\" href=\"/manifest.webmanifest\" />", "<link rel=\"stylesheet\" href=\"/desktop.css\" />")
-                .Replace("src=\"/install.js\"", "src=\"/desktop.js\"");
-            body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(html));
+            Stream body;
+            if (path == "/index.html")
+            {
+                var html = File.ReadAllText(file)
+                    .Replace("<link rel=\"manifest\" href=\"/manifest.webmanifest\" />", "<link rel=\"stylesheet\" href=\"/desktop.css\" />")
+                    .Replace("src=\"/install.js\"", "src=\"/desktop.js\"");
+                body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(html), writable: false);
+            }
+            else
+            {
+                // WebView2 may retain the response stream beyond navigation or disposal.
+                // Hand it the bundled asset bytes and release the file immediately.
+                body = new MemoryStream(File.ReadAllBytes(file), writable: false);
+            }
+            e.Response = core.Environment.CreateWebResourceResponse(body, 200, "OK", Headers + Policy + "Content-Type: " + mime + "\r\n");
         }
-        else body = File.OpenRead(file);
-        e.Response = core.Environment.CreateWebResourceResponse(body, 200, "OK", Headers + Policy + "Content-Type: " + mime + "\r\n");
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            e.Response = core.Environment.CreateWebResourceResponse(null, 503, "Asset unavailable", Headers);
+        }
     }
 }
