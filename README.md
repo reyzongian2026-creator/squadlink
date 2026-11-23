@@ -6,7 +6,7 @@ Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte
 
 ## Edición de escritorio en pruebas
 
-**Squadlink Preview 0.4.0-preview.4** abre con un directorio de salas nativo de Windows. La primera columna cambia de espacio y la segunda muestra las opciones del espacio elegido. El directorio permite buscar salas, consultar el juego y los cupos, crear una sala o entrar con código. Un perfil nuevo puede usar el directorio sin iniciar WebView2. Al entrar en una llamada se conserva una sola sesión de voz entre secciones.
+**Squadlink Preview 0.4.0-preview.5** abre con un directorio de salas nativo de Windows. La primera columna cambia de espacio y la segunda muestra las opciones del espacio elegido. El directorio permite buscar salas, consultar el juego y los cupos, crear una sala o entrar con código. Un perfil nuevo puede usar el directorio sin iniciar WebView2. Al entrar en una llamada se conserva una sola sesión de voz entre secciones.
 
 Para probarla, abre una [compilación correcta de Windows en la rama de prueba](https://github.com/reyzongian2026-creator/squadlink/actions/workflows/windows.yml?query=branch%3Apreview%2Fwindows-escritorio) y descarga **Squadlink-Windows-x64** en *Artifacts* con tu sesión de GitHub. Descomprime el ZIP y ejecuta `Squadlink-Setup-x64.exe`. El archivo `SHA256.txt` permite verificar el instalador. La edición Preview tiene su propio acceso directo, directorio de instalación y perfil de jugador. Puede convivir con la versión estable.
 
@@ -21,7 +21,7 @@ En **Ajustes → Rendimiento** puedes cambiar de perfil durante una sesión. **B
 
 La aplicación mantiene la presencia de un perfil vinculado. Si un invitado vuelve al directorio tras salir de un panel, el cliente libera el motor cuando ha terminado cualquier entrada a una sala. El artefacto incluye una captura del directorio con dos salas de prueba. El registro de compilación muestra la memoria del árbol de procesos y el porcentaje de CPU en reposo, medidos en un equipo de prueba de Windows.
 
-En **Ajustes → Actualizaciones**, pulsa **Buscar actualizaciones**. La app compara el número y el intento de compilación con los artefactos válidos del canal Preview de Windows. Puedes activar **Buscar al abrir Squadlink** para ver el aviso en el título de la ventana. La descarga y la instalación son manuales. La Preview 3 necesita una primera instalación manual de Preview 4 sobre el mismo perfil.
+En **Ajustes → Actualizaciones**, pulsa **Buscar actualizaciones**. La app compara el número y el intento de compilación con los artefactos válidos del canal Preview de Windows. Puedes activar **Buscar al abrir Squadlink** para ver el aviso en el título de la ventana. La descarga y la instalación son manuales. La Preview 3 necesita una primera instalación manual de Preview 5 sobre el mismo perfil.
 
 ### Consumo medido en Windows
 

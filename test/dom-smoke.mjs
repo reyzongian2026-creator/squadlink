@@ -18,8 +18,11 @@ export async function domSmoke(Window) {
       Object.defineProperty(globalThis, key, { configurable: true, value: key === 'window' ? win : win[key] });
     }
     let offline = false;
+    let expiredSocialSession = false;
     globalThis.fetch = async (url, options) => {
       if (offline) throw new TypeError("sin conexión simulada");
+      if (expiredSocialSession && url === '/api/social/pulse')
+        return Response.json({error: 'Sesión caducada'}, {status: 401});
       const res = await player.request(url, options?.body && JSON.parse(options.body));
       const chunks = [];
       for await (const chunk of res) chunks.push(chunk);
@@ -142,6 +145,17 @@ export async function domSmoke(Window) {
     await until(() => el('room-name').textContent === 'Partida de Ana' && !el('room').hidden);
     assert.match(el('members').textContent, /Ana/);
     assert.match(el('members').textContent, /Prueba/);
+    const savedContacts = localStorage.getItem('squadlink.contacts.v1');
+    expiredSocialSession = true;
+    win.dispatchEvent(new win.Event('focus'));
+    await until(() => el('social-content').hidden && !el('social-login').hidden);
+    assert.equal(el('friend-id').textContent, '');
+    for (const id of ['friends', 'friend-requests', 'room-requests', 'room-admission'])
+      assert.equal(el(id).childElementCount, 0);
+    assert.equal(localStorage.getItem('squadlink.contacts.v1'), savedContacts);
+    expiredSocialSession = false;
+    el('social-retry').click();
+    await until(() => el('friend-id').textContent === ownerId && el('friends').textContent.includes('Luz'));
     console.log('DOM y HTTP: personaje, XP, ranking, publicación y retiro de sala, privacidad del código, amistad, actividad, admisión a sala protegida, código manual, arcade, preferencias de apodo y reintento de salida verificados.');
   } finally {
     for (const dispose of disposals) dispose();

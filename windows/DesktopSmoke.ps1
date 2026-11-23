@@ -143,13 +143,33 @@ try {
   if (!$version) {throw 'La versión instalada carece de identidad de compilación.'}
   Invoke-Control $root 'Voz'
   Find-Control $root 'Andes Five' | Out-Null
+  $selectionPattern = [System.Windows.Automation.SelectionItemPattern]::Pattern
+  (Find-Control $root 'Andes Five').GetCurrentPattern($selectionPattern).Select()
+  Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4179/api/test-directory?fail=1' | Out-Null
+  try {
+    Invoke-Control $root 'Actualizar'
+    Find-Control $root 'No se pudo cargar el directorio. Pulsa Actualizar para reintentar.' | Out-Null
+    if (!(Find-Control $root 'Andes Five').GetCurrentPattern($selectionPattern).Current.IsSelected) { throw 'El directorio perdió la sala seleccionada al fallar la red.' }
+    if (!(Find-Control $root 'Entrar a la sala').Current.IsEnabled) { throw 'La sala guardada dejó de estar disponible.' }
+  } finally {
+    Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4179/api/test-directory?fail=0' | Out-Null
+  }
+  Invoke-Control $root 'Actualizar'
   Measure-Idle 'directorio-nativo'
   Save-Window $app.MainWindowHandle
   Invoke-Control $root 'Comunidad'
   Find-Control $root 'Elegir mi apodo' | Out-Null
   Measure-Idle 'amigos-invitado-bajo'
-  Invoke-Control $root 'Elegir mi apodo'
+  # Reproduce incomplete local assets in the isolated copy and recover in the same process.
+  $held = $testClient + '.held'
+  Move-Item $testClient $held
+  try {
+    Invoke-Control $root 'Elegir mi apodo'
+    Find-Control $root 'Reintentar sección' | Out-Null
+  } finally { Move-Item $held $testClient }
+  Invoke-Control $root 'Reintentar sección'
   Find-Control $root 'Tu apodo' | Out-Null
+  Write-Output 'La ventana nativa recuperó la sección tras restaurar el recurso local.'
   Set-Mode $root 'Experiencia completa'
   Save-Window $app.MainWindowHandle 'Ajustes-rendimiento.png'
   Invoke-Control $root 'Comunidad'

@@ -27,6 +27,9 @@ internal sealed class LobbyWindow : Form
     private readonly Panel workspace = new() {Dock = DockStyle.Fill, BackColor = DesktopNavigation.Canvas};
     private readonly Label loading = DesktopNavigation.Caption("Abriendo sección…", 14, FontStyle.Regular);
     private readonly RoomDirectory directory;
+    private readonly FlowLayoutPanel recovery = new() { Dock=DockStyle.Fill, FlowDirection=FlowDirection.TopDown,
+        Padding=new Padding(24), BackColor=DesktopNavigation.Canvas };
+    private readonly System.Windows.Forms.Timer clientStartup = new() {Interval=20000};
     private readonly PerformanceSettings performance;
     private readonly UpdateSettings updates;
     private readonly LightWorkspace lite = new();
@@ -48,7 +51,7 @@ internal sealed class LobbyWindow : Form
     public LobbyWindow()
     {
         gameTimer.Tick += async (_, _) => await ScanGame();
-        FormClosed += (_, _) => { ResetDetector(); gameTimer.Dispose(); };
+        FormClosed += (_, _) => { clientStartup.Dispose(); ResetDetector(); gameTimer.Dispose(); };
         Text = "Squadlink Preview";
         Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         MinimumSize = new Size(820, 565);
@@ -70,6 +73,15 @@ internal sealed class LobbyWindow : Form
         serverSettings.Controls.Add(new Label { Text = "Servidor del grupo", AutoSize = true, Font = new Font("Segoe UI",18,FontStyle.Bold) });
         serverSettings.Controls.Add(server);
         serverSettings.Controls.Add(connect);
+        recovery.Controls.Add(new Label {Text="No se pudo abrir la sección",AutoSize=true,
+            ForeColor=Color.WhiteSmoke,Font=new Font("Segoe UI",17,FontStyle.Bold)});
+        recovery.Controls.Add(new Label {Text="Si el problema continúa, comprueba WebView2 y vuelve a instalar Squadlink Preview.",AutoSize=true,
+            MaximumSize=new Size(440,0),ForeColor=DesktopNavigation.Muted});
+        var retry = DesktopNavigation.ActionButton("Reintentar sección");
+        retry.Dock=DockStyle.None; retry.Size=new Size(175,42); recovery.Controls.Add(retry);
+        retry.Click += async (_,_) => await Navigate(pendingAction ?? "lobby",pendingCode);
+        clientStartup.Tick += (_,_) => ClientFailed(view);
+        workspace.Controls.Add(recovery);
         loading.TextAlign = ContentAlignment.MiddleCenter;
         workspace.Controls.Add(loading);
         workspace.Controls.Add(directory);
@@ -87,7 +99,7 @@ internal sealed class LobbyWindow : Form
             try { Directory.CreateDirectory(dataDir); File.WriteAllText(Path.Combine(dataDir, "server.txt"), address.AbsoluteUri); }
             catch (IOException ex) { MessageBox.Show(this, ex.Message); return; }
             origin = address; ready = false; hasProfile = false; lite.ResetSnapshot();
-            if (view.CoreWebView2 != null) { navigation.ResetState(); directory.SetJoined(false); view.CoreWebView2.Navigate(address.AbsoluteUri); }
+            if (view.CoreWebView2 != null) { navigation.ResetState(); directory.SetJoined(false); clientStartup.Start(); view.CoreWebView2.Navigate(address.AbsoluteUri); }
             await Navigate("rooms");
         };
         Shown += async (_, _) =>
@@ -198,20 +210,31 @@ internal sealed class LobbyWindow : Form
                         e.State = CoreWebView2PermissionState.Deny;
                     // WebView2 asks the player for microphone permission on the selected origin.
                 };
+                var initializedView = view;
                 view.CoreWebView2.NavigationCompleted += (_, e) =>
                 {
                     if (!e.IsSuccess && e.WebErrorStatus != CoreWebView2WebErrorStatus.OperationCanceled)
-                        MessageBox.Show(this, "No se pudo cargar el lobby. Revisa la dirección y que el servidor esté encendido.");
+                        BeginInvoke(new Action(() => ClientFailed(initializedView)));
                 };
             }
+            clientStartup.Start();
             view.CoreWebView2.Navigate(origin.AbsoluteUri);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            navigation.SelectPage("server"); Present(serverSettings);
-            MessageBox.Show(this, "No se pudo abrir el lobby. Comprueba que Microsoft Edge WebView2 Runtime esté instalado.\n" + ex.Message);
+            if (!Disposing && !IsDisposed) ClientFailed(view);
         }
-        finally { connect.Enabled = true; }
+        finally { if (!IsDisposed) connect.Enabled = true; }
+    }
+
+    private void ClientFailed(WebView2 failed)
+    {
+        if (IsDisposed || Disposing || view != failed) return;
+        clientStartup.Stop();
+        ready=false; ResetDetector(); navigation.ResetState(); directory.SetJoined(false); lite.ResetSnapshot();
+        failed.Dispose();
+        view=new WebView2 {Dock=DockStyle.Fill, DefaultBackgroundColor=BackColor};
+        if (!nativePage) Present(recovery);
     }
 
     private void ResetDetector()
@@ -266,7 +289,7 @@ internal sealed class LobbyWindow : Form
             directory.SetJoined(navigation.Joined);
             if (!ready)
             {
-                ready = true; SetMemoryTarget();
+                clientStartup.Stop(); ready = true; SetMemoryTarget();
                 if (pendingAction != null) {
                     string action = pendingAction; pendingAction = null;
                     Present(view); Post(action, pendingCode); pendingCode = null;

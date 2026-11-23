@@ -37,6 +37,7 @@ internal sealed class DesktopNavigation : UserControl
             button.Font = new Font("Segoe MDL2 Assets", 16);
             button.TextAlign = ContentAlignment.MiddleCenter; button.Padding = Padding.Empty;
             button.AccessibleName = group.Name; tips.SetToolTip(button, group.Name);
+            button.PreviewKeyDown += MarkArrowKey; button.KeyDown += MoveWithinGroup;
             button.Click += (_, _) => ActionRequested?.Invoke(group.Pages[0].Id);
             groupButtons.Add(button); Row(rail, button, 50);
         }
@@ -55,10 +56,11 @@ internal sealed class DesktopNavigation : UserControl
             FlatStyle = FlatStyle.Flat, BackColor = Surface, ForeColor = Color.WhiteSmoke, UseVisualStyleBackColor = false,
             TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(0,2,0,2), Font = new Font("Segoe UI", 10)};
         button.FlatAppearance.BorderSize = 0; button.FlatAppearance.MouseOverBackColor = Active;
+        button.FlatAppearance.MouseDownBackColor = Color.FromArgb(82, 82, 103);
         return button;
     }
     public static Label Caption(string text, float size, FontStyle style) => new() {
-        Text = text, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.WhiteSmoke,
+        Text = text, AutoEllipsis = true, UseMnemonic = false, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.WhiteSmoke,
         Font = new Font("Segoe UI", size, style), Dock = DockStyle.Fill, Margin = Padding.Empty };
     private static TableLayoutPanel Stack(Color color)
     {
@@ -89,11 +91,41 @@ internal sealed class DesktopNavigation : UserControl
             {
                 var button = ActionButton(section.Label);
                 button.Click += (_, _) => ActionRequested?.Invoke(section.Id);
+                button.PreviewKeyDown += MarkArrowKey; button.KeyDown += MoveWithinGroup;
                 pageButtons[section.Id] = button; Row(channels, button, 40);
             }
             channels.ResumeLayout();
         }
-        foreach (var pair in pageButtons) pair.Value.BackColor = pair.Key == page ? Active : Surface;
+        foreach (var pair in pageButtons)
+        {
+            bool selected = pair.Key == page;
+            pair.Value.BackColor = selected ? Active : Surface;
+            pair.Value.ForeColor = selected ? Accent : Color.WhiteSmoke;
+            pair.Value.AccessibleDescription = selected ? "Sección abierta" : null;
+        }
+    }
+
+    private static void MarkArrowKey(object? sender, PreviewKeyDownEventArgs e)
+    {
+        if (e.KeyCode is Keys.Up or Keys.Down or Keys.Home or Keys.End) e.IsInputKey = true;
+    }
+
+    private void MoveWithinGroup(object? sender, KeyEventArgs e)
+    {
+        if (e.Modifiers != Keys.None || sender is not Button button ||
+            e.KeyCode is not (Keys.Up or Keys.Down or Keys.Home or Keys.End)) return;
+        var buttons = groupButtons.Contains(button) ? groupButtons : pageButtons.Values.ToList();
+        int index = buttons.IndexOf(button);
+        if (index < 0) return;
+        int next = e.KeyCode switch {
+            Keys.Home => 0,
+            Keys.End => buttons.Count - 1,
+            Keys.Down => (index + 1) % buttons.Count,
+            _ => (index + buttons.Count - 1) % buttons.Count
+        };
+        buttons[next].Focus();
+        e.Handled = true;
+        e.SuppressKeyPress = true;
     }
 
     public void ResetState()

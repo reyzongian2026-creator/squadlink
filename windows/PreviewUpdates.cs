@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
 using System.Reflection;
@@ -19,8 +18,9 @@ internal readonly record struct BuildStamp(long Number, int Attempt) : IComparab
     }
 }
 
-internal sealed record PreviewArtifact(BuildStamp Build, long Run, long Id)
+internal sealed record PreviewArtifact(BuildStamp Build, long Run, long Id, DateTimeOffset ExpiresAt)
 {
+    public bool IsAvailableAt(DateTimeOffset instant) => instant < ExpiresAt;
     public Uri Url => new($"https://github.com/{PreviewUpdates.Repository}/actions/runs/{Run}/artifacts/{Id}");
 }
 
@@ -47,20 +47,24 @@ internal sealed class PreviewUpdates(HttpClient http)
             foreach (var run in runs.EnumerateArray()) {
                 if (run.GetProperty("head_branch").GetString()!=Branch || run.GetProperty("conclusion").GetString()!="success"
                     || run.GetProperty("event").GetString() is not ("push" or "workflow_dispatch")
-                    || !string.Equals(run.GetProperty("head_repository").GetProperty("full_name").GetString(),Repository,StringComparison.OrdinalIgnoreCase)) continue;
+                    || !run.TryGetProperty("head_repository", out var source) || source.ValueKind != JsonValueKind.Object
+                    || !source.TryGetProperty("full_name", out var owner) || owner.ValueKind != JsonValueKind.String
+                    || !string.Equals(owner.GetString(),Repository,StringComparison.OrdinalIgnoreCase)) continue;
                 var stamp = new BuildStamp(run.GetProperty("run_number").GetInt64(),run.GetProperty("run_attempt").GetInt32());
                 if (stamp.CompareTo(installed)<=0) return (null,unavailable);
                 unavailable = true;
                 long runId = run.GetProperty("id").GetInt64();
                 using var assets = await Get($"runs/{runId}/artifacts?name=Squadlink-Windows-x64&per_page=100",ct);
-                long newestId = 0;
+                PreviewArtifact? newest = null;
+                var now = DateTimeOffset.UtcNow;
                 foreach (var asset in assets.RootElement.GetProperty("artifacts").EnumerateArray()) {
-                    if (asset.GetProperty("name").GetString()=="Squadlink-Windows-x64" && !asset.GetProperty("expired").GetBoolean()
-                        && asset.GetProperty("size_in_bytes").GetInt64()>0
-                        && asset.GetProperty("expires_at").GetDateTimeOffset()>DateTimeOffset.UtcNow)
-                        newestId = Math.Max(newestId,asset.GetProperty("id").GetInt64());
+                    if (asset.GetProperty("name").GetString() != "Squadlink-Windows-x64"
+                        || asset.GetProperty("expired").GetBoolean() || asset.GetProperty("size_in_bytes").GetInt64() <= 0) continue;
+                    var candidate = new PreviewArtifact(stamp, runId, asset.GetProperty("id").GetInt64(),
+                        asset.GetProperty("expires_at").GetDateTimeOffset());
+                    if (candidate.Id > (newest?.Id ?? 0) && candidate.IsAvailableAt(now)) newest = candidate;
                 }
-                if (newestId>0) return (new(stamp,runId,newestId),false);
+                if (newest != null) return (newest,false);
             }
             if (runs.GetArrayLength()<30) return (null,unavailable);
         }

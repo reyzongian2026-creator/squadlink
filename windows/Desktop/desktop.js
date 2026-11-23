@@ -37,12 +37,13 @@ profile.onclick = () => byId('profile').click();
 byId('loadout').before(profile);
 profile.dataset.desktopPage = 'player';
 
+const pageIds = new Set(Object.values(pages).flat());
 let section = 'lobby';
 function show(next) {
   if (!Object.hasOwn(pages, next)) return;
   section = next;
   document.body.dataset.workspace = next;
-  for (const id of new Set(Object.values(pages).flat())) {
+  for (const id of pageIds) {
     byId(id).classList.toggle('desktop-inactive', !pages[next].includes(id));
   }
   profile.hidden = next !== 'player';
@@ -53,9 +54,29 @@ function show(next) {
   document.scrollingElement.scrollTop = 0;
 }
 
+const friendRows = byId('friends');
+const memberRows = byId('members');
+
+function sameRows(current, next) {
+  return current.length === next.length && current.every((text, index) => text === next[index]);
+}
+
 let previous;
+let contacts = [];
+let members = [];
 let inRoom = !byId('room').hidden;
-function sync() {
+function sync(records = observer.takeRecords()) {
+  if (!previous || records.some(record => friendRows.contains(record.target))) {
+    const next = [...friendRows.querySelectorAll('.social-row')].slice(0,25).map(row =>
+      (row.querySelector('strong')?.textContent || '') + ' · ' +
+      (row.querySelector('.dot.online') ? 'En línea' : 'Desconectado'));
+    if (!sameRows(contacts, next)) contacts = next;
+  }
+  if (!previous || records.some(record => memberRows.contains(record.target))) {
+    const next = [...memberRows.querySelectorAll('li')].map(row =>
+      (row.querySelector('strong')?.textContent || '') + ' · ' + (row.querySelector('small')?.textContent || ''));
+    if (!sameRows(members, next)) members = next;
+  }
   const joined = !byId('room').hidden;
   if (joined !== inRoom) {
     inRoom = joined;
@@ -66,22 +87,20 @@ function sync() {
     requests: byId('room-requests').querySelectorAll('[data-action="admit"]').length,
     code: joined ? byId('room-code').textContent : '',
     voiceStatus: joined ? byId('voice-status').textContent.slice(0,140) : '',
-    contacts: [...byId('friends').querySelectorAll('.social-row')].slice(0,25).map(row =>
-      (row.querySelector('strong')?.textContent || '') + ' · ' +
-      (row.querySelector('.dot.online') ? 'En línea' : 'Desconectado')),
-    members: [...byId('members').querySelectorAll('li')].map(row =>
-      (row.querySelector('strong')?.textContent || '') + ' · ' + (row.querySelector('small')?.textContent || '')),
+    contacts, members,
     name: joined ? byId('room-name').textContent : '',
     mic: byId('mic').getAttribute('aria-pressed') === 'true',
     canMic: joined && !byId('mic').disabled,
     canLeave: joined && !byId('leave').disabled
   };
-  const key = JSON.stringify(state);
-  if (key !== previous) { previous = key; bridge.postMessage(state); }
+  if (!previous || Object.keys(state).some(key => state[key] !== previous[key])) {
+    previous = state;
+    bridge.postMessage(state);
+  }
 }
 const observer = new MutationObserver(sync);
 for (const id of ['room', 'mic', 'leave', 'room-name', 'friend-id', 'members', 'friends', 'room-code', 'voice-status', 'room-requests']) {
-  observer.observe(byId(id), {attributes:true, attributeFilter:['hidden','disabled','aria-pressed'], childList:true, characterData:true, subtree:!['room','mic','leave'].includes(id)});
+  observer.observe(byId(id), {attributes:true, attributeFilter:id === 'friends' ? ['class'] : ['hidden','disabled','aria-pressed'], childList:true, characterData:true, subtree:!['room','mic','leave'].includes(id)});
 }
 let releaseTimer;
 bridge.addEventListener('message', ({data}) => {

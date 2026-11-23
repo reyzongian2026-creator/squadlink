@@ -16,12 +16,17 @@ async Task<(PreviewArtifact? Artifact,bool Unavailable)> Check(BuildStamp local,
 void Require(bool pass,string name){if(!pass)throw new Exception(name);Console.WriteLine(name);}
 var current=new BuildStamp(10,2);
 Require(await Check(current,[Run(10,2),Run(9)])==(null,false),"No ofrece la misma compilación ni una anterior");
-var newer=await Check(current,[Run(15,branch:"main"),Run(14,repo:"otro/proyecto"),Run(13,conclusion:"failure"),Run(11),Run(10,2)],
+var missingSource = new {head_branch=PreviewUpdates.Branch, conclusion="success", @event="push", head_repository=(object?)null};
+var newer=await Check(current,[missingSource,Run(15,branch:"main"),Run(14,repo:"otro/proyecto"),Run(13,conclusion:"failure"),Run(11),Run(10,2)],
     [Asset(60,"Captura-del-escritorio"),Asset(61,expired:true),Asset(62),Asset(63)]);
 Require(newer.Artifact?.Url.AbsoluteUri=="https://github.com/reyzongian2026-creator/squadlink/actions/runs/11/artifacts/63","Selecciona el instalador válido más reciente del canal");
 Require((await Check(current,[Run(10,3)],[Asset(99)])).Artifact?.Build==new BuildStamp(10,3),"Reconoce una recompilación de la misma versión");
 Require(await Check(current,[Run(12),Run(11),Run(10,2)],[Asset(101,days:-1)],[])==(null,true),"Distingue artefactos caducados o ausentes");
 Require((await Check(current,[Run(12),Run(11)],[],[Asset(70)])).Artifact?.Id==70,"Recupera el siguiente instalador válido");
+var verified = newer.Artifact ?? throw new Exception("Falta el instalador verificado.");
+Require(verified.IsAvailableAt(verified.ExpiresAt.AddTicks(-1)), "El último enlace verificado conserva su vigencia antes del vencimiento");
+Require(!verified.IsAvailableAt(verified.ExpiresAt), "Un enlace que vence mientras la ventana sigue abierta deja de ser descargable");
+Require(!verified.IsAvailableAt(verified.ExpiresAt.AddMinutes(1)), "Un reintento posterior a la caducidad descarta el artefacto anterior");
 using var failed=new HttpClient(new Fixture(new Queue<string>(),HttpStatusCode.Forbidden));
 try {await new PreviewUpdates(failed).Check(current,CancellationToken.None);throw new Exception("No detectó el error del servicio");}
 catch(HttpRequestException){Console.WriteLine("Los errores de red no se confunden con tener la última versión");}

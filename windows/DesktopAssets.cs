@@ -9,6 +9,8 @@ internal sealed class DesktopAssets
 
     public DesktopAssets()
     {
+        foreach (var name in new[]{"index.html","desktop.js","app.js","desktop.css"})
+            if (!File.Exists(Path.Combine(root,name))) throw new FileNotFoundException("Falta un archivo de la interfaz.",name);
         files = Directory.GetFiles(root).ToDictionary(file => "/" + Path.GetFileName(file), file => file, StringComparer.Ordinal);
     }
 

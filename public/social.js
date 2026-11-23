@@ -112,7 +112,7 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom }) {
   function draw() {
     if (!snapshot) return;
     const s = snapshot;
-    $("friend-id").textContent = s.id;
+    if ($("friend-id").textContent !== s.id) $("friend-id").textContent = s.id;
     $("social-content").hidden = false;
     $("social-intro").hidden =
       $("social-login").hidden =
@@ -178,7 +178,8 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom }) {
       ),
       ...s.outgoing.map((f) => row(f.nick, "Solicitud de amistad enviada")),
     ]);
-    $("room-requests").hidden = !active || !s.knocks.length;
+    const hideRequests = !active || !s.knocks.length;
+    if ($("room-requests").hidden !== hideRequests) $("room-requests").hidden = hideRequests;
     refreshList("room-requests", [active, s.knocks], () =>
       active
         ? s.knocks.map((f) =>
@@ -249,6 +250,12 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom }) {
         $("social-intro").hidden = false;
         $("social-content").hidden = true;
         snapshot = null;
+        $("friend-id").textContent = "";
+        $("self-activity").textContent = "";
+        $("player-game").value = "";
+        $("room-requests").hidden = true;
+        for (const id of roots) $(id).replaceChildren();
+        signatures.clear();
         window.clearInterval(timer);
       }
     } finally {
