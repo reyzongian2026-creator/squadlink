@@ -20,6 +20,8 @@ function Find-Control($root, $name, [bool]$partial = $false) {
     if ($found) { return $found }
     Start-Sleep -Milliseconds 250
   } while ([DateTime]::UtcNow -lt $until)
+  $names = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name } | Where-Object { $_ } | Select-Object -First 55
+  Write-Output ($names -join ' | ') | Out-Host
   throw "El control '$name' no apareció."
 }
 try {
@@ -31,6 +33,13 @@ try {
   if (!$ready) { throw 'El servidor de prueba no arrancó.' }
   $app = Start-Process $Executable -PassThru
   if (!$app.WaitForInputIdle(20000)) { throw 'La ventana no inició.' }
+  $deadline = [DateTime]::UtcNow.AddSeconds(30)
+  do {
+    $app.Refresh()
+    if ($app.HasExited) { throw "La aplicación terminó al arrancar (código $($app.ExitCode))." }
+    if ($app.MainWindowHandle -ne [IntPtr]::Zero) { break }
+    Start-Sleep -Milliseconds 200
+  } while ([DateTime]::UtcNow -lt $deadline)
   $root = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
   Find-Control $root 'Crear sala' | Out-Null
   $checks = [ordered]@{'Amigos'='Elegir mi apodo'; 'Arcade'='Arcade'; 'Mi jugador'='Editar mi apodo'; 'Ajustes'='Ajustes de voz'; 'Explorar salas'='Actualizar'; 'Mi sala'='Unirme con código'}
