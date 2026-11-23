@@ -50,20 +50,31 @@ function Find-TypedControl($root, $name, $type) {
   Write-Host ($labels -join ' | ')
   throw "No se encontró $type con nombre '$name'."
 }
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class NativeRadioInput {
+  [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+}
+"@
 function Set-Mode($root, $name) {
   Invoke-Control $root 'Ajustes'
   $mode = Find-TypedControl $root $name ([System.Windows.Automation.ControlType]::RadioButton)
-  if (!$mode.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) {
-    $mode.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
-  }
   $file = Join-Path $profileDir 'performance.txt'
   $expected = if ($name -eq 'Experiencia completa') { 'full' } else { 'low' }
-  $until = [DateTime]::UtcNow.AddSeconds(5)
+  $mode.SetFocus()
+  $handle = [IntPtr]$mode.Current.NativeWindowHandle
+  if ($handle -eq [IntPtr]::Zero) { throw "Falta la ventana nativa de '$name'." }
+  # Deliver the same native button click as the player's mouse, even if the
+  # synthetic second voice client currently owns the foreground.
+  [void][NativeRadioInput]::SendMessage($handle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+  $until = [DateTime]::UtcNow.AddSeconds(6)
   do {
-    if ((Test-Path $file) -and ([IO.File]::ReadAllText($file)).Trim() -eq $expected) { return }
-    Start-Sleep -Milliseconds 100
+    $saved = if (Test-Path $file) { ([IO.File]::ReadAllText($file)).Trim() } else { '' }
+    if ($saved -eq $expected -and $mode.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) { return }
+    Start-Sleep -Milliseconds 120
   } while ([DateTime]::UtcNow -lt $until)
-  throw "El perfil '$name' no se guardó al seleccionarlo."
+  throw "El perfil '$name' no se seleccionó o no se guardó. Valor en disco: '$saved'."
 }
 function Get-ClientProcesses([int]$rootId) {
   if ($rootId -le 0) { throw 'Identificador de proceso de Squadlink inválido.' }
