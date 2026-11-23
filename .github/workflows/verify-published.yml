@@ -1,0 +1,45 @@
+name: Verify published Squadlink 0.3.0
+on:
+  push:
+    branches: [qa/published-0.3.0]
+    paths: ['.github/workflows/verify-published.yml', 'test/full-room-check.mjs']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  full-room:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --no-save --package-lock=false playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - run: node test/full-room-check.mjs
+  released-installer:
+    runs-on: windows-2025
+    timeout-minutes: 6
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download and exercise released installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh release download windows-0.3.0-45112107132-1 --repo $env:GITHUB_REPOSITORY --dir release
+          if ($LASTEXITCODE) { throw 'Download failed' }
+          $setup = (Resolve-Path release/Squadlink-Setup-x64.exe).Path
+          $hash = (Get-FileHash $setup).Hash
+          $published = ((Get-Content release/SHA256.txt) -split '\s+')[0]
+          if ($hash -ne $published -or $hash -ne 'F271A06737931741719B4944D1F5EA21A7715407F45E155FDDEF856204E1F652') { throw 'Unexpected SHA256' }
+          $dir = Join-Path $env:RUNNER_TEMP 'Squadlink-verification'
+          $install = Start-Process $setup -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=`"$dir`"" -Wait -PassThru
+          if ($install.ExitCode) { throw 'Installation failed' }
+          $app = Start-Process (Join-Path $dir 'Squadlink.exe') -PassThru
+          try { if (!$app.WaitForInputIdle(20000) -or $app.HasExited) { throw 'Startup failed' } }
+          finally { if (!$app.HasExited) { $app.Kill(); $app.WaitForExit() } }
+          $remove = Start-Process (Join-Path $dir 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
+          if ($remove.ExitCode -or (Test-Path (Join-Path $dir 'Squadlink.exe'))) { throw 'Uninstall failed' }
+          Write-Output "Verified published SHA256 $hash, installation, startup and removal."
