@@ -5,11 +5,13 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 $profileDir = Join-Path $env:LOCALAPPDATA 'Squadlink Preview'
 New-Item -ItemType Directory -Force $profileDir | Out-Null
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--use-fake-device-for-media-stream --use-fake-ui-for-media-stream --autoplay-policy=no-user-gesture-required'
 $env:HOST = '127.0.0.1'
 $env:PORT = '4179'
 'http://127.0.0.1:4179' | Set-Content (Join-Path $profileDir 'server.txt')
 $serverProcess = Start-Process node -ArgumentList 'server.mjs' -PassThru -WindowStyle Hidden
 $app = $null
+$voicePeer = $null
 function Find-Control($root, $name, [bool]$partial = $false) {
   $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $name)
   if ($partial) { $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button) }
@@ -169,11 +171,26 @@ try {
   $submit.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
   Find-Control $root 'Abrir controles de sala' | Out-Null
   Measure-Idle 'sala-bajo-sin-microfono'
+  $label = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | Where-Object { $_.Current.Name -match '^Código de sala: ([A-Z0-9]{6})' } | Select-Object -First 1
+  if (!$label -or $label.Current.Name -notmatch '^Código de sala: ([A-Z0-9]{6})') {throw 'Falta el código de la sala de prueba.'}
+  $roomCode = $Matches[1]
+  $sync = Join-Path $env:RUNNER_TEMP 'squadlink-voice-bench'
+  New-Item -ItemType Directory -Force $sync | Out-Null
+  Invoke-Control $root 'Activar micrófono'
+  Find-Control $root 'Silenciar micrófono' | Out-Null
+  $voicePeer = Start-Process node -ArgumentList ('test/windows/live-voice.mjs ' + $roomCode + ' "' + $sync + '"') -PassThru -RedirectStandardOutput (Join-Path $sync 'peer.log') -RedirectStandardError (Join-Path $sync 'peer.err')
+  $deadline = [DateTime]::UtcNow.AddSeconds(80)
+  while (!(Test-Path (Join-Path $sync 'connected')) -and !$voicePeer.HasExited -and [DateTime]::UtcNow -lt $deadline) {Start-Sleep -Milliseconds 200}
+  if (!(Test-Path (Join-Path $sync 'connected'))) {Get-Content (Join-Path $sync 'peer.err'); throw 'No llegó audio al segundo cliente.'}
+  Measure-Idle 'voz-activa-bajo'
   Set-Mode $root 'Experiencia completa'
   Invoke-Control $root 'Voz'
   Invoke-Control $root 'Mi sala'
   Find-Control $root 'Participantes' | Out-Null
-  Measure-Idle 'sala-completo-sin-microfono'
+  Measure-Idle 'voz-activa-completo'
+  'done' | Set-Content (Join-Path $sync 'finish')
+  if (!$voicePeer.WaitForExit(15000) -or $voicePeer.ExitCode -ne 0) {Get-Content (Join-Path $sync 'peer.err'); throw 'Falló la comprobación de voz tras cambiar el perfil.'}
+  Get-Content (Join-Path $sync 'peer.log')
   Invoke-Control $root 'Juegos'
   Find-Control $root 'Reflejos' $true | Out-Null
   Find-Control $root 'Canal de prueba' | Out-Null
@@ -198,6 +215,7 @@ try {
   Write-Output 'Perfiles, memoria, continuidad de sala y persistencia tras reinicio verificados.'
   Write-Output 'Verificados directorio, grupos, secciones, perfil, clasificación, audio y entrada por código.'
 } finally {
+  if ($voicePeer -and !$voicePeer.HasExited) { $voicePeer.Kill(); $voicePeer.WaitForExit() }
   if ($app -and !$app.HasExited) { $app.Kill(); $app.WaitForExit() }
   if (!$serverProcess.HasExited) { $serverProcess.Kill(); $serverProcess.WaitForExit() }
 }

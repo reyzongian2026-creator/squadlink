@@ -48,7 +48,9 @@ let self,
   toastTimer,
   generation = 0,
   gameRequest = 0;
-const directory = mountDirectory({
+const desktopClient = Boolean(document.querySelector('script[src="/desktop.js"]'));
+// Windows owns the room directory and refreshes it only when visible.
+const directory = desktopClient ? { reload() {}, draw() {} } : mountDirectory({
   api,
   getRoom: () => room,
   join: (code) => openEntry("join", { code }),
@@ -75,7 +77,7 @@ function prepareLoadout() {
   return loadoutImport;
 }
 function refreshLoadout() {
-  prepareLoadout()
+  return prepareLoadout()
     .then((controller) => controller.refresh())
     .catch(() => {
       if (!$("loadout").childElementCount)
@@ -102,7 +104,7 @@ async function setupSocial() {
       });
   const client = await socialImport;
   await client.connect();
-  refreshLoadout();
+  if (!desktopClient || loadoutImport) refreshLoadout();
 }
 function startSocial() {
   setupSocial().catch((error) => {
@@ -566,6 +568,7 @@ for (const button of document.querySelectorAll("[data-game]")) {
     $("game-dialog").showModal();
     try {
       const { openArcade } = await import("./arcade.js");
+      if (desktopClient) await openDesktopProgress();
       if (request === gameRequest && $("game-dialog").open)
         cleanupGame = openArcade(button.dataset.game, $("game-mount"), loadout);
     } catch {
@@ -605,7 +608,7 @@ const identityReady = restoreIdentity().catch((error) => tell(error.message));
 async function boot() {
   directory.reload();
   await identityReady;
-  if (!self) refreshLoadout();
+  if (!self && !desktopClient) refreshLoadout();
   if (!room && /^[a-z0-9]{6}$/i.test(invited) && !$("entry").open)
     openEntry("join");
 }
@@ -619,4 +622,12 @@ boot();
 export async function canReleaseGuestWorkspace() {
   await identityReady;
   return !self && !room && !$("submit-entry").disabled && !$("entry").open && !$("game-dialog").open;
+}
+
+let firstDesktopProgress;
+export function openDesktopProgress() {
+  if (!firstDesktopProgress) firstDesktopProgress = identityReady.then(refreshLoadout).finally(() => {
+    if (!loadout) firstDesktopProgress = null;
+  });
+  return firstDesktopProgress;
 }

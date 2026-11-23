@@ -1,4 +1,4 @@
-import { canReleaseGuestWorkspace } from './app.js';
+import { canReleaseGuestWorkspace, openDesktopProgress } from './app.js';
 const byId = id => document.getElementById(id);
 const bridge = window.chrome.webview;
 byId('hero-title').textContent = 'Mi sala';
@@ -47,6 +47,7 @@ function show(next) {
   }
   profile.hidden = next !== 'player';
   if (next !== 'lobby' && document.body.classList.contains('in-match')) byId('compact').click();
+  if (['player','ranking','arcade'].includes(next)) openDesktopProgress();
   if (next === 'settings') byId('audio-panel').open = true;
 
   document.scrollingElement.scrollTop = 0;
@@ -62,6 +63,7 @@ function sync() {
   }
   const state = {
     type: 'desktop:state', section, joined, identified: /^[A-F0-9]{16}$/i.test(byId('friend-id').textContent),
+    requests: byId('room-requests').querySelectorAll('[data-action="admit"]').length,
     code: joined ? byId('room-code').textContent : '',
     voiceStatus: joined ? byId('voice-status').textContent.slice(0,140) : '',
     contacts: [...byId('friends').querySelectorAll('.social-row')].slice(0,25).map(row =>
@@ -78,7 +80,7 @@ function sync() {
   if (key !== previous) { previous = key; bridge.postMessage(state); }
 }
 const observer = new MutationObserver(sync);
-for (const id of ['room', 'mic', 'leave', 'room-name', 'friend-id', 'members', 'friends', 'room-code', 'voice-status']) {
+for (const id of ['room', 'mic', 'leave', 'room-name', 'friend-id', 'members', 'friends', 'room-code', 'voice-status', 'room-requests']) {
   observer.observe(byId(id), {attributes:true, attributeFilter:['hidden','disabled','aria-pressed'], childList:true, characterData:true, subtree:!['room','mic','leave'].includes(id)});
 }
 let releaseTimer;

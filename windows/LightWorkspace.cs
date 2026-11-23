@@ -7,6 +7,7 @@ internal sealed class LightWorkspace : UserControl
     private readonly ListBox list = new() {Dock = DockStyle.Fill, BackColor = DesktopNavigation.Canvas,
         ForeColor = Color.WhiteSmoke, BorderStyle = BorderStyle.None, Font = new Font("Segoe UI",11), IntegralHeight = false};
     private readonly Button detail = DesktopNavigation.ActionButton("");
+    private int requests;
     private bool friends = true, identified;
     private string name = "", code = "", voiceStatus = "";
     private string[] contacts = [], members = [];
@@ -24,12 +25,13 @@ internal sealed class LightWorkspace : UserControl
         layout.Controls.Add(detail,0,2); layout.Controls.Add(list,0,3); Controls.Add(layout);
         detail.Click += (_,_) => DetailRequested?.Invoke(friends ? identified ? "friends-detail" : "login" : "room-detail");
     }
-    public void ResetSnapshot() { name = code = voiceStatus = ""; identified = false; contacts = []; members = []; Render(); }
+    public void ResetSnapshot() { name = code = voiceStatus = ""; identified = false; requests = 0; contacts = []; members = []; Render(); }
     public void ShowPage(bool social) { friends = social; Render(); }
     public void UpdateSnapshot(JsonElement state)
     {
         string Text(string key) => state.GetProperty(key).GetString() ?? "";
         string[] Lines(string key) => state.GetProperty(key).EnumerateArray().Select(x=>x.GetString() ?? "").ToArray();
+        requests = state.GetProperty("requests").GetInt32();
         name = Text("name"); code = Text("code"); voiceStatus = Text("voiceStatus");
         identified = state.GetProperty("identified").GetBoolean();
         contacts = Lines("contacts"); members = Lines("members");
@@ -40,7 +42,7 @@ internal sealed class LightWorkspace : UserControl
         title.Text = friends ? "Amigos" : name;
         summary.Text = friends ? !identified ? "Elige tu apodo para agregar amigos." : contacts.Length == 0
             ? "Tu lista de amigos está vacía." : contacts.Length == 25 ? "Primeros 25 contactos · Abre Gestionar para ver todos." : "Actividad de tus contactos"
-            : "Código de sala: " + code + (voiceStatus.Length > 0 ? " · " + voiceStatus : "");
+            : "Código de sala: " + code + (requests > 0 ? $" · {requests} solicitudes para entrar" : "") + (voiceStatus.Length > 0 ? " · " + voiceStatus : "");
         detail.Text = friends ? identified ? "Gestionar amigos y solicitudes" : "Elegir mi apodo" : "Abrir controles de sala";
         list.AccessibleName = friends ? "Contactos" : "Participantes";
         var rows = friends ? contacts : members;

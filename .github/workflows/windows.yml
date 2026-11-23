@@ -24,6 +24,8 @@ jobs:
         run: dotnet run --project test/windows/DetectorCheck.csproj -c Release
       - name: Publish desktop client
         run: dotnet publish windows/Squadlink.csproj -c Release -r win-x64 --self-contained true -o artifacts/app
+      - name: Prepare the second voice client for the Windows test
+        run: npm install --no-save --package-lock=false playwright-core@1.56.1
       - name: Build and verify per-user installer
         shell: pwsh
         run: |
