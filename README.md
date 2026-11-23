@@ -2,6 +2,10 @@
 
 Sala de voz para hasta cinco amigos, con acceso por apodo, código compartible, clave opcional y dos minijuegos para la espera (Reflejos y Memoria). Cada grupo se conecta a una misma instancia de Squadlink. El código identifica la sala dentro de esa instancia.
 
+## Descargar para Windows x64
+
+Entra con una cuenta que tenga acceso al repositorio privado y descarga [Squadlink-Setup-x64.exe](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/Squadlink-Setup-x64.exe). [SHA256.txt](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/SHA256.txt) contiene su huella. El instalador configura el cliente para tu usuario. Al abrir la app por primera vez, introduce la dirección HTTPS del servidor que te proporcione el anfitrión. El código de sala solo funciona dentro de ese servidor.
+
 ## Probar en este equipo
 
 Descomprime la carpeta. Con Node.js 22 o superior instalado, abre **Iniciar-Squadlink.cmd** en Windows o **Squadlink.command** en macOS. El lanzador inicia el servidor local y abre el navegador. Mantén la consola abierta mientras pruebas.
