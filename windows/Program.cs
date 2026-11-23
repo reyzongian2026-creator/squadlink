@@ -103,6 +103,7 @@ internal sealed class LobbyWindow : Form
         navigation.ActionRequested += async action => await Navigate(action);
         connect.Click += async (_, _) =>
         {
+            if (entryWindow?.Busy == true) { Reveal(entryWindow); return; }
             var address = ParseServer(server.Text);
             if (address == null) { MessageBox.Show(this, "Ingresa una dirección HTTPS o un servidor local HTTP."); return; }
             if (address == origin) { await Navigate("rooms"); return; }
@@ -117,6 +118,7 @@ internal sealed class LobbyWindow : Form
             origin = address;
             server.Text = address.AbsoluteUri;
             await OpenDirectory();
+            await Navigate("rooms");
         };
         Shown += async (_, _) =>
         {

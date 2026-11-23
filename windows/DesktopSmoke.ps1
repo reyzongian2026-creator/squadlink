@@ -362,6 +362,18 @@ try {
   if (!(Find-Control $homeRoot 'Salir de sala').Current.IsEnabled) { throw 'Se perdió la llamada al volver al directorio.' }
   Invoke-Control $homeRoot 'Salir de sala'
   Find-Control $homeRoot 'Sin sala' | Out-Null
+  $targetRoom = (Invoke-RestMethod 'http://127.0.0.1:4179/api/directory').rooms | Where-Object name -eq 'Andes Five' | Select-Object -First 1
+  if (!$targetRoom.code) {throw 'Falta la sala del segundo anfitrión.'}
+  $entry = Open-Option 'Unirme con código' 'Unirme con código'
+  $field = (Find-TypedControl $entry 'Código de sala' ([System.Windows.Automation.ControlType]::Edit)).GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+  $field.SetValue('XX')
+  Invoke-Control $entry 'Unirme con código'
+  Find-Control $entry 'Ingresa el código de seis caracteres.' | Out-Null
+  $field.SetValue($targetRoom.code)
+  Invoke-Control $entry 'Unirme con código'
+  Find-Control $homeRoot 'Andes Five' | Out-Null
+  Invoke-Control $homeRoot 'Salir de sala'
+  Find-Control $homeRoot 'Sin sala' | Out-Null
   $homeRoot.GetCurrentPattern([System.Windows.Automation.WindowPattern]::Pattern).Close()
   if (!$app.WaitForExit(10000)) { throw 'La aplicación no cerró correctamente.' }
   $app = Start-Process $installedExe -PassThru
