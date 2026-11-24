@@ -59,3 +59,9 @@ Dos participantes enviaron audio simultáneamente. Se midió el PCM del reproduc
 En ambos sistemas, la ganancia de escucha produjo un cambio medido de 0,00 dB en el audio enviado al otro participante. La prueba de señal fuerte con el micrófono a +18 dB registró cero muestras saturadas. Se conservó la misma pista del micrófono al cambiar los niveles.
 
 La emisora de prueba y la energía de voz en ambos sentidos siguieron avanzando al minimizar, restaurar y volver al lobby. Un jugador pudo silenciar y reanudar la radio mientras el otro siguió escuchando. En Arcade se abrieron los dos espacios de cartuchos con ROM de diagnóstico instaladas y el selector de archivos oculto. El instalador de Windows también comprobó la copia de ambos archivos por su hash.
+
+## Atajo de radio y cartuchos en 0.5.0-preview.16
+
+Con dos participantes en la sala, se comprobó el silencio y la reanudación de la radio desde el botón del lobby y mediante **Alt + Mayús + R** en el lobby y en Arcade. Mientras uno silenciaba su radio, en el otro cliente avanzaban la emisora y la voz. Con Squadlink minimizado, Windows recibió la pulsación a través del sistema. En Mac se probó la función registrada por el sistema para esa combinación. El ensayo de Mac con la ventana minimizada no inyectó pulsaciones físicas.
+
+El instalador personal de Windows incluye los cartuchos como archivos internos. La prueba del instalador utilizó dos cartuchos de diagnóstico, eliminó los originales antes de ejecutar el EXE y verificó los hashes de las copias instaladas. El recorrido de Arcade probó la apertura directa de cartuchos integrados, y la recuperación de una importación anterior en la edición pública. [Pruebas de Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45346558666) · [Pruebas de Mac](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45346558637)
