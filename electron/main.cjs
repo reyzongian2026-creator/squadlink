@@ -137,7 +137,7 @@ ipcMain.handle('updates',async e=>{
 });
 ipcMain.handle('download',async e=>{hostPage(e);if(updateUrl)await shell.openExternal(updateUrl);});
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.webp':'image/webp','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon'};
-const csp="default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data:;connect-src 'self';media-src 'self' blob:;object-src 'none';frame-src https://danborden1.github.io/doom-web/;base-uri 'none';form-action 'self'";
+const csp="default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data:;connect-src 'self';media-src 'self' blob:;object-src 'none';frame-src 'self';base-uri 'none';form-action 'self'";
 async function start(){
  try{const saved=JSON.parse(fs.readFileSync(prefsFile(),'utf8'));prefs={server:parseServer(saved.server),low:saved.low!==false};}catch{}
  const ses=session.fromPartition(options.partition);
@@ -155,12 +155,13 @@ async function start(){
    else if(!['hero-art.webp','icon-192.png'].includes(name))return new Response(null,{status:404});
   }else name=name||'index.html';
   const type=mime[path.extname(name)];if(!type)return new Response(null,{status:404});
-  try{return new Response(await fs.promises.readFile(path.join(dir,name)),{headers:{'Content-Type':type,'Content-Security-Policy':csp,'X-Content-Type-Options':'nosniff'}});}catch{return new Response(null,{status:404});}
+  try{return new Response(await fs.promises.readFile(path.join(dir,name)),{headers:{'Content-Type':type,'Content-Security-Policy':name==='doom-player.html' ? "frame-ancestors 'self'; object-src 'none'" : csp,'X-Content-Type-Options':'nosniff'}});}catch{return new Response(null,{status:404});}
  });
  const trusted=wc=>wc&&view?.webContents===wc&&wc.getURL().startsWith('squad://app/');
- ses.setPermissionCheckHandler((wc,p)=>trusted(wc)&&((p==='media'&&microphone)||p==='speaker-selection'));
+ ses.setPermissionCheckHandler((wc,p)=>trusted(wc)&&((p==='media'&&microphone)||p==='speaker-selection'||(p==='pointerLock'&&action?.key==='arcade')));
  ses.setPermissionRequestHandler(async(wc,p,done,details)=>{
   if(!trusted(wc))return done(false);
+  if(p==='pointerLock')return done(action?.key==='arcade');
   if(['speaker-selection','clipboard-sanitized-write'].includes(p))return done(true);
   if(p!=='media'||!details.mediaTypes?.includes('audio')||details.mediaTypes.includes('video'))return done(false);
   if(!microphone){const answer=await dialog.showMessageBox(home,{type:'question',message:'¿Permitir que Squadlink use tu micrófono?',buttons:['Cancelar','Permitir'],cancelId:0,defaultId:0});microphone=answer.response===1&&trusted(wc);}
