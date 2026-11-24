@@ -28,7 +28,7 @@ export async function musicSmoke(host,guest) {
     assert.match(await page.locator('#count').innerText(), /2\s*\/\s*5/);
   }
   await panel(guest).getByText('Añadir música',{exact:true}).click();
-  await panel(guest).locator('input[type=url]').fill('https://youtu.be/M7lc1UVf-VE');
+  await panel(guest).locator('input[type=url]').fill('https://youtu.be/aqz-KE-bpKQ');
   await panel(guest).getByLabel('Título (opcional)').fill('Video de prueba');
   await panel(guest).getByRole('button',{name:'Añadir a la cola'}).click();
   await panel(host).getByText('En cola (1)',{exact:true}).waitFor();
@@ -42,14 +42,14 @@ export async function musicSmoke(host,guest) {
       window.musicProviderEvents=[];
       window.addEventListener('message',event=>{
         if(event.data?.channel==='squadlink:music' && event.source===document.querySelector('#room-music iframe')?.contentWindow)
-          window.musicProviderEvents.push(event.data.action);
+          window.musicProviderEvents.push(event.data.action === 'unavailable' ? 'unavailable ('+event.data.code+')' : event.data.action);
       });
     });
     await panel(host).getByRole('button',{name:'Escuchar',exact:true}).click();
     const frame=panel(host).locator('iframe');
     await frame.scrollIntoViewIfNeeded();
     await host.frameLocator('#room-music iframe').locator('iframe[src*="youtube.com/embed/"]').waitFor({timeout:35000});
-    const result=await host.waitForFunction(()=>window.musicProviderEvents.find(event=>['playing','unavailable','blocked'].includes(event)),null,{timeout:20000})
+    const result=await host.waitForFunction(()=>window.musicProviderEvents.find(event=>event==='playing'||event==='blocked'||event.startsWith('unavailable')),null,{timeout:20000})
       .then(value=>value.jsonValue()).catch(()=> 'sin confirmación de reproducción');
     console.log('Reproductor oficial de YouTube ('+new URL(host.url()).protocol+'): '+result);
     await panel(host).getByRole('button',{name:'Dejar de escuchar'}).click();
