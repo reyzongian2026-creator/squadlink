@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { roomMusic, musicView } from './room-music.mjs';
 import { createSocial } from './social.mjs';
 import { createProgression } from './progression.mjs';
 import { createPostgresStore } from './postgres-store.mjs';
@@ -100,7 +101,7 @@ function publicDirectory(rooms, query) {
 function roomView(room) {
   if (!room) return null;
   return {code:room.code, name:room.name, locked:Boolean(room.key), createdAt:room.createdAt, ownerId:room.ownerId,
-    directory:room.directory,
+    directory:room.directory, music:musicView(room),
     members:[...room.members.values()].map(({id,nick,muted,joinedAt,social}) =>
       ({id,nick,muted,joinedAt,game:social?.game || '',since:social?.since ?? null}))};
 }
@@ -164,6 +165,7 @@ export function createServer(options = {}) {
   const database = !options.progression?.store && progressionEnv.SQUADLINK_DATABASE_URL
     ? createPostgresStore(progressionEnv.SQUADLINK_DATABASE_URL) : null;
   const progression = createProgression({reject, throttle, now:clock, store:database, ...options.progression});
+  const music = roomMusic({reject,broadcast:broadcastRoom});
   const sessions = new Map();
   const rooms = new Map();
   const limits = new Map();
@@ -202,7 +204,7 @@ export function createServer(options = {}) {
     session.stream?.end();
     session.stream = null;
     for (const member of room.members.values()) member.pending = member.pending.filter(e => e.data.from !== session.id);
-    if (!room.members.size) rooms.delete(room.code);
+    if (!room.members.size) { music.clear(room); rooms.delete(room.code); }
     else broadcastRoom(room);
   }
   function enter(session, room) {
@@ -224,6 +226,12 @@ export function createServer(options = {}) {
     try {
       const url = new URL(req.url, 'http://local.invalid');
       const path = url.pathname;
+      if (path === '/music-youtube.html') {
+        res.removeHeader('X-Frame-Options');
+        res.setHeader('Content-Security-Policy', "frame-ancestors 'self' squad://app");
+        res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');
+      }
+      if (path === '/doom-player.html') res.setHeader('X-Frame-Options','SAMEORIGIN');
       if (!path.startsWith('/api/')) return await staticFile(req, res, path);
       const expected = origin ?? ('http://' + req.headers.host);
       if ((req.headers.origin && req.headers.origin !== expected) || req.headers['sec-fetch-site'] === 'cross-site')
@@ -232,7 +240,7 @@ export function createServer(options = {}) {
       const session = sessions.get(key);
       const route = req.method + ' ' + path;
       const ip = req.socket.remoteAddress || '';
-      const data = req.method === 'POST' ? await jsonBody(req) : null;
+      const data = req.method === 'POST' && path !== '/api/music/upload' ? await jsonBody(req) : null;
       if (route === 'GET /api/directory') return send(res, 200, publicDirectory(rooms, url.searchParams));
       if (route === 'POST /api/session') {
         const nick = textField(data.nick, 1, 24, 'El apodo debe tener entre 1 y 24 caracteres.');
@@ -303,6 +311,17 @@ export function createServer(options = {}) {
       if (route === 'POST /api/leave') { leave(session); return send(res, 200, {ok:true}); }
       const room = session.room;
       if (!room) reject(403, 'Entra a una sala primero.');
+      if (path.startsWith('/api/music/')) {
+        const code = data?.room ?? url.searchParams.get('room');
+        if (room.code !== code) reject(403,'La pista pertenece a otra sala.');
+        if (route === 'GET /api/music/file' || route === 'HEAD /api/music/file')
+          return await music.file(req,res,room,url.searchParams.get('id'));
+        if (req.method !== 'POST') reject(405,'Método no permitido.');
+        throttle('music/'+session.id,80);
+        if (route === 'POST /api/music/upload') await music.upload(req,room,session,url.searchParams);
+        else music.command(path.slice('/api/music/'.length),room,session,data);
+        return send(res,200,{music:musicView(room)});
+      }
       if (route === 'GET /api/events') return openStream(session, res);
       if (route === 'GET /api/ice') {
         const servers = [...iceServers];
@@ -353,6 +372,7 @@ export function createServer(options = {}) {
   timer.unref();
   server.on('close', () => {
     clearInterval(timer);
+    for (const room of rooms.values()) music.clear(room);
     database?.close().catch(() => console.error('No se pudo cerrar el almacén de progreso.'));
   });
   return server;

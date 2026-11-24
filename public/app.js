@@ -350,11 +350,33 @@ function renderMembers() {
     }
     fragment.append(li);
   }
+  if (room.music?.queue?.length) {
+    const bot = document.createElement('li');
+    const name = document.createElement('strong'), playing = document.createElement('small');
+    name.textContent = '♫ DJ Squadlink';
+    playing.textContent = 'Bot de música · ' + room.music.queue[0].title;
+    bot.dataset.musicBot = '';
+    bot.append(name,playing);
+    fragment.append(bot);
+  }
   $("members").replaceChildren(fragment);
+}
+let roomMusicUI;
+let musicModule;
+function updateMusic() {
+  if (roomMusicUI) { roomMusicUI.update(room); return; }
+  const currentCode = room.code;
+  musicModule ??= import('./music.js').catch(error=>{ musicModule=null; throw error; });
+  musicModule.then(({createMusic})=>{
+    if (room?.code !== currentCode || roomMusicUI) return;
+    roomMusicUI = createMusic({mount:$('room-music'),api,notify:tell});
+    roomMusicUI.update(room);
+  }).catch(()=>{ if(room?.code===currentCode) $('room-music').textContent='No se pudo cargar la música.'; });
 }
 function updateRoom(snapshot) {
   const previousCode = room?.code;
   room = snapshot;
+  updateMusic();
   $("room-name").textContent = room.name;
   const metadata = room.directory || {};
   for (const [id, value] of [
@@ -469,6 +491,9 @@ function resetRoom() {
   stream = null;
   voice?.close();
   voice = null;
+  roomMusicUI?.close();
+  roomMusicUI = null;
+  $('room-music').replaceChildren();
   room = null;
   $("match-code").textContent = $("directory-game-code").value = "";
   $("password").value = "";

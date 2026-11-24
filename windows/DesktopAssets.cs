@@ -26,6 +26,7 @@ internal sealed class DesktopAssets
         {
             ".html" => "text/html; charset=utf-8", ".js" => "text/javascript; charset=utf-8",
             ".css" => "text/css; charset=utf-8", ".png" => "image/png", ".webp" => "image/webp",
+            ".svg" => "image/svg+xml",
             _ => "application/octet-stream"
         };
         Stream body;
@@ -38,6 +39,6 @@ internal sealed class DesktopAssets
             body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(html));
         }
         else body = File.OpenRead(file);
-        e.Response = core.Environment.CreateWebResourceResponse(body, 200, "OK", Headers + (path == "/doom-player.html" ? "" : Policy) + "Content-Type: " + mime + "\r\n");
+        e.Response = core.Environment.CreateWebResourceResponse(body, 200, "OK", Headers + (path == "/doom-player.html" || path == "/music-youtube.html" ? "" : Policy) + "Content-Type: " + mime + "\r\n");
     }
 }

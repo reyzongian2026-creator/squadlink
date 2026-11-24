@@ -1,5 +1,6 @@
 // Requires Playwright on the test machine only. A single process owns this isolated server.
 import assert from 'node:assert/strict';
+import {musicSmoke} from './support/music-browser.mjs';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { createServer } from '../server.mjs';
@@ -318,6 +319,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
       throw Error('Sin evidencia de paquetes de voz recibidos con energía audible');
     }
     const initial = await Promise.all([inbound(a), inbound(b)]);
+    await musicSmoke(a,b);
     await a.getByRole('button', { name: 'Medir conexión de voz' }).click();
     await a.locator('#voice-measurements').getByText(/Ana.*(Directa|Por retransmisor)/).waitFor();
     await openChannel(a, 'arcade');
