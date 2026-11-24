@@ -65,3 +65,15 @@ La emisora de prueba y la energía de voz en ambos sentidos siguieron avanzando 
 Con dos participantes en la sala, se comprobó el silencio y la reanudación de la radio desde el botón del lobby y mediante **Alt + Mayús + R** en el lobby y en Arcade. Mientras uno silenciaba su radio, en el otro cliente avanzaban la emisora y la voz. Con Squadlink minimizado, Windows recibió la pulsación a través del sistema. En Mac se probó la función registrada por el sistema para esa combinación. El ensayo de Mac con la ventana minimizada no inyectó pulsaciones físicas.
 
 El instalador personal de Windows incluye los cartuchos como archivos internos. La prueba del instalador utilizó dos cartuchos de diagnóstico, eliminó los originales antes de ejecutar el EXE y verificó los hashes de las copias instaladas. El recorrido de Arcade probó la apertura directa de cartuchos integrados, y la recuperación de una importación anterior en la edición pública. [Pruebas de Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45346558666) · [Pruebas de Mac](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45346558637)
+
+## Lobby, radio y Arcade en 0.5.0-preview.17
+
+- El lobby de escritorio conserva las salas visibles durante una caída de red, permite reintentar y pausa las consultas mientras está oculto. La prueba simuló veinte cambios de foco consecutivos y comprobó que se enviaba una sola consulta.
+- El directorio conserva las páginas abiertas y el filtro al actualizar. Si falla la petición de la segunda página, la lista anterior sigue disponible.
+- Si se desconecta el micrófono nuevo al activarlo durante una llamada, Squadlink conserva el anterior, la pista saliente y su configuración. La prueba simula la desconexión.
+- La radio guarda en cada equipo el volumen elegido. Ante un corte de una emisora que ya estaba sonando, intenta reconectarse una vez en ese reproductor. Silenciar o salir cancela el intento pendiente. En el ensayo con dos clientes se interrumpió una emisora de prueba y se verificó que la escucha se reanudara.
+- En la edición de escritorio, Mario y Duck Hunt pausan la emulación y liberan sus teclas y audio cuando la ventana pierde el foco. Al volver, P reanuda la partida. La llamada y la radio tienen ciclos de reproducción independientes.
+
+[Validación de Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45348499403) · [Validación de macOS Apple Silicon](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45348499393)
+
+En los equipos de CI, la suma de memoria residente de los procesos de Electron fue de 431,7 MiB en inicio y 568,3 MiB en voz para Windows, y de 544,8 MiB y 630,1 MiB respectivamente para macOS. Son lecturas puntuales con instrumentación durante una llamada sintética. Sigue pendiente la comparación con Discord en el mismo equipo y bajo la misma carga.
