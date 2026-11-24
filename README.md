@@ -10,13 +10,33 @@ El arcade incluye Cambio de blanco, Precisión, Mata patos, 2048 y Tres en raya.
 
 En **Arcade → Duck Hunt · NES** selecciona tu cartucho `.nes` y pulsa **Jugar**. Usa **Select** y **Start** para entrar a una partida y dispara con clic o toque. El archivo se procesa en tu dispositivo.
 
-En **Mi sala → Música de sala → Añadir música**, elige un archivo de audio (hasta 20 MiB) o pega el enlace de un video de YouTube. **DJ Squadlink** muestra qué suena y conserva el orden de la cola. Cada integrante pulsa **Escuchar** y ajusta su volumen. Los archivos se comparten dentro de la sala y el servidor los elimina al salir de la cola o al cerrarse la sala. Los videos requieren que YouTube permita su reproducción insertada y que el reproductor esté visible.
+En los clientes con el selector de YouTube, abre **Mi sala → Música de sala → Añadir música** y elige un archivo de audio (hasta 20 MiB) o pega el enlace de un video de YouTube. **DJ Squadlink** muestra qué suena y conserva el orden de la cola. Cada integrante pulsa **Escuchar** y ajusta su volumen. Los archivos se comparten dentro de la sala y el servidor los elimina al salir de la cola o al cerrarse la sala. Los videos requieren que YouTube permita su reproducción insertada y que el reproductor esté visible.
 
 Squadlink Moderno 0.5.0-preview.7 abre el lobby, los amigos, el arcade y los ajustes en la misma ventana. En Windows, ejecuta el instalador. En Mac, extrae el ZIP y mueve la app a Aplicaciones. La versión de Mac lleva firma local y carece de notarización de Apple. [Ver la versión y sus sumas SHA-256](https://github.com/reyzongian2026-creator/squadlink/releases/tag/moderno-v0.5.0-preview.7)
 
 **[Descargar el instalador de Windows x64](https://github.com/reyzongian2026-creator/squadlink/releases/latest/download/Squadlink-Setup-x64.exe)** · **[Abrir el lobby web](https://squadlink-lobby.onrender.com/)** · [Versiones y SHA-256](https://github.com/reyzongian2026-creator/squadlink/releases/latest)
 
 El instalador es público y se puede descargar sin iniciar sesión en GitHub. Tus amigos también pueden entrar desde el enlace web. El cliente de Windows se instala para el usuario actual, utiliza Microsoft Edge WebView2 Runtime y abre el lobby compartido. Los jugadores de Windows y del navegador pueden estar en la misma sala.
+
+## Personaje y radio en Mac · preview.13
+
+Esta sección corresponde a la compilación de prueba **0.5.0-preview.13** para Mac con Apple Silicon. Los enlaces de descarga de la parte superior apuntan a **preview.7**. Puedes comprobar tu versión en **Ajustes → Actualizaciones**.
+
+### Elegir el rostro y guardar la apariencia
+
+Abre **Mi personaje**. Cada especie (humano, humanoide, alienígena y robot) tiene tres rostros. Pulsa **Hombre**, **Mujer** o **Especie no identificada** para ver el cambio al instante. Puedes combinar cualquiera con la silueta, el vello facial y los accesorios que elijas. Pulsa **Guardar apariencia** para conservar la selección al cerrar la app. La primera vez, el botón te permite crear el personaje o elegir tu apodo.
+
+En **Evoluciones** puedes consultar las siete etapas. Reflejos y Memoria conceden XP. Cada 100 XP se sube un nivel hasta el 50, que se alcanza con 4.900 XP. El aura dorada aparece en el nivel 10, la azul en el 30 y la prismática en el 50.
+
+### Conservar el jugador al cambiar de apodo o de equipo
+
+En **Mi personaje → Editar mi apodo** puedes cambiar el nombre y conservar el mismo jugador, XP, récords y amistades. Para trasladarte a otro equipo, selecciona **Guardar mi pase privado**. En la instalación nueva, elige **Abrir mi pase de jugador** antes de crear otro perfil. Quien tenga el archivo puede entrar como tú. Si pierdes todos los dispositivos y copias del pase, el apodo por sí solo no permite recuperar el acceso.
+
+### Escuchar la radio en una sala
+
+Abre **Radio y música → Añadir música → Radio en directo** y elige género y emisora. Por ejemplo, **Pop en inglés** ofrece Power 181, **Disco de los 80** ofrece 80s80s · Italo Disco y **Electrónica** ofrece Tech House y SUNSHINE LIVE · EDM. **Escuchar solo aquí** reproduce en tu equipo. **Añadir a la sala** comparte la emisora en la cola. Cada participante puede activar la escucha y ajustar su volumen.
+
+Al reiniciar, el perfil y el progreso guardados siguen vinculados a tu jugador. Las salas son temporales. Si la última persona permanece desconectada y la sala caduca, su código deja de funcionar y hay que crear otra sala para continuar con la radio.
 
 ## La primera partida
 
