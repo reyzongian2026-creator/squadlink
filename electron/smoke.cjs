@@ -62,6 +62,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  const onboarding=await surface('app');
  await onboarding.evaluate(audioSetup);
  await onboarding.getByRole('heading',{name:'Crea tu personaje',exact:true}).waitFor();
+ assert.deepEqual((await windowState()).views.map(v=>v.host),['app'],'Crear el personaje no debe cargar un lobby oculto');
  await onboarding.getByRole('button',{name:'Elegir apodo y guardar',exact:true}).click();
  await onboarding.getByLabel('Tu apodo').fill('Prueba Electron');
  await onboarding.locator('#submit-entry').click();

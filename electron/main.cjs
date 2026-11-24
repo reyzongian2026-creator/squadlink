@@ -199,7 +199,11 @@ ipcMain.on('desk-state',async(e,m)=>{
    try{savePrefs(next);prefs=next;}catch{} // A read-only profile can still join this session.
   }
   const before=state.joined;state={joined:m.joined===true,name:String(m.name||'').slice(0,80),nickname:String(m.nickname||'').slice(0,40),code:String(m.code||'').slice(0,6),mic:m.mic===true,canMic:m.canMic===true,canLeave:m.canLeave!==false,members:Array.isArray(m.members)?m.members.slice(0,5):[]};publish();
-  if(!ready){ready=true;if(action)dispatch(action.key,action.code);else dispatch('background');}
+  if(!ready){
+   ready=true;
+   if(mac)require('./update-mac.cjs').confirmMacUpdateReady();
+   if(action)dispatch(action.key,action.code);else dispatch('background');
+  }
   if(state.joined!==before)syncRadioShortcut(state.joined);
   if(state.joined&&!before)open('lobby');
   if(before&&!state.joined)showHost();
@@ -330,12 +334,15 @@ async function start(){
  });
  if(mac)Menu.setApplicationMenu(Menu.buildFromTemplate([{role:'appMenu'},{role:'editMenu'},{role:'windowMenu'}]));
  else Menu.setApplicationMenu(null);
- home=createHome();
- mountHost();reveal(home);
- // A saved player can authenticate again after the room session cookie expires.
+ // A new player starts in the character editor. Create the lobby only on its first visit.
+ // A returning player's hidden workspace restores presence when the session opens.
  const returning=prefs.hasPlayer||(await ses.cookies.get({url:prefs.server,name:'squad_session'})).length>0;
- if(returning)ensureView();
- else open('player');
+ home=createHome();
+ if(returning){
+  mountHost();
+  ensureView();
+ }else open('player');
+ reveal(home);
 }
 if(locked)app.whenReady().then(start);
 app.on('will-quit',()=>{if(app.isReady())syncRadioShortcut(false);});
