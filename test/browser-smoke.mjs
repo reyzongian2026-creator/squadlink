@@ -205,6 +205,32 @@ async function progressionSmoke(player, observer, playForRank) {
     .getByText(profile.best.reflex + ' ms', { exact: true }).waitFor();
 }
 
+async function boostDuringCall(page) {
+  const panel = page.locator('#audio-panel');
+  if (!await panel.evaluate(el => el.open)) await panel.locator('summary').click();
+  const mic = panel.getByRole('slider', {name:'Ganancia de mi micrófono',exact:true});
+  const listen = panel.getByRole('slider', {name:'Volumen de las voces que escucho',exact:true});
+  await mic.waitFor();
+  const initial = await page.evaluate(() => window.qaTracks.map(t => t.id));
+  assert.ok(initial.length > 0);
+  await mic.evaluate(el => { el.value='7'; el.dispatchEvent(new Event('input',{bubbles:true})); });
+  assert.equal(await mic.getAttribute('aria-valuetext'), '+7 dB');
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('squadlink.audio.v1'))?.micGainDb ?? 0), 0);
+  await mic.press('End');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('squadlink.audio.v1'))?.micGainDb === 18);
+  assert.equal(await listen.inputValue(), '70');
+  await listen.press('End');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('squadlink.audio.v1'))?.listenVolume === 2);
+  assert.equal(await listen.getAttribute('aria-valuetext'), '200 %');
+  assert.equal(await mic.inputValue(), '18');
+  assert.equal(await panel.getByLabel('Ganancia automática del micrófono').isChecked(),false);
+  await panel.getByRole('button',{name:'Restablecer volumen y filtros de voz'}).click();
+  await panel.getByText(/Volumen de voz al 70/).waitFor();
+  assert.deepEqual(await page.evaluate(() => window.qaTracks.filter(t => t.readyState === 'live').map(t => t.id)),initial);
+  assert.equal(await mic.getAttribute('aria-valuetext'), '0 dB');
+  assert.equal(await listen.inputValue(), '70');
+}
+
 async function audioPreferencesSmoke(page) {
   await openChannel(page, 'main');
   const settings = page.locator('#audio-panel');
@@ -339,6 +365,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
       throw Error('Sin evidencia de paquetes de voz recibidos con energía audible');
     }
     const initial = await Promise.all([inbound(a), inbound(b)]);
+    await boostDuringCall(a);
     await musicSmoke(a,b);
     await a.getByRole('button', { name: 'Medir conexión de voz' }).click();
     await a.locator('#voice-measurements').getByText(/Ana.*(Directa|Por retransmisor)/).waitFor();

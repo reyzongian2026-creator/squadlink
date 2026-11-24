@@ -3,11 +3,16 @@
 export function prepareVoiceCapture(input, settings) {
   let context, source, filter, destination, closed = false, timer, cancelSetup;
   let noise = settings.noiseSuppression;
+  let micGainDb = settings.micGainDb ?? 0;
   const capture = {
     stream: input,
     setNoise(enabled) {
       noise = enabled;
       if (filter) filter.parameters.get('reduceNoise').value = enabled ? 1 : 0;
+    },
+    setMicGainDb(db) {
+      micGainDb = db;
+      if (filter) filter.parameters.get('micGainDb').value = db;
     },
     close() {
       if (closed) return;
@@ -38,7 +43,7 @@ export function prepareVoiceCapture(input, settings) {
       source = context.createMediaStreamSource(input);
       filter = new AudioWorkletNode(context, 'squadlink-voice-cleaner', {
         channelCount: 1, channelCountMode: 'explicit', outputChannelCount: [1],
-        parameterData: {reduceNoise: noise ? 1 : 0}
+        parameterData: {reduceNoise: noise ? 1 : 0, micGainDb}
       });
       destination = context.createMediaStreamDestination();
       destination.channelCount = 1;

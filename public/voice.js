@@ -1,3 +1,4 @@
+import { VoicePlayback } from './voice-playback.js';
 import { prepareVoiceCapture } from './voice-capture.js';
 import { microphoneConstraints, readAudioSettings, saveAudioSettings } from './audio-settings.js';
 
@@ -9,6 +10,7 @@ export class VoiceRoom {
   constructor({ selfId, iceServers = [], sendSignal, onStatus = () => {}, onPeerState = () => {}, onMicrophoneEnded = () => {} }) {
     Object.assign(this, { selfId, iceServers, sendSignal, onStatus, onPeerState, onMicrophoneEnded });
     this.peers = new Map();
+    this.playback = new VoicePlayback(onStatus);
     this.memberGain = new Map();
     this.members = new Set();
     this.stream = null;
@@ -34,28 +36,20 @@ export class VoiceRoom {
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
     const audio = document.createElement('audio');
     audio.autoplay = false;
-    audio.volume = this.settings.listenVolume * (this.memberGain.get(id) ?? 1);
     const outputId = this.pendingOutputId ?? this.settings.outputId;
     const sinkReady = outputId && audio.setSinkId
       ? audio.setSinkId(outputId).catch(() => {
         if (!this.closed) this.onStatus('La salida guardada no está disponible. Se usará la salida del sistema.');
       })
       : Promise.resolve();
-    const peer = { id, pc, audio, transceiver: null, incoming: Promise.resolve(), candidates: [],
+    const peer = { id, pc, audio, sinkReady, transceiver: null, incoming: Promise.resolve(), candidates: [],
       offerer: this.selfId < id, restartTimer: null, restartDelay: restartStepMs, dropped: false };
     this.peers.set(id, peer);
+    this.playback.setLevel(peer, this.settings.listenVolume * (this.memberGain.get(id) ?? 1));
     pc.onicecandidate = ({ candidate }) => {
       if (candidate && !peer.dropped) this.relay(peer, { candidate: candidate.toJSON() });
     };
-    pc.ontrack = ({ track }) => {
-      if (peer.dropped || track.kind !== 'audio' || audio.srcObject?.getAudioTracks()[0] === track) return;
-      const stream = new MediaStream([track]);
-      audio.srcObject = stream;
-      const current = () => !peer.dropped && audio.srcObject === stream;
-      sinkReady.then(() => current() && audio.play()).catch(error => {
-        if (current() && error.name !== 'AbortError') this.onStatus('Pulsa el control de audio para escuchar a tu equipo.');
-      });
-    };
+    pc.ontrack = ({track}) => this.playback.receive(peer, track);
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
       this.onPeerState(id, state);
@@ -197,7 +191,10 @@ export class VoiceRoom {
       return false;
     }
     this.stream = next;
-    if (!filtered && globalThis.AudioWorkletNode) this.onStatus('Se usan los filtros de voz del dispositivo.');
+    if (!filtered && (globalThis.AudioWorkletNode || settings.micGainDb > 0)) {
+      this.onStatus(settings.micGainDb > 0 ? 'La ganancia manual del micrófono no está disponible en este dispositivo.' :
+        'Se usan los filtros de voz del dispositivo.');
+    }
     const track = next.getAudioTracks()[0];
     track.onended = () => this.handleMicrophoneEnded(next);
     if (track.readyState === 'ended') {
@@ -266,6 +263,16 @@ export class VoiceRoom {
     if (this.closed) return;
     const previous = this.settings;
     const next = { ...previous, ...patch };
+    if (!Number.isFinite(next.listenVolume) || next.listenVolume < 0 || next.listenVolume > 2)
+      throw new Error('El volumen de escucha admite de 0 a 200 %.');
+    if (next.micGainDb !== previous.micGainDb) {
+      if (!Number.isInteger(next.micGainDb) || next.micGainDb < 0 || next.micGainDb > 18) {
+        throw new Error('Elige una ganancia de micrófono entre 0 y +18 dB.');
+      }
+      if (next.micGainDb > 0 && this.stream && this.outgoingTrack() === this.stream.getAudioTracks()[0]) {
+        throw new Error('La ganancia manual del micrófono no está disponible en este dispositivo.');
+      }
+    }
     if (next.outputId !== previous.outputId) {
       this.pendingOutputId = next.outputId;
       try {
@@ -300,9 +307,12 @@ export class VoiceRoom {
       }
     }
     if (!this.closed) {
+      if (next.micGainDb !== previous.micGainDb) {
+        for (const capture of this.filters.values()) capture.setMicGainDb(next.micGainDb);
+      }
       this.settings = next;
       if (next.listenVolume !== previous.listenVolume) {
-        for (const [id, peer] of this.peers) peer.audio.volume = next.listenVolume * (this.memberGain.get(id) ?? 1);
+        for (const [id, peer] of this.peers) this.playback.setLevel(peer, next.listenVolume * (this.memberGain.get(id) ?? 1));
       }
       saveAudioSettings(next);
     }
@@ -313,10 +323,11 @@ export class VoiceRoom {
     const value = Math.max(0, Math.min(1, gain));
     this.memberGain.set(id, value);
     const peer = this.peers.get(id);
-    if (peer) peer.audio.volume = value * this.settings.listenVolume;
+    if (peer) this.playback.setLevel(peer, value * this.settings.listenVolume);
   }
 
   async resumePlayback() {
+    await this.playback.resume();
     await Promise.all([...this.peers.values()].filter(p => p.audio.srcObject).map(p =>
       p.audio.play().catch(() => this.onStatus('No se pudo reproducir el audio. Revisa la salida de sonido.'))));
   }
@@ -330,6 +341,8 @@ export class VoiceRoom {
     peer.pc.close();
     peer.audio.pause();
     peer.audio.srcObject = null;
+    this.playback.releaseBoost(peer);
+    peer.remoteStream = null;
     this.peers.delete(id);
   }
 

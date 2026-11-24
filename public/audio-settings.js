@@ -6,7 +6,7 @@ export function microphoneConstraints(settings) {
 }
 
 const preferencesKey = 'squadlink.audio.v1';
-const recommended = Object.freeze({ noiseSuppression: true, autoGainControl: false, listenVolume: 0.7 });
+const recommended = Object.freeze({ noiseSuppression: true, autoGainControl: false, listenVolume: 0.7, micGainDb: 0 });
 
 export function readAudioSettings() {
   let stored;
@@ -16,7 +16,8 @@ export function readAudioSettings() {
     outputId: typeof stored?.outputId === 'string' ? stored.outputId : '',
     noiseSuppression: typeof stored?.noiseSuppression === 'boolean' ? stored.noiseSuppression : recommended.noiseSuppression,
     autoGainControl: typeof stored?.autoGainControl === 'boolean' ? stored.autoGainControl : recommended.autoGainControl,
-    listenVolume: Number.isFinite(stored?.listenVolume) ? Math.max(0, Math.min(1, stored.listenVolume)) : recommended.listenVolume
+    micGainDb: Number.isFinite(stored?.micGainDb) ? Math.min(18, Math.max(0, Math.round(stored.micGainDb))) : recommended.micGainDb,
+    listenVolume: Number.isFinite(stored?.listenVolume) ? Math.max(0, Math.min(2, stored.listenVolume)) : recommended.listenVolume
   };
 }
 
@@ -36,8 +37,26 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   noise.type = 'checkbox';
   const gain = document.createElement('input');
   gain.type = 'checkbox';
-  const volume = document.createElement('input');
-  volume.type = 'range'; volume.min = '0'; volume.max = '100';
+  const levelControl = (label, max, format) => {
+    const slider = document.createElement('input');
+    slider.type = 'range'; slider.min = '0'; slider.max = String(max); slider.step = '1';
+    slider.setAttribute('aria-label', label);
+    const element = field(label, slider);
+    const value = document.createElement('span');
+    value.setAttribute('aria-hidden', 'true');
+    element.append(value);
+    const updateLabel = () => {
+      const text = format(Number(slider.value));
+      value.textContent = text;
+      slider.setAttribute('aria-valuetext', text);
+    };
+    slider.oninput = updateLabel;
+    return {slider, element, updateLabel};
+  };
+  const inputLevel = levelControl('Ganancia de mi micrófono', 18, db => (db > 0 ? '+' : '') + db + ' dB');
+  const listenLevel = levelControl('Volumen de las voces que escucho', 200, percent => percent + ' %');
+  const micGain = inputLevel.slider;
+  const volume = listenLevel.slider;
   const refresh = document.createElement('button');
   refresh.type = 'button';
   refresh.className = 'secondary';
@@ -75,8 +94,11 @@ export function mountAudioSettings(container, getVoice, onStatus) {
     renderOptions(speakers, devices, settings.outputId, 'audiooutput');
     noise.checked = settings.noiseSuppression;
     gain.checked = settings.autoGainControl;
+    micGain.value = String(settings.micGainDb);
+    inputLevel.updateLabel();
+    micGain.disabled = saving;
     volume.value = String(Math.round(settings.listenVolume * 100));
-    volume.setAttribute('aria-valuetext', volume.value + ' %');
+    listenLevel.updateLabel();
     gain.disabled = saving || !media?.getSupportedConstraints?.().autoGainControl;
     volume.disabled = saving;
     microphone.disabled = saving || !media;
@@ -88,7 +110,7 @@ export function mountAudioSettings(container, getVoice, onStatus) {
     if (saving) return;
     saving = true;
     let message;
-    volume.disabled = gain.disabled = true;
+    micGain.disabled = volume.disabled = gain.disabled = true;
     microphone.disabled = speakers.disabled = noise.disabled = refresh.disabled = restore.disabled = true;
     try {
       const voice = getVoice();
@@ -107,9 +129,10 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   microphone.onchange = () => change({ inputId: microphone.value });
   speakers.onchange = () => change({ outputId: speakers.value });
   volume.onchange = () => change({ listenVolume: Number(volume.value) / 100 });
+  micGain.onchange = () => change({ micGainDb: Number(micGain.value) });
   gain.onchange = () => change({ autoGainControl: gain.checked });
   noise.onchange = () => change({ noiseSuppression: noise.checked });
-  restore.onclick = () => change(recommended, 'Volumen de voz al 70 %. Reducción de ruido activada y ganancia automática desactivada.');
+  restore.onclick = () => change(recommended, 'Volumen de voz al 70 %. Ganancia del micrófono a 0 dB. Reducción de ruido activada y ganancia automática desactivada.');
   refresh.onclick = async () => {
     await render();
     status.textContent = 'Lista actualizada. Activa el micrófono para ver los dispositivos autorizados.';
@@ -118,8 +141,8 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   note.textContent = outputSupported
     ? 'Activa el micrófono para que el navegador muestre los nombres de los dispositivos.'
     : 'La salida de audio se elige en los ajustes de sonido de tu sistema.';
-  container.replaceChildren(field('Micrófono', microphone), field('Salida de audio', speakers),
-    field('Volumen de las voces que escucho', volume), field('Reducir ruido de fondo', noise),
+  container.replaceChildren(field('Micrófono', microphone), inputLevel.element, field('Salida de audio', speakers),
+    listenLevel.element, field('Reducir ruido de fondo', noise),
     field('Ganancia automática del micrófono', gain), restore, refresh, note, status);
   media?.addEventListener?.('devicechange', render);
   render();
