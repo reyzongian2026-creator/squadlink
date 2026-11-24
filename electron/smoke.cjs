@@ -65,6 +65,8 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await space.screenshot({path:path.join(capture,'Crear-sala-Moderna.png')});await space.locator('#submit-entry').click();
  await space.locator('#room-name').waitFor({state:'visible'});
  await checkWindow(true);
+ await space.getByText('Detalles de sala',{exact:true}).click();
+ await space.waitForFunction(()=>/^[A-Z0-9]{6}$/.test(document.querySelector('#room-code')?.textContent));
  const code=await space.locator('#room-code').innerText();assert.match(code,/^[A-Z0-9]{6}$/);
  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
  await checkWindow(false);
