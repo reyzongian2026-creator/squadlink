@@ -146,3 +146,9 @@ Se compararon las aplicaciones empaquetadas .22 y .23 con el mismo recorrido, do
 Al minimizar y restaurar la ventana se comprobó que seguían avanzando el audio recibido y la radio. Se verificó la salida del proceso que dibujaba el lobby y la continuidad del proceso de la llamada. El modo completo y los ajustes abiertos tienen un comportamiento distinto.
 
 Ejecuciones comparables de Windows [antes](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45370498859) y [después](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45371482909), y de macOS [antes](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45370501746) y [después](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45371482952).
+
+## Coste del filtro del micrófono con la ganancia activa
+
+Se comparó el filtro anterior con el nuevo en un Mac con Apple Silicon. Cada una de las 11 parejas alternó el orden de las versiones, en procesos independientes del motor V8 de Electron. Para cuatro minutos de habla, ruido y silencios a 48 kHz (bloques de 128 muestras), el tiempo mediano de CPU dedicado al filtro pasó de 54,8 a 38,3 ms. El ahorro equivale aproximadamente a 0,007 puntos porcentuales de un núcleo durante la llamada. Esta prueba mide únicamente el cálculo del filtro.
+
+En 24 combinaciones de frecuencia de muestreo, tamaño de bloque y señal, las 12.246.400 muestras de salida coincidieron bit a bit. Los casos incluyen silencio, picos, ganancia manual y cambios de la reducción de ruido.
