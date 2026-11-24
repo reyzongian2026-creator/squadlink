@@ -1,0 +1,62 @@
+name: 'QA de consumo .23 y .24 en la misma máquina'
+on:
+  push:
+    branches: ['qa/paired-lobby-background-24']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  compare:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 18
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Preparar herramientas y certificado local
+        shell: bash
+        run: |
+          npm ci --prefix electron --no-fund --no-audit
+          npm ci --no-fund --no-audit
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout qa.key -out qa.crt -subj '//CN=localhost' -days 1 || openssl req -x509 -newkey rsa:2048 -nodes -keyout qa.key -out qa.crt -subj '/CN=localhost' -days 1
+      - name: Descargar y comprobar binarios oficiales
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            file=Squadlink-Moderno-Setup-x64.exe; workflow=45374389359; artifact=Squadlink-Electron-Windows-x64
+            basehash=e1da36fb1138c3c6cb83748325651029b951f08b936fff6c1ff37410c0771886
+          else
+            file=Squadlink-Moderno-macOS-arm64.zip; workflow=45374389300; artifact=Squadlink-Moderno-macOS-arm64
+            basehash=3143ba63abcdf1398757928619f828d5e69b9aab3b573243c09d078a4ffa1723
+          fi
+          gh release download moderno-v0.5.0-preview.23 -p "$file" -D v23
+          gh run download "$workflow" -n "$artifact" -D v24
+          node -e 'const fs=require("fs"),{createHash}=require("crypto");for(const ver of ["23","24"]){const file=process.argv[1],p="v"+ver+"/",hash=createHash("sha256").update(fs.readFileSync(p+file)).digest("hex");if(ver==="23"?hash!==process.argv[2]:!fs.readFileSync(p+"SHA256.txt","utf8").toLowerCase().includes(hash))throw Error("SHA inesperado "+p);console.log(ver,hash,file)}' "$file" "$basehash"
+      - if: runner.os == 'Windows'
+        name: Medir versiones Windows
+        shell: pwsh
+        run: |
+          foreach ($v in 23,24) {
+            $setup=(Resolve-Path "v$v/Squadlink-Moderno-Setup-x64.exe").Path
+            $target=Join-Path $env:RUNNER_TEMP "Medir$v"
+            $r=Start-Process $setup -ArgumentList "/VERYSILENT /NORESTART /DIR=`"$target`"" -Wait -PassThru
+            if($r.ExitCode){throw "Inno $($r.ExitCode)"}
+          }
+          node electron/paired-background.cjs "$env:RUNNER_TEMP/Medir23/Squadlink.exe" "$env:RUNNER_TEMP/Medir24/Squadlink.exe" qa.key qa.crt
+          exit $LASTEXITCODE
+      - if: runner.os == 'macOS'
+        name: Medir versiones Mac
+        run: |
+          ditto -x -k v23/Squadlink-Moderno-macOS-arm64.zip "$RUNNER_TEMP/Medir23"
+          ditto -x -k v24/Squadlink-Moderno-macOS-arm64.zip "$RUNNER_TEMP/Medir24"
+          node electron/paired-background.cjs "$RUNNER_TEMP/Medir23/Squadlink Moderno.app/Contents/MacOS/Electron" "$RUNNER_TEMP/Medir24/Squadlink Moderno.app/Contents/MacOS/Electron" qa.key qa.crt
