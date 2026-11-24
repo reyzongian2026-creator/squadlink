@@ -1,6 +1,7 @@
 const { _electron,chromium }=require('playwright-core');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
-const {spawn}=require('node:child_process');
+const {spawn,execFile}=require('node:child_process');
+const runFile=require('node:util').promisify(execFile);
 const {fixtureSetup,testVoiceQuality,testManualGain,testListenBoost}=require('../test/support/voice-quality.cjs');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 (async()=>{
@@ -14,6 +15,16 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  app=await _electron.launch({executablePath,args:['--user-data-dir='+profile],timeout:45000});
  assert.equal(await app.evaluate(({app})=>app.getVersion()),require('./package.json').version,'La app instalada debe anunciar la versión de la compilación');
  app.context().setDefaultTimeout(15000);
+ // Record the callback actually accepted by Electron. macOS CI does not grant
+ // Accessibility for cross-app keyboard injection; no permission prompt is needed.
+ if(process.platform==='darwin')await app.evaluate(({globalShortcut})=>{
+  const register=globalShortcut.register.bind(globalShortcut);
+  globalShortcut.register=(combination,callback)=>{
+   const accepted=register(combination,callback);
+   if(accepted && combination==='Alt+Shift+R')globalThis.qaGlobalRadio=callback;
+   return accepted;
+  };
+ });
  async function surface(host) {
   for(let i=0;i<200;i++){
    const page=app.context().pages().find(p=>!p.isClosed()&&p.url().startsWith('squad://'+host+'/'));
@@ -84,7 +95,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  const first=await audio([0,0]);await memory('voz');
  await home.getByRole('button',{name:'Mi sala',exact:true}).click();
  await testVoiceQuality(space,peer);
- const {musicSmoke}=await import('../test/support/music-browser.mjs');
+ const {musicSmoke,assertRadioShortcut}=await import('../test/support/music-browser.mjs');
  async function radioAndVoice() {
   return Promise.all([space,peer].map(async page=>{
    const media=await page.evaluate(()=>{
@@ -123,6 +134,18 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
    await waitMinimized(true);
    await requireProgress(await radioAndVoice(),'Radio y voz con la ventana minimizada');
+   const registered=await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Alt+Shift+R'));
+   if(registered){
+    const windows=process.platform==='win32';
+    const sendGlobal=windows ? ()=>runFile('powershell.exe',['-NoProfile','-NonInteractive','-Command',
+     "(New-Object -ComObject WScript.Shell).SendKeys('%+r')"],{timeout:8000})
+     : ()=>app.evaluate(()=>{
+       if(!globalThis.qaGlobalRadio)throw Error('Falta el callback del atajo registrado.');
+       globalThis.qaGlobalRadio();
+      });
+    await assertRadioShortcut(space,peer,sendGlobal,windows?'teclas del sistema Windows, ventana minimizada':
+      'callback global registrado en macOS, ventana minimizada');
+   }else console.log('El sistema reservó Alt+Shift+R; se comprobarán las teclas con foco.');
   }finally{
    await app.evaluate(({BaseWindow})=>{const win=BaseWindow.getAllWindows()[0];win.restore();win.show();win.focus();});
    await waitMinimized(false);
@@ -131,6 +154,11 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
   await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   await requireProgress(await radioAndVoice(),'Radio y voz en el lobby');
+  await assertRadioShortcut(space,peer,()=>home.keyboard.press('Alt+Shift+KeyR'),'teclas en el lobby de escritorio');
+  await home.getByRole('button',{name:'Arcade',exact:true}).click();
+  await space.locator('[data-game="reflex"]').waitFor();
+  await assertRadioShortcut(space,peer,()=>space.keyboard.press('Alt+Shift+KeyR'),'teclas en Arcade');
+  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
   await home.getByRole('button',{name:'Mi sala',exact:true}).click();
   await space.locator('#room-music [data-listen][aria-pressed="true"]').waitFor();
  });

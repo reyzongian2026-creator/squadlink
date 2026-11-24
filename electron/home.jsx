@@ -110,6 +110,7 @@ function App(){
          <div className="actions">{state.joined ? <>
            <button className="primary" onClick={()=>open('lobby')}><Icon id="headset"/>Mi sala</button>
            <button disabled={!state.canMic} onClick={()=>run(()=>api.action('mic'))}><Icon id="mic"/>{state.mic?'Silenciar':'Activar micrófono'}</button>
+           {state.radioState && state.radioState!=='empty' && <button aria-keyshortcuts="Alt+Shift+R" title="Alt + Mayús + R" aria-pressed={state.radioState==='playing'} onClick={()=>run(()=>api.action('radio'))}>{state.radioState==='playing'?'Silenciar mi radio':'Reanudar mi radio'}</button>}
            <button className="exit" onClick={()=>run(()=>api.action('leave'))}><Icon id="exit"/>Salir de sala</button>
          </> : <>
            <button className="primary" onClick={()=>open('create')}><Icon id="plus"/>Crear sala</button>

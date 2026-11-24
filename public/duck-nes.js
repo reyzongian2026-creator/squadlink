@@ -1,4 +1,4 @@
-// The cartridge stays in this renderer. Only the emulator module is imported.
+import { accessCartridge } from './cartridge-store.js';
 const WIDTH = 256;
 const HEIGHT = 240;
 const FRAME_MS = 1000 / 60;
@@ -80,7 +80,7 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
   const help = mario
     ? 'Enter para Start. En el mapa usa las flechas y Espacio para entrar al nivel. Durante la partida, Espacio o Z salta y X corre.'
     : 'Enter para Start y Mayús para Select. Apunta con el ratón o las flechas y dispara con clic o Espacio.';
-  panel.innerHTML = `<details ${checkInstalled ? 'hidden' : 'open'} class="nes-cartridge"><summary>Cartucho de ${title}</summary><label>Seleccionar archivo .nes<input type="file" accept=".nes"></label></details>
+  panel.innerHTML = `<details hidden class="nes-cartridge"><summary>Cartucho de ${title}</summary><label>Seleccionar archivo .nes<input type="file" accept=".nes"></label></details>
     <p class="nes-help">${help}${mario ? '' : ' El cartucho contiene destellos rápidos.'}</p>
     <div class="nes-screen"><canvas width="256" height="240" hidden tabindex="0" aria-label="Pantalla NES de ${title}"></canvas>
       <span class="nes-sight" aria-hidden="true" hidden></span></div>
@@ -90,6 +90,7 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
       <button type="button" class="secondary" data-control="start" hidden>Start</button>
       <button type="button" class="secondary" data-control="full" aria-pressed="false">Pantalla completa · F</button>
     </div>`;
+  const chooser = panel.querySelector('.nes-cartridge');
   const fileField = panel.querySelector('input');
   const canvas = panel.querySelector('canvas');
   const control = key => panel.querySelector('[data-control="' + key + '"]');
@@ -123,8 +124,8 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
     }
   }
   const buttonReleases = new Map();
-  const chooseMessage = 'Selecciona tu cartucho de ' + title + '.';
-  status.textContent = checkInstalled ? 'Abriendo ' + title + '…' : chooseMessage;
+  const chooseMessage = 'Importa tu archivo .nes de ' + title + ' una vez para jugar en este dispositivo.';
+  status.textContent = 'Abriendo ' + title + '…';
 
   const full = control('full');
   let expandedHere = false;
@@ -203,8 +204,7 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
     }
   }
 
-  async function loadFile(file, installed=false) {
-    const id = ++version;
+  async function loadFile(file, source, id) {
     stop(); nes = null; cartridge = null; rankedCart = startedGame = false;
     play.disabled = true; play.textContent = 'Jugar';
     select.hidden = start.hidden = canvas.hidden = true;
@@ -218,32 +218,52 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
         matches = Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2,'0')).join('') === sha;
       }
       if (id !== version || closed) return;
-      const chooser = panel.querySelector('.nes-cartridge');
-      chooser.hidden = installed;
+      let message = source === 'installed' ? 'Cartucho instalado.' : 'Cartucho guardado en este dispositivo.';
+      if (source === 'import') {
+        try {
+          await accessCartridge(view.indexedDB, game, bytes.buffer);
+        } catch {
+          message = 'Cartucho listo para esta sesión. No se pudo guardar en este dispositivo.';
+        }
+        if (id !== version || closed) return;
+      }
+      chooser.hidden = true;
       rankedCart = matches;
       cartridge = bytes;
       play.disabled = false;
       if (!mount.contains(doc.activeElement) || doc.activeElement === fileField) play.focus({preventScroll:true});
-      status.textContent = (installed ? 'Cartucho instalado. ' : 'Cartucho listo. ') + 'Pulsa Enter para jugar.' +
+      status.textContent = message + ' Pulsa Enter para jugar.' +
         (matches ? '' : ' Esta edición se juega en modo práctica.');
     } catch (error) {
       if (id === version && !closed) status.textContent = error.message;
     }
   }
-  listen(fileField, 'change', () => { void loadFile(fileField.files?.[0]); });
-  if (checkInstalled) {
-    view.fetch('/' + game + '.nes', {signal:aborter.signal}).then(async response => {
-      if (!response.ok) return;
-      const file = await response.blob();
-      if (!version && !closed) await loadFile(file,true);
-    }).catch(() => {}).finally(() => {
-      if (closed || cartridge) return;
-      const chooser = panel.querySelector('.nes-cartridge');
-      chooser.hidden = false;
-      chooser.open = true;
-      if (!version) status.textContent = chooseMessage;
-    });
+  listen(fileField, 'change', () => {
+    const file = fileField.files?.[0];
+    if (file) void loadFile(file, 'import', ++version);
+  });
+  async function restoreCartridge() {
+    const id = version;
+    if (checkInstalled) {
+      try {
+        const response = await view.fetch('/' + game + '.nes', {signal:aborter.signal});
+        if (response.ok) {
+          const file = await response.blob();
+          if (!closed && id === version) await loadFile(file, 'installed', id);
+        }
+      } catch { /* A public installation may have no packaged cartridge. */ }
+    }
+    if (closed || id !== version || cartridge) return;
+    try {
+      const saved = await accessCartridge(view.indexedDB, game);
+      if (saved && !closed && id === version) await loadFile(new view.Blob([saved]), 'saved', id);
+    } catch { /* Import is still possible if local storage is unavailable. */ }
+    if (closed || id !== version || cartridge) return;
+    chooser.open = true;
+    chooser.hidden = false;
+    status.textContent = chooseMessage;
   }
+  void restoreCartridge();
 
   listen(play, 'click', async () => {
     if (running) { showPaused(); return; }
@@ -299,7 +319,9 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
     } catch {
       if (id !== version || closed) return;
       stop(); nes = null; play.disabled = false; play.textContent = 'Reintentar';
-      status.textContent = 'No se pudo iniciar el cartucho. Comprueba el archivo .nes y vuelve a intentar.';
+      chooser.hidden = false; chooser.open = true;
+      fileField.value = '';
+      status.textContent = 'No se pudo iniciar el cartucho. Puedes importar otro archivo .nes compatible.';
     }
   });
 

@@ -1,4 +1,4 @@
-const {app,BaseWindow,BrowserWindow,WebContentsView,protocol,session,ipcMain,dialog,shell,Menu,systemPreferences,safeStorage}=require('electron');
+const {app,BaseWindow,BrowserWindow,WebContentsView,protocol,session,ipcMain,dialog,shell,Menu,globalShortcut,systemPreferences,safeStorage}=require('electron');
 const fs=require('node:fs'),path=require('node:path');
 const {relay,parseServer}=require('./gateway.cjs');
 const {detect}=require('./detection.cjs');
@@ -17,7 +17,7 @@ function savePrefs(value){
 }
 const blank=()=>({joined:false,name:'',nickname:'',code:'',mic:false,canMic:false,members:[]});
 let prefs={server:base,low:true},state=blank(),home,view,hostSection='home',action,ready=false,visit=0,closing=false,updateUrl='',microphone=false;
-let hostView;
+let hostView, radioState='empty';
 let detectTimer,scanning=false,generation=0,detected=null;
 const locked=app.requestSingleInstanceLock();
 if(!locked)app.quit();
@@ -31,13 +31,35 @@ protocol.registerSchemesAsPrivileged([{scheme:'squad',privileges:{standard:true,
 app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
 const options={contextIsolation:true,nodeIntegration:false,sandbox:true,preload:path.join(__dirname,'preload.cjs'),partition:'persist:squadlink-modern'};
 function reveal(w){if(w&&!w.isDestroyed()){if(w.isMinimized())w.restore();w.show();w.focus();}}
-function snapshot(){return {...state,...prefs,hostSection:action?'workspace':hostSection,version:app.getVersion(),updateUrl};}
+function snapshot(){return {...state,...prefs,radioState,hostSection:action?'workspace':hostSection,version:app.getVersion(),updateUrl};}
 function hostContents(){return mac ? hostView?.webContents : home?.webContents;}
 function publish(){
  const wc=hostContents();
  if(wc&&!wc.isDestroyed())wc.send('snapshot',snapshot());
 }
+const radioAccelerator='Alt+Shift+R';
+let lastRadioPress=-Infinity;
+function toggleRadio(){
+ if(!state.joined || !view || view.webContents.isDestroyed())return;
+ const now=performance.now();
+ if(now-lastRadioPress<180)return;
+ lastRadioPress=now;
+ send({type:'desktop:radio-toggle'});
+}
+function syncRadioShortcut(joined){
+ if(joined){
+  if(!globalShortcut.isRegistered(radioAccelerator))globalShortcut.register(radioAccelerator,toggleRadio);
+ }else if(globalShortcut.isRegistered(radioAccelerator)){
+  globalShortcut.unregister(radioAccelerator);
+ }
+}
 function guard(contents){
+  contents.on('before-input-event',(event,input)=>{
+   if(state.joined && input.type==='keyDown' && input.alt && input.shift && !input.control && !input.meta && input.code==='KeyR'){
+    event.preventDefault();
+    if(!input.isAutoRepeat)toggleRadio();
+   }
+  });
   contents.setWindowOpenHandler(()=>({action:'deny'}));
   contents.on('will-navigate',e=>e.preventDefault());
   contents.on('will-attach-webview',e=>e.preventDefault());
@@ -104,7 +126,7 @@ function createHome(){
 function ensureView(){
  if(view)return;
  view=new WebContentsView({webPreferences:options});const wc=view.webContents;guard(wc);
- wc.on('render-process-gone',()=>{if(view?.webContents!==wc)return;disposeVoice();state=blank();showHost();
+ wc.on('render-process-gone',()=>{if(view?.webContents!==wc)return;disposeVoice();state=blank();syncRadioShortcut(false);showHost();
  dialog.showMessageBox(home,{type:'warning',message:'El motor de la sala se cerró. Puedes volver a abrirla desde el lobby.'});});
  wc.on('before-input-event',(e,input)=>{if(input.type==='keyDown'&&(mac?input.meta:input.control)&&input.shift&&input.code==='KeyM'&&!input.isAutoRepeat&&state.canMic){e.preventDefault();dispatch('mic');}});
  wc.loadURL('squad://app/?server='+encodeURIComponent(prefs.server));
@@ -128,7 +150,9 @@ function gameStatus(){send({type:'squadlink:game',enabled:Boolean(detectTimer),g
 ipcMain.on('home',e=>{if(fromVoice(e))showHost();});
 ipcMain.on('desk-state',async(e,m)=>{
  if(!fromVoice(e)||!m||typeof m!=='object')return;
- if(m.type==='desktop:navigate'){
+ if(m.type==='desktop:radio-state'){
+  if(['playing','muted','empty'].includes(m.state)){radioState=m.state;publish();}
+ }else if(m.type==='desktop:navigate'){
   if(['home','lobby','rooms','friends','player','arcade','ranking','guide','preferences'].includes(m.page))open(m.page);
  }else if(m.type==='desktop:state'){
   if(m.identified===true&&!prefs.hasPlayer){
@@ -137,6 +161,7 @@ ipcMain.on('desk-state',async(e,m)=>{
   }
   const before=state.joined;state={joined:m.joined===true,name:String(m.name||'').slice(0,80),nickname:String(m.nickname||'').slice(0,40),code:String(m.code||'').slice(0,6),mic:m.mic===true,canMic:m.canMic===true,members:Array.isArray(m.members)?m.members.slice(0,5):[]};publish();
   if(!ready){ready=true;if(action)dispatch(action.key,action.code);else dispatch('background');}
+  if(state.joined!==before)syncRadioShortcut(state.joined);
   if(state.joined&&!before)open('lobby');
   if(before&&!state.joined)showHost();
  }else if(m.type==='desktop:release'&&m.visit===visit&&!state.joined&&!action&&prefs.low)disposeVoice();
@@ -166,7 +191,12 @@ ipcMain.handle('player-pass:export',async(event,raw)=>{
 });
 ipcMain.handle('snapshot',e=>{hostPage(e);return snapshot();});
 ipcMain.handle('open',(e,value)=>{hostPage(e);open(typeof value==='string'?value:value?.key,/^[A-Z0-9]{6}$/.test(value?.code)?value.code:undefined);});
-ipcMain.handle('call',(e,key)=>{hostPage(e);if(state.joined&&['mic','leave'].includes(key))dispatch(key);});
+ipcMain.handle('call',(e,key)=>{
+ hostPage(e);
+ if(!state.joined)return;
+ if(key==='radio')toggleRadio();
+ else if(['mic','leave'].includes(key))dispatch(key);
+});
 ipcMain.handle('prefs',(e,data)=>{
  hostPage(e);let next={...prefs};
  if(typeof data?.low==='boolean')next.low=data.low;
@@ -268,4 +298,5 @@ async function start(){
  else open('player');
 }
 if(locked)app.whenReady().then(start);
+app.on('will-quit',()=>{if(app.isReady())syncRadioShortcut(false);});
 app.on('window-all-closed',()=>app.quit());

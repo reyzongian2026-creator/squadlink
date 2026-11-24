@@ -453,6 +453,19 @@ function renderMembers() {
 }
 let roomMusicUI;
 let musicModule;
+function toggleRoomRadio() {
+  if (!room) return;
+  roomMusicUI?.toggleFromShortcut();
+}
+window.squadBridge?.addEventListener('message', ({data}) => {
+  if (data?.type === 'desktop:radio-toggle') toggleRoomRadio();
+});
+// Electron handles this in its main process, including when another app has focus.
+if (!window.squadBridge) window.addEventListener('keydown', event => {
+  if (!room || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.code !== 'KeyR') return;
+  event.preventDefault();
+  if (!event.repeat) toggleRoomRadio();
+}, true);
 function updateMusic() {
   if (roomMusicUI) { roomMusicUI.update(room); return; }
   const currentCode = room.code;

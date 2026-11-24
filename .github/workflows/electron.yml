@@ -43,7 +43,7 @@ jobs:
           $remove=Start-Process (Join-Path $target 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
           if ($remove.ExitCode -or (Test-Path (Join-Path $target 'Squadlink.exe'))) {throw 'Falló la desinstalación'}
           (Get-FileHash $setup).Hash+'  Squadlink-Moderno-Setup-x64.exe' | Set-Content artifacts/electron/SHA256.txt
-      - name: Probar la instalación opcional de cartuchos personales
+      - name: Instalar el EXE personal autocontenido con cartuchos de diagnóstico
         run: |
           $package=New-Item -ItemType Directory (Join-Path $env:RUNNER_TEMP 'Paquete personal')
           $cartridges=New-Item -ItemType Directory (Join-Path $package.FullName 'cartridges')
@@ -52,10 +52,20 @@ jobs:
           node --input-type=module -e "import {writeFileSync} from 'node:fs'; import {diagnosticCartridge} from './test/duck-nes-fixture.mjs'; writeFileSync(process.argv[1], diagnosticCartridge())" (Join-Path $cartridges.FullName 'duck-nes.nes')
           if ($LASTEXITCODE) {exit $LASTEXITCODE}
           Copy-Item (Join-Path $cartridges.FullName 'duck-nes.nes') (Join-Path $cartridges.FullName 'mario3.nes')
-          $result=Start-Process $setup -ArgumentList "/VERYSILENT /NORESTART /DIR=`"$target`"" -Wait -PassThru
-          if ($result.ExitCode) {throw 'Falló la instalación con cartuchos'}
+          $expected=(Get-FileHash (Join-Path $cartridges.FullName 'duck-nes.nes')).Hash
+          $maker=Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
+          if (!(Test-Path $maker)) {
+            choco install nsis -y --no-progress
+            if ($LASTEXITCODE) {exit $LASTEXITCODE}
+          }
+          $personal=Join-Path $env:RUNNER_TEMP 'Squadlink-Personal.exe'
+          & $maker "/DPUBLIC_SETUP=$setup" "/DCARTRIDGES_DIR=$($cartridges.FullName)" "/DOUTPUT_EXE=$personal" electron/personal-setup.nsi
+          if ($LASTEXITCODE) {exit $LASTEXITCODE}
+          # Install on a clean target after removing every external source file.
+          Remove-Item -Recurse $package.FullName
+          $result=Start-Process $personal -ArgumentList "/S /D=$target" -Wait -PassThru
+          if ($result.ExitCode) {throw 'Falló la instalación con cartuchos integrados'}
           foreach ($name in 'mario3.nes','duck-nes.nes') {
-            $expected=(Get-FileHash (Join-Path $cartridges.FullName $name)).Hash
             $installed=Join-Path $target "resources\app\cartridges\$name"
             if ((Get-FileHash $installed).Hash -ne $expected) {throw "El cartucho $name no se instaló correctamente"}
           }

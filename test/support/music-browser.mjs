@@ -13,6 +13,48 @@ function sampleWav(seconds=25) {
   for(let i=0;i<samples;i++) bytes.writeInt16LE(Math.round(900*Math.sin(2*Math.PI*440*i/rate)),44+2*i);
   return bytes;
 }
+// The focused renderer can be the desktop lobby while the player and RTP live
+// in a different WebContents. Only public room controls and receiver stats are read.
+export async function assertRadioShortcut(listener,other,press,label) {
+  async function state(page) {
+    return page.evaluate(async () => {
+      const panel=document.querySelector('#room-music'), audio=panel?.querySelector('audio');
+      const connection=(window.testPeers || window.qaPeers || []).find(pc=>pc.connectionState==='connected');
+      if (!connection) throw Error('Falta la llamada de voz en la prueba del atajo.');
+      const inbound=[...(await connection.getStats()).values()].find(s=>s.type==='inbound-rtp' && s.kind==='audio');
+      return {listening:panel.querySelector('[data-listen]').getAttribute('aria-pressed')==='true',
+        playing:Boolean(audio&&!audio.paused),time:audio?.currentTime,source:audio?.currentSrc,
+        title:panel.querySelector('[data-title]').textContent,code:document.querySelector('#room-code').textContent,
+        mic:document.querySelector('#mic').getAttribute('aria-pressed'),energy:inbound?.totalAudioEnergy};
+    });
+  }
+  const before=await Promise.all([listener,other].map(state));
+  await press();
+  await listener.waitForFunction(()=>document.querySelector('#room-music [data-listen]')?.getAttribute('aria-pressed')==='false'
+      && !document.querySelector('#room-music audio'),null,{timeout:5000});
+  await other.waitForFunction(time=>{
+    const audio=document.querySelector('#room-music audio');
+    return audio && !audio.paused && audio.currentTime>time+0.4;
+  },before[1].time,{timeout:5000});
+  const muted=await Promise.all([listener,other].map(state));
+  for(const [i,reading] of muted.entries()){
+    assert.equal(reading.listening,i===1,label);
+    assert.equal(reading.code,before[i].code,label);
+    assert.equal(reading.title,before[i].title,label);
+    assert.equal(reading.mic,'true',label+' cambió el micrófono');
+    assert.ok(reading.energy>before[i].energy,label+' interrumpió la voz');
+  }
+  await press();
+  await listener.waitForFunction(src=>{
+    const panel=document.querySelector('#room-music'), audio=panel?.querySelector('audio');
+    return panel?.querySelector('[data-listen]').getAttribute('aria-pressed')==='true' &&
+      audio?.currentSrc===src && !audio.paused && audio.currentTime>0.15;
+  },before[0].source,{timeout:8000});
+  const resumed=await state(other);
+  assert.ok(resumed.playing && resumed.source===before[1].source && resumed.time>=muted[1].time,label);
+  console.log('Atajo de radio local verificado',label);
+}
+
 export async function musicSmoke(host,guest,whileBothListen) {
   const panel=page=>page.locator('#room-music');
   const listen=(page,on)=>panel(page).locator('[data-listen][aria-pressed="'+on+'"]');
@@ -70,6 +112,7 @@ export async function musicSmoke(host,guest,whileBothListen) {
       return audio?.currentSrc === url && !audio.paused && audio.currentTime > 0.15;
     },station.url,{timeout:15000});
     await playing(guest);
+    await assertRadioShortcut(guest,host,()=>guest.keyboard.press('Alt+Shift+KeyR'),'navegador enfocado');
     if (whileBothListen) await whileBothListen();
     const hostTime = await panel(host).locator('audio').evaluate(audio=>audio.currentTime);
     await listen(guest,true).click();
