@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {radioStations} from '../../public/radio-stations.js';
 
 // A generated PCM tone exercises the real decoder and the private room media route.
 function sampleWav() {
@@ -14,28 +15,77 @@ function sampleWav() {
 }
 export async function musicSmoke(host,guest) {
   const panel=page=>page.locator('#room-music');
-  for(const page of [host,guest]) await panel(page).getByRole('button',{name:'Escuchar',exact:true}).click();
   await panel(host).getByText('Añadir música',{exact:true}).click();
-  await panel(host).locator('select').selectOption('file');
+  await panel(host).locator('.source-options').getByText('Archivo de audio',{exact:true}).click();
   await panel(host).locator('input[type=file]').setInputFiles({name:'Prueba compartida.wav',mimeType:'audio/wav',buffer:sampleWav()});
-  await panel(host).getByRole('button',{name:'Añadir a la cola'}).click();
+  await panel(host).getByRole('button',{name:'Añadir a la sala'}).click();
+  for (const page of [host,guest]) {
+    await panel(page).locator('[data-title]').filter({hasText:'Prueba compartida'}).waitFor();
+    await panel(page).getByRole('button',{name:'Escuchar aquí',exact:true}).click();
+  }
   await Promise.all([host,guest].map(page=>page.waitForFunction(()=>{
     const audio=document.querySelector('#room-music audio');
     return audio && !audio.paused && audio.currentTime>0.15 && audio.duration===25;
   },null,{timeout:30000})));
   for(const page of [host,guest]) {
-    assert.equal(await page.locator('#members [data-music-bot]').count(),1);
+    assert.equal(await page.locator('#members [data-music-bot], .music-header .room-dj').count(),1);
     assert.match(await page.locator('#count').innerText(), /2\s*\/\s*5/);
   }
   await panel(guest).getByText('Añadir música',{exact:true}).click();
+  const station = radioStations[0];
+  await panel(guest).locator('.genre-options').getByText(station.genre,{exact:true}).click();
+  const offered = await panel(guest).locator('.station-options input').evaluateAll(
+    options => options.map(option => option.value)
+  );
+  assert.deepEqual(offered, radioStations.filter(item => item.genre === station.genre).map(item => item.id));
+  await panel(guest).locator('.station-options label').filter({hasText:station.name}).click();
+  await panel(guest).getByRole('button',{name:'Añadir a la sala'}).click();
+  await panel(host).getByText('En cola (1)',{exact:true}).waitFor();
+  for (const page of [host,guest]) await panel(page).getByRole('button',{name:'Silenciar solo para mí'}).click();
+  await panel(host).getByRole('button',{name:'Siguiente'}).click();
+  await panel(guest).locator('[data-title]').filter({hasText:station.name}).waitFor();
+  assert.equal(await panel(guest).locator('audio').count(),0);
+
+  // Authenticate and advance the real room while keeping the station independent of the public stream.
+  let offline = true;
+  const stream = route => offline
+    ? route.abort('failed')
+    : route.fulfill({status:200,contentType:'audio/wav',body:sampleWav()});
+  await host.route(station.url, stream);
+  try {
+    await panel(host).getByRole('button',{name:'Escuchar aquí',exact:true}).click();
+    const retry = panel(host).getByRole('button',{name:'Reintentar'});
+    await retry.waitFor();
+    offline = false;
+    await retry.click();
+    await host.waitForFunction(url=>{
+      const audio=document.querySelector('#room-music audio');
+      return audio?.currentSrc===url && !audio.paused && audio.currentTime>0.1;
+    },station.url,{timeout:15000});
+    const volume = panel(host).getByRole('slider',{name:'Volumen de música'});
+    await volume.focus(); await volume.press('Home'); await volume.press('ArrowRight');
+    assert.equal(await panel(host).locator('audio').evaluate(audio=>audio.volume), 0.01);
+    await panel(host).getByRole('button',{name:'Silenciar solo para mí'}).click();
+  } finally {
+    await host.unroute(station.url, stream);
+  }
+  await panel(guest).getByRole('button',{name:'Siguiente'}).click();
+  for(const page of [host,guest]) await page.locator('#members [data-music-bot]').waitFor({state:'detached'});
+  await panel(guest).getByText('Añadir música',{exact:true}).click();
+  // Adding a new station to an empty queue must not override this listener's mute setting.
+  await panel(guest).getByRole('button',{name:'Añadir a la sala'}).click();
+  await panel(guest).locator('[data-title]').filter({hasText:station.name}).waitFor();
+  assert.equal(await panel(guest).locator('audio').count(),0);
+  assert.equal(await guest.evaluate(()=>localStorage.getItem('squadlink.music.muted')), 'true');
+  await panel(host).getByRole('button',{name:'Siguiente'}).click();
+  await guest.locator('#members [data-music-bot]').waitFor({state:'detached'});
+  await panel(guest).getByText('Añadir música',{exact:true}).click();
+  await panel(guest).locator('.source-options').getByText('YouTube',{exact:true}).click();
   await panel(guest).locator('input[type=url]').fill('https://youtu.be/aqz-KE-bpKQ');
   await panel(guest).getByLabel('Título (opcional)').fill('Video de prueba');
-  await panel(guest).getByRole('button',{name:'Añadir a la cola'}).click();
-  await panel(host).getByText('En cola (1)',{exact:true}).waitFor();
-  // Retain the second track in the shared queue while both listeners mute locally.
-  for(const page of [host,guest]) await panel(page).getByRole('button',{name:'Dejar de escuchar'}).click();
-  await panel(host).getByRole('button',{name:'Siguiente'}).click();
-  await panel(guest).locator('[data-title]').filter({hasText:'Video de prueba'}).waitFor();
+  await panel(guest).getByRole('button',{name:'Añadir a la sala'}).click();
+  await panel(host).locator('[data-title]').filter({hasText:'Video de prueba'}).waitFor();
+  assert.equal(await panel(guest).locator('iframe').count(),0);
   // Production and the desktop app identify the official YouTube widget over HTTPS.
   if (/^(https:|squad:)/.test(host.url())) {
     await host.evaluate(()=>{
@@ -45,14 +95,14 @@ export async function musicSmoke(host,guest) {
           window.musicProviderEvents.push(event.data.action === 'unavailable' ? 'unavailable ('+event.data.code+')' : event.data.action);
       });
     });
-    await panel(host).getByRole('button',{name:'Escuchar',exact:true}).click();
+    await panel(host).getByRole('button',{name:'Escuchar aquí',exact:true}).click();
     const frame=panel(host).locator('iframe');
     await frame.scrollIntoViewIfNeeded();
     await host.frameLocator('#room-music iframe').locator('iframe[src*="youtube.com/embed/"]').waitFor({timeout:35000});
     const result=await host.waitForFunction(()=>window.musicProviderEvents.find(event=>event==='playing'||event==='blocked'||event.startsWith('unavailable')),null,{timeout:20000})
       .then(value=>value.jsonValue()).catch(()=> 'sin confirmación de reproducción');
     console.log('Reproductor oficial de YouTube ('+new URL(host.url()).protocol+'): '+result);
-    await panel(host).getByRole('button',{name:'Dejar de escuchar'}).click();
+    await panel(host).getByRole('button',{name:'Silenciar solo para mí'}).click();
   }
   await panel(guest).getByRole('button',{name:'Siguiente'}).click();
   for(const page of [host,guest]) await page.locator('#members [data-music-bot]').waitFor({state:'detached'});
