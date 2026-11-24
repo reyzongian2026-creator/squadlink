@@ -125,3 +125,24 @@ La integración de voz en Chromium agotó dos veces el tiempo de espera del mens
 El recorrido reproduce dos tonos sin abrir el micrófono y prueba una grabación local con entrada sintética y escucha al 200 %. Comprueba la reproducción y la liberación de las pistas, los reproductores y los contextos de audio. En una prueba de dos segundos con el filtro existente, a 44,1 y 48 kHz, el nivel RMS del siseo sintético en la segunda mitad cayó 24,1 dB y la señal suave de dos tonos cayó 0,34 dB. La prueba mide señales digitales en el filtro. Para localizar un ruido físico hace falta escuchar una muestra tomada con el micrófono afectado.
 
 [Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45367368732) · [macOS](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45367368643)
+
+## Memoria durante una partida en 0.5.0-preview.23
+
+Se compararon las aplicaciones empaquetadas .22 y .23 con el mismo recorrido, dos participantes y audio sintético. Cada valor es la mediana de cinco muestras de memoria residente (working set) de los procesos de Squadlink, separadas por 180 ms. Cada sistema y versión se ejecutó en un runner distinto.
+
+| Sistema | Escenario | .22 (MiB) | .23 (MiB) | Cambio |
+|---|---|---:|---:|---:|
+| Windows | Inicio | 437,5 | 437,4 | +0,0 % |
+| Windows | Lobby visible con llamada | 675,4 | 687,7 | +1,8 % |
+| Windows | Sala visible con llamada | 676,7 | 561,8 | -17,0 % |
+| Windows | Voz y radio con la sala minimizada | 778,7 | 684,2 | -12,1 % |
+| Windows | Voz y radio con el lobby minimizado | 762,3 | 555,6 | -27,1 % |
+| macOS | Inicio | 563,7 | 557,1 | -1,2 % |
+| macOS | Lobby visible con llamada | 694,7 | 686,0 | -1,3 % |
+| macOS | Sala visible con llamada | 578,1 | 570,3 | -1,3 % |
+| macOS | Voz y radio con la sala minimizada | 594,6 | 591,3 | -0,6 % |
+| macOS | Voz y radio con el lobby minimizado | 649,7 | 532,6 | -18,0 % |
+
+Al minimizar y restaurar la ventana se comprobó que seguían avanzando el audio recibido y la radio. Se verificó la salida del proceso que dibujaba el lobby y la continuidad del proceso de la llamada. El modo completo y los ajustes abiertos tienen un comportamiento distinto.
+
+Ejecuciones comparables de Windows [antes](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45370498859) y [después](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45371482909), y de macOS [antes](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45370501746) y [después](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45371482952).

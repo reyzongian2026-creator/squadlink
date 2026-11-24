@@ -6,6 +6,8 @@ Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte
 
 **[Descargar Squadlink](https://squadlink-lobby.onrender.com/descargar.html)**
 
+Para jugar mientras hablas, usa **Ajustes → Rendimiento → Bajo consumo**. Está activo de forma predeterminada. Con una llamada activa, Squadlink libera la vista del lobby al abrir la sala o al minimizar el lobby. Puedes restaurar la ventana y seguir en la misma llamada con la radio que elegiste.
+
 Desde **0.5.0-preview.20**, abre **Ajustes → Actualizaciones**. Cuando haya una versión nueva, pulsa **Descargar actualización**. Puedes seguir en la llamada mientras se descarga. Sal de la sala y pulsa **Instalar y reiniciar** cuando estés listo. Squadlink vuelve a abrirse con tu perfil y conserva los cartuchos instalados. Si tienes la .19 o una versión anterior, instala esta primera actualización con la descarga de arriba.
 
 A partir de la .21 puedes cancelar una descarga durante una llamada. Cuando una descarga termine, puedes cerrar Squadlink y volver a **Ajustes** más tarde para instalarla. La aplicación comprueba el archivo guardado. Si el almacén seguro del equipo está disponible, también puedes instalarlo sin conexión.
