@@ -30,6 +30,8 @@
   overflow: hidden;
 }
 .kit-stage {
+  position: relative;
+  padding-top: 2.6rem;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -37,6 +39,14 @@
   background: radial-gradient(ellipse at 51% 34%, #33414e 0%, #202936 48%, #151924 86%);
 }
 #kit-voxel { width: min(100%, 266px); aspect-ratio: 320 / 510; }
+#kit-voxel.kit-closeup { aspect-ratio: 1; }
+#kit-closeup {
+  position: absolute; z-index: 1; top: .5rem; left: 50%; transform: translateX(-50%);
+  white-space: nowrap; padding: .3rem .58rem; border: 1px solid #637185; border-radius: 8px;
+  background: #1c2430; color: #f0f3f7; font: inherit; font-size: .75rem; cursor: pointer;
+}
+#kit-closeup[aria-pressed=true] { background: #38455c; border-color: #b4c7e9; }
+.kit-controls fieldset[hidden] { display: none; }
 #kit-voxel svg { width: 100%; height: 100%; display: block; }
 .kit-controls, .kit-ranking { padding: var(--panel-inset); }
 #kit-nick, #kit-status, #kit-rank-status, #kit-ranking .name { overflow-wrap: anywhere; }

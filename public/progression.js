@@ -1,5 +1,5 @@
 import {portraitBadge, updatePortrait} from './portrait-badge.js';
-import {voxelAvatar} from './character-art.js';
+import {voxelAvatar, portraitAvatar} from './character-art.js';
 import {avatarOptions, defaultAvatar, normalizeAvatar, progressForXp} from './character-model.js';
 export {voxelAvatar};
 const skins = [
@@ -23,7 +23,7 @@ export function mountLoadout({api, getSelf, tell}) {
   root.innerHTML = `
     <div class="kit-heading"><h2>Mi personaje</h2><span id="kit-level">Nivel 1</span></div>
     <div class="kit-panels"><article class="kit-editor">
-      <div class="kit-stage"><div id="kit-voxel" role="img" aria-label="Vista previa de tu personaje"></div></div>
+      <div class="kit-stage"><button type="button" id="kit-closeup" aria-pressed="false" aria-controls="kit-voxel">Acercar rostro</button><div id="kit-voxel" role="img" aria-label="Vista previa de tu personaje"></div></div>
       <div class="kit-controls"><h3 id="kit-nick">Invitado</h3>
         <div class="kit-xp"><span id="kit-xp-label">0 / 100 XP</span><progress id="kit-xp" max="100" value="0" aria-label="Progreso al siguiente nivel"></progress></div>
         <div id="kit-options"></div>
@@ -35,17 +35,27 @@ export function mountLoadout({api, getSelf, tell}) {
       <div class="kit-tabs" role="group" aria-label="Clasificación por minijuego"><button type="button" data-rank="reflex" aria-pressed="true">Reflejos</button>
       <button type="button" data-rank="sequence" aria-pressed="false">Memoria</button></div>
       <p id="kit-rank-scope"></p><ol id="kit-ranking"></ol><p id="kit-rank-status" role="status"></p></article></div>`;
-  const groups = {gender:'Identidad del personaje', species:'Especie', build:'Silueta', facialHair:'Vello facial',
+  const groups = {gender:'Identidad del personaje', species:'Especie', build:'Silueta', hairStyle:'Cabello', hairColor:'Color de cabello', facialHair:'Vello facial',
     skin:'Tono base', outfit:'Chaqueta', headgear:'Accesorio'};
+  const hairSamples = [null, "#25212b", "#86583c", "#dfb875", "#be5143", "#5689c9", "#9674c6", "#e0e0e9"];
   const sets = Object.fromEntries(Object.keys(groups).map(key =>
-    [key, key === 'skin' ? skins : key === 'outfit' ? outfits : avatarOptions[key].map(label => [label])]));
+    [key, key === 'skin' ? skins : key === 'outfit' ? outfits : avatarOptions[key].map((label, index) => [label, key === 'hairColor' ? hairSamples[index] : null])]));
   let lastArt = '';
   let stageVisible = !window.IntersectionObserver;
   let profile, draft = {...defaultAvatar}, dirty = false, saving = false;
   let selectedGame = 'reflex', rankVersion = 0, profileVersion = 0;
+  let closeup = false;
+  $('kit-closeup').onclick = () => {
+    closeup = !closeup;
+    $('kit-closeup').setAttribute('aria-pressed', String(closeup));
+    $('kit-voxel').classList.toggle('kit-closeup', closeup);
+    render();
+  };
   const selectors = {};
+  const hairGroups = {};
   for (const [key, items] of Object.entries(sets)) {
     const group = document.createElement('fieldset');
+    if (key === 'hairStyle' || key === 'hairColor') hairGroups[key] = group;
     const title = document.createElement('legend');
     title.textContent = groups[key];
     group.append(title);
@@ -76,12 +86,15 @@ export function mountLoadout({api, getSelf, tell}) {
     $('kit-save').textContent = guest ? 'Elegir apodo' : profile && !profile.characterCreated ? 'Crear mi personaje' : 'Guardar apariencia';
     $('kit-save').disabled = !guest && (saving || !profile || (!dirty && profile.characterCreated));
     $('kit-rank-refresh').textContent = guest ? 'Elegir apodo' : 'Actualizar';
-    const key = JSON.stringify([draft, evolution.aura]);
+    const key = JSON.stringify([draft, evolution.aura, closeup]);
     if (stageVisible && key !== lastArt) {
-      $('kit-voxel').innerHTML = voxelAvatar(draft, level);
+      $('kit-voxel').innerHTML = (closeup ? portraitAvatar : voxelAvatar)(draft, level);
       $('kit-voxel').setAttribute('aria-label', [avatarOptions.species[draft.species], avatarOptions.gender[draft.gender], evolution.name].join(' · '));
       lastArt = key;
     }
+    const hasHair = draft.species === 0 || draft.species === 1;
+    hairGroups.hairStyle.hidden = !hasHair;
+    hairGroups.hairColor.hidden = !hasHair || draft.hairStyle === 1;
     for (const [key, buttons] of Object.entries(selectors)) {
       buttons.forEach((btn, i) => btn.setAttribute('aria-pressed', String(i === draft[key])));
     }

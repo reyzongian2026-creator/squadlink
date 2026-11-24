@@ -65,26 +65,91 @@ function silhouette(id, build) {
     + '<feDisplacementMap in="SourceGraphic" in2="map" scale="78" xChannelSelector="R" yChannelSelector="G"/></filter>';
 }
 
-const gearShapes = [
-  '',
-  // Rounded cushions, double headband and brushed metal hinges; origin at eyes.
-  '<path d="M-46 8 C-53-61 48-68 49 6" fill="none" stroke="#263445" stroke-width="7.5"/>'
-    + '<path d="M-46-1 C-46-57 42-62 48-2" fill="none" stroke="#a3bdcb" stroke-width="2.1"/>'
-    + '<g fill="url(#METAL)" stroke="#243341" stroke-width="1.6">'
-    + '<rect x="-53" y="-11" width="12" height="28" rx="5" transform="rotate(-5 -47 3)"/>'
-    + '<rect x="41" y="-11" width="12" height="28" rx="5" transform="rotate(5 47 3)"/></g>'
-    + '<path d="M-49-4v13m98-13v13" fill="none" stroke="#81eee2" stroke-width="2.5" stroke-linecap="round"/>',
-  // Curved crown, fitted band and a peaked brim with a visible underside.
-  '<path d="M-43-18 Q-43-53-9-55 Q27-63 38-29 L39-20 Q-2-13-43-18Z" fill="url(#GEAR)" stroke="#273647" stroke-width="1.4"/>'
-    + '<path d="M-23-19 Q-24-43-8-54 M12-23 Q12-43 2-54" fill="none" stroke="#9adad4" stroke-opacity=".39" stroke-width="1.3"/>'
-    + '<path d="M-44-23 Q-3-33 37-26 L40-20 Q-5-13-43-17Z" fill="#2b4055"/>'
-    + '<path d="M-32-19 Q-3-28 35-25 Q50-23 57-16 Q41-11 21-14 Q-4-18-32-14Z" fill="url(#METAL)" stroke="#283746" stroke-width="1.3"/>'
-    + '<path d="M-6-55 q3-4 7 0" fill="none" stroke="#425565" stroke-width="3" stroke-linecap="round"/>',
-  // Unobstructed upper and lower edge, allowing the actual eyes to show through.
-  '<path d="M-48-6 L-34-9 Q0-14 38-9 L48-6 46 1 37 1 Q33 12 15 13 Q6 13 1 7 Q-3 6-8 10 Q-19 16-34 9 Q-39 7-40 1L-47 0Z" fill="url(#GLASS)" stroke="#243c50" stroke-width="1.6"/>'
-    + '<path d="M-41-6 Q0-15 41-6" stroke="#c9ffff" stroke-width="2.2" fill="none"/>'
-    + '<path d="M-30-4l8-2-8 10-7 0zm12-2l4-1-7 8-3 0z" fill="#dffbff" opacity=".53"/>',
+// Landmarks measured in the 128px portrait. The same coordinates are mapped back
+// to each body crop so the ear cushions, brim and glass fit both sizes.
+// [left/right ear, ear centre Y, crown Y, cap half-width, cap top/brim Y,
+//  visor half-width/height]. Antennae and fins are outside the head measurements.
+const gearFits = [
+  [[31,96,55,5,33,5,38,29,8],[31,97,55,7,33,5,39,29,8],[32,96,55,4,33,4,38,28,8]],
+  [[40,87,54,8,26,11,38,24,7],[40,84,54,13,23,13,40,21,7],[39,89,54,10,26,10,39,24,7]],
+  [[44,84,52,27,24,15,39,21,8],[45,82,51,26,22,15,39,20,8],[45,82,52,28,22,16,40,20,8]],
+  [[11,117,54,8,49,7,34,52,13],[11,114,54,8,46,6,34,49,15],[7,118,55,9,48,6,35,52,15]],
 ];
+
+// Bare scalps sit below the original hair volume. Fit the headband against the
+// actual crown, and shorten the cap to meet the shaved temples.
+const bareHeadFits = [
+  [[36,89,19,28,12],[36,90,18,29,11],[36,89,19,28,12]],
+  [[42,85,19,24,13],[44,81,27,20,19],[41,87,19,25,13]],
+];
+
+function portraitTransform(art, mini) {
+  const [x,y,,,,crop] = art;
+  return mini ? '' : 'translate('+x+' '+y+') scale('+crop/128+') translate(-64 -50)';
+}
+
+function headphones(look, fit, id) {
+  let [left,right,ear,crown] = fit;
+  if (look.species < 2 && look.hairStyle === 1) {
+    [left,right,crown] = bareHeadFits[look.species][look.gender];
+  }
+  const radius = (right-left)/2, centre = (right+left)/2;
+  // Position the padded cups separately so their proportions remain intact even
+  // on heads with a tall crown or low ears.
+  const band = '<g transform="translate('+centre+' '+ear+') scale('+radius/50+' '+(ear-crown)/50+')">'
+    + '<path d="M-50 1 C-54-65 50-70 50 1" fill="none" stroke="#182631" stroke-width="6.2"/>'
+    + '<path d="M-50-2 C-52-66 49-66 50-3" fill="none" stroke="url(#'+id+'metal)" stroke-width="3.4"/>'
+    + '<path d="M-34-38 C-17-53 12-55 32-40" fill="none" stroke="#263842" stroke-width="5.3" stroke-linecap="round"/>'
+    + '<path d="M-31-41 C-14-51 12-53 29-42" fill="none" stroke="#aac1c7" stroke-opacity=".7" stroke-width="1.1" stroke-linecap="round"/></g>';
+  function cup(x, mirror) {
+    const size = look.species === 3 ? .85 : radius/42;
+    return '<g transform="translate('+x+' '+ear+') scale('+mirror*size+' '+size+') rotate(-7)">'
+      + '<path d="M-4-13 Q1-16 5-10 L6 8 Q4 14-1 14 L-5 12 Q-9 6-8-3Z" fill="#1b2630" stroke="#121b26" stroke-width="1.2"/>'
+      + '<path d="M-6-10 Q-3-14 1-12 L2 10 Q0 13-4 12 Q-8 8-8-2Z" fill="url(#'+id+'metal)"/>'
+      + '<path d="M-5-6 Q-4-9-2-9 L-1 8 Q-3 10-5 7Z" fill="#354852"/>'
+      + '<path d="M-4-4v8" stroke="'+jackets[look.outfit]+'" stroke-width="1.8" stroke-linecap="round"/>'
+      + '<path d="M-3-13v-4q0-2 2-3" fill="none" stroke="#748995" stroke-width="2"/></g>';
+  }
+  return band+cup(left,1)+cup(right,-1);
+}
+
+function cap(look, fit, id) {
+  let [left,right,,,radius,top,brim] = fit;
+  if (look.species < 2 && look.hairStyle === 1)
+    [left,right,,radius,top] = bareHeadFits[look.species][look.gender];
+  const centre = (left+right)/2;
+  return '<g transform="translate('+centre+' '+brim+') scale('+radius/48+' '+(brim-top)/50+')">'
+    + '<path d="M-48 4 C-49-22-35-44-9-49 Q8-55 27-43 Q46-30 48-3 L46 4 Q6-5-46 7Z" fill="url(#'+id+'fabric)" stroke="#1e2f3a" stroke-width="1.5"/>'
+    + '<path d="M-47 2 Q-47-30-21-44 Q-31-33-30-5Z" fill="#172d3a" opacity=".4"/>'
+    + '<path d="M-29-3 Q-29-29-9-47 M26-6 Q25-32 1-48" fill="none" stroke="#273e4b" stroke-width="1.9"/>'
+    + '<path d="M-30-5 Q-31-28-13-44 M24-8 Q23-30 5-45" fill="none" stroke="#9cb6b3" stroke-opacity=".6" stroke-width=".85" stroke-dasharray="1.8 1.2"/>'
+    + '<path d="M-8-26 l6-4 5 2 -10 7 -4-2z" fill="#b8cec6" stroke="#425b64" stroke-width=".7"/>'
+    + '<path d="M-46 1 Q-9-12 40-4 L46 1 Q-4-5-45 7Z" fill="#253b47"/>'
+    + '<path d="M-40 4 Q-19-7 14-7 Q43-7 61 4 Q60 11 34 12 Q20 9 5 5 Q-21 0-40 6Z" fill="#1c303b" stroke="#1a2c36" stroke-width="1.2"/>'
+    + '<path d="M-40 3 Q-18-8 14-8 Q42-8 60 3 Q54 8 37 8 Q22 7 8 3 Q-17-2-40 5Z" fill="url(#'+id+'bill)"/>'
+    + '<path d="M-29 1 Q0-8 24-4 Q44-3 54 2" fill="none" stroke="#93acaf" stroke-opacity=".63" stroke-width="1" stroke-dasharray="2 1.7"/>'
+    + '<ellipse cx="-5" cy="-49" rx="4.5" ry="2.3" fill="#516b75"/></g>';
+}
+
+function visor(look, fit, id) {
+  const radius = fit[7], height = fit[8];
+  // The broad robot display takes a single curved shield; organic faces use
+  // separate lenses with a raised bridge that clears the nose.
+  if (look.species === 3) {
+    return '<g transform="translate(64 50) scale('+radius/50+' '+height/14+')">'
+      + '<path d="M-51-6 Q-45-14-2-14 Q37-16 51-8 L49 7 Q47 14 33 14 Q12 13 4 10 Q0 9-5 11 Q-20 16-38 13 Q-49 12-50 6Z" fill="url(#'+id+'glass)" stroke="#3c6374" stroke-width="1.7"/>'
+      + '<path d="M-46-8 Q-20-16 9-13 Q33-13 46-9 M-37-6l7-2" fill="none" stroke="#cbedea" stroke-opacity=".8" stroke-width="1.2"/>'
+      + '<path d="M-53-4v9m105-10v9" stroke="url(#'+id+'metal)" stroke-width="3.7" stroke-linecap="round"/></g>';
+  }
+  const lens = '<path d="M-47-5 Q-35-13-8-9 L-4-6 Q-5 3-11 9 Q-19 15-34 11 Q-45 9-46 2Z" fill="url(#'+id+'glass)" stroke="#344f60" stroke-width="2.1"/>';
+  return '<g transform="translate(64 50) scale('+radius/50+' '+height/12+')">'
+    + '<path d="M-52-4l7 1M45-3l7-1" stroke="#293d48" stroke-width="4.2" stroke-linecap="round"/>'
+    + lens+'<g transform="scale(-1 1)">'+lens+'</g>'
+    + '<path d="M-6-5 Q0-9 6-5" fill="none" stroke="#3b5464" stroke-width="3"/>'
+    + '<path d="M-43-6 Q-30-12-12-9 M11-9 Q31-13 43-6" fill="none" stroke="#d3ebe7" stroke-width="1.1"/>'
+    + '<path d="M-37-3l9-3-7 9m49-7l7-2" fill="none" stroke="#d2fff9" stroke-opacity=".65" stroke-width="1.4"/></g>';
+}
+
 const beardShapes = [
   '',
   '<path d="M0-7 C-7-11-11-5-18-4 Q-25-2-26-8 Q-30 2-23 4 Q-14 8-2 0 L0-2 3 1 Q14 8 23 3 Q28 0 26-7 Q24-2 18-4 C12-5 8-11 0-7Z"/>',
@@ -94,27 +159,31 @@ const beardShapes = [
 
 function accessories(look, art, mini, id) {
   const [x,y,mouthX,mouthY,width,crop] = art;
-  const eyeX = mini ? 64 : x, eyeY = mini ? 50 : y;
-  const scale = mini ? 128 / crop : 1;
-  const mouth = [eyeX+(mouthX-x)*scale, eyeY+(mouthY-y)*scale];
-  const gear = gearShapes[look.headgear].replaceAll('METAL',id+'metal')
-    .replaceAll('GEAR',id+'fabric').replaceAll('GLASS',id+'glass');
-  const hair = beardShapes[look.facialHair];
-  const size = (width * scale / 100).toFixed(3);
-  return (hair ? '<g transform="translate('+mouth.join(' ')+') scale('+size+')" fill="url(#'+id+'hair)">'+hair+'</g>' : '')
-    + (gear ? '<g transform="translate('+eyeX+' '+eyeY+') scale('+size+')">'+gear+'</g>' : '');
+  const scale = 128/crop;
+  const mouth = [64+(mouthX-x)*scale,50+(mouthY-y)*scale];
+  const size = (width*scale/100).toFixed(3);
+  const facialHair = beardShapes[look.facialHair];
+  const beard = facialHair ? '<g transform="translate('+mouth.join(' ')+') scale('+size+')" fill="url(#'+id+'beard)">'+facialHair+'</g>' : '';
+  const fit = gearFits[look.species][look.gender];
+  let gear = '';
+  if (look.headgear === 1) gear = headphones(look, fit, id);
+  if (look.headgear === 2) gear = cap(look, fit, id);
+  if (look.headgear === 3) gear = visor(look, fit, id);
+  return beard || gear ? '<g transform="'+portraitTransform(art,mini)+'">'+beard+gear+'</g>' : '';
 }
 
 function gearMaterials(id, look) {
   let defs = '';
-  if (look.headgear === 1 || look.headgear === 2)
-    defs += gradient(id+'metal',['#e7f0f3','#80a5af','#4d6578','#283c50']);
-  if (look.headgear === 2)
-    defs += gradient(id+'fabric',['#a4c4c2','#5b797e','#3a5360','#283947']);
+  if (look.headgear === 1 || (look.headgear === 3 && look.species === 3))
+    defs += gradient(id+'metal',['#e4e8df','#93a7aa','#5b7380','#2e4150']);
+  if (look.headgear === 2) {
+    defs += '<radialGradient id="'+id+'fabric" cx=".32" cy=".22" r=".9"><stop stop-color="#829b9c"/><stop offset=".4" stop-color="#576f79"/><stop offset=".8" stop-color="#344c59"/><stop offset="1" stop-color="#263c49"/></radialGradient>';
+    defs += gradient(id+'bill',['#82999f','#617b83','#3f5a67','#304553']);
+  }
   if (look.headgear === 3)
-    defs += '<linearGradient id="'+id+'glass" x2=".45" y2="1"><stop stop-color="#69ded7" stop-opacity=".86"/>'
-      + '<stop offset=".55" stop-color="#438db0" stop-opacity=".63"/><stop offset="1" stop-color="#343f72" stop-opacity=".85"/></linearGradient>';
-  if (look.facialHair) defs += gradient(id+'hair',['#644a3f','#422e2c','#2c2326','#211e24']);
+    defs += '<linearGradient id="'+id+'glass" x2=".23" y2="1"><stop stop-color="#7cd5cf" stop-opacity=".53"/>'
+      + '<stop offset=".46" stop-color="#468394" stop-opacity=".23"/><stop offset="1" stop-color="#303e62" stop-opacity=".5"/></linearGradient>';
+  if (look.facialHair) defs += gradient(id+'beard',['#644a3f','#422e2c','#2c2326','#211e24']);
   return defs;
 }
 
@@ -135,23 +204,77 @@ function atmosphere(stage, mini, id) {
   return {defs:field,back,front};
 }
 
+// Each ramp is calibrated for the darker original hair texture. Root shadows,
+// reflected light and individual strand highlights remain distinct.
+const hairRamps = [
+  null,
+  ['#050609','#14171c','#383b43','#676c72','#96979b'],
+  ['#150c0c','#4b2e25','#8e6349','#c39e78','#e9d4a9'],
+  ['#30201c','#937444','#cdb478','#f1dfae','#fff7de'],
+  ['#240c13','#6b2326','#ba4e40','#df8972','#f7c5a5'],
+  ['#070e1c','#22466e','#487cb5','#80b1cf','#cee8ed'],
+  ['#180b20','#503165','#956ca7','#c29bce','#f1d9eb'],
+  ['#242430','#828390','#babac0','#e9e5df','#fffaf1'],
+];
+
+function hairMaterial(id, tone) {
+  const stops = hairRamps[tone];
+  const channels = ['R','G','B'].map((channel,index) => {
+    const offset = 1+index*2;
+    const values = stops.map(color=>(parseInt(color.slice(offset,offset+2),16)/255).toFixed(3));
+    return '<feFunc'+channel+' type="table" tableValues="'+values.join(' ')+'"/>';
+  }).join('');
+  return '<filter id="'+id+'" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">'
+    + '<feColorMatrix type="saturate" values="0"/><feComponentTransfer>'
+    + '<feFuncR type="gamma" exponent=".72"/><feFuncG type="gamma" exponent=".72"/><feFuncB type="gamma" exponent=".72"/></feComponentTransfer>'
+    + '<feComponentTransfer>'+channels+'</feComponentTransfer></filter>';
+}
+
+function costume(look, art, mini, id) {
+  const width = mini ? 128 : 320, height = mini ? 128 : 510;
+  const prefix = mini ? 'face-' : '', file = look.species+'-'+look.gender;
+  const hasHair = look.species < 2 && look.hairStyle !== 1;
+  const capCoversHair = hasHair && look.headgear === 2;
+  const bald = look.species < 2 && (!hasHair || capCoversHair);
+  const base = bald ? prefix+'bald' : mini ? 'face' : 'avatar';
+  const region = prefix+(bald ? 'bald-' : '');
+  let defs = material(id+'skin',skins[look.species][look.skin]) + material(id+'coat',jackets[look.outfit]);
+  let image = materialImage(base,file,width,height)
+    + materialImage(region+'skin',file,width,height,id+'skin')
+    + materialImage(region+'coat',file,width,height,id+'coat');
+  if (hasHair && (look.hairColor || capCoversHair)) {
+    const color = look.hairColor ? id+'hairColor' : '';
+    if (color) defs += hairMaterial(color,look.hairColor);
+    let hair = materialImage(prefix+'hair',file,width,height,color);
+    if (capCoversHair) {
+      const fit = gearFits[look.species][look.gender];
+      const left = Math.round((fit[0]+fit[1])/2-fit[4]), right = left+fit[4]*2, brim = fit[6];
+      // Only expose hair below the brim. The sloped sides retain hanging locks
+      // and braids without letting an old bun protrude at the sides of the cap.
+      const cut = 'M-500 360 L'+(left-15)+' '+(brim+24)+' Q'+(left-4)+' '+(brim+10)+' '+left+' '+(brim+2)
+        + ' Q64 '+(brim-8)+' '+right+' '+(brim+2)+' Q'+(right+4)+' '+(brim+10)+' '+(right+15)+' '+(brim+24)
+        + ' L650 360 V850 H-500Z';
+      defs += '<clipPath id="'+id+'underBrim"><path transform="'+portraitTransform(art,mini)+'" d="'+cut+'"/></clipPath>';
+      hair = '<g clip-path="url(#'+id+'underBrim)">'+hair+'</g>';
+    }
+    image += hair;
+  }
+  return {defs,image};
+}
+
 function renderAvatar(input, level, mini) {
   const look = normalizeAvatar(input);
-  const file = look.species+'-'+look.gender;
+  const art = faces[look.species][look.gender];
   const id = 'sqa'+(++nextId)+'-'; // SVG paint servers share one ID space across the document.
   const width = mini ? 128 : 320, height = mini ? 128 : 510;
   const stage = evolutionForLevel(level).aura;
   const aura = energy[stage] ? atmosphere(stage, mini, id) : {defs:'',back:'',front:''};
-  const skin = material(id+'skin',skins[look.species][look.skin]);
-  const outfit = material(id+'coat',jackets[look.outfit]);
+  const {defs,image} = costume(look,art,mini,id);
   const shape = !mini && look.build ? silhouette(id+'build',look.build) : '';
-  const image = materialImage(mini ? 'face' : 'avatar',file,width,height)
-    + materialImage(mini ? 'face-skin' : 'skin',file,width,height,id+'skin')
-    + materialImage(mini ? 'face-coat' : 'coat',file,width,height,id+'coat');
   return '<svg aria-hidden="true" focusable="false" viewBox="0 0 '+width+' '+height+'" width="'+width+'" height="'+height+'" xmlns="http://www.w3.org/2000/svg">'
-    + '<defs>'+skin+outfit+shape+aura.defs+gearMaterials(id,look)+'</defs>'+aura.back
+    + '<defs>'+defs+shape+aura.defs+gearMaterials(id,look)+'</defs>'+aura.back
     + (shape ? '<g filter="url(#'+id+'build)">'+image+'</g>' : image)
-    + accessories(look,faces[look.species][look.gender],mini,id)+aura.front+'</svg>';
+    + accessories(look,art,mini,id)+aura.front+'</svg>';
 }
 
 // Preserve the editor's public export for older desktop integrations.

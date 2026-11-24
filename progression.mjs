@@ -172,8 +172,11 @@ export function createProgression({reject,throttle,now=Date.now,env=process.env,
       const payload = row=>({profile:display(row),scope:db.scope,...receipt(row,device)});
       async function change(modify,restored) {
         return access(()=>db.update(id,stored=>{
-          const base = restored && (!stored || restored.revision > stored.revision && restored.xp >= stored.xp)
-            ? restored : stored || initial(id,session.nick);
+          let base = stored || restored || initial(id,session.nick);
+          if (stored && restored && restored.revision > stored.revision && restored.xp >= stored.xp) {
+            // A newer signed backup from an older app can omit appearance fields it never supported.
+            base = {...restored,avatar:{...stored.avatar,...restored.avatar}};
+          }
           const next = modify(base);
           return next.nick !== session.nick ? {...next,nick:session.nick,revision:next.revision+1} : next;
         }));
@@ -186,15 +189,23 @@ export function createProgression({reject,throttle,now=Date.now,env=process.env,
         if (!originalAvatarFields.every(key => fields.includes(key)) ||
             !fields.every(key => validAvatarOption(key,data[key])))
           reject(400,'El aspecto elegido es inválido.');
+        const expected = data.expectedRevision;
+        if (expected !== undefined && (!Number.isSafeInteger(expected) || expected < 0))
+          reject(400,'La revisión del personaje es inválida.');
         const configured = characterFields.every(key => fields.includes(key));
-        return payload(await change(row => {
+        let conflict = false;
+        const updated = await change(row => {
+          conflict = expected !== undefined && expected !== row.revision;
+          if (conflict) return row;
           const previous = normalizeAvatar(row.avatar);
           if (fields.every(key => data[key] === previous[key]) && (!configured || row.characterCreated))
             return row;
           const avatar = {...previous};
           for (const key of fields) avatar[key] = data[key];
           return {...row,avatar,characterCreated:row.characterCreated === true || configured,revision:row.revision+1};
-        }));
+        });
+        if (conflict) reject(409,'Tu personaje cambió en otro dispositivo. Revisa la apariencia antes de guardar.');
+        return payload(updated);
       }
       if (action === 'record') {
         const {game,value} = data;

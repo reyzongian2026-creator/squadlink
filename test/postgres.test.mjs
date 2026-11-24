@@ -61,7 +61,7 @@ test('PostgreSQL real: concurrencia entre pools, rollback, ranking y perfil HTTP
     return player;
   }
   const player = await reconnect();
-  const avatar = {skin:1,outfit:2,headgear:3};
+  const avatar = {skin:1,outfit:2,headgear:3,species:1,gender:1,build:0,facialHair:3,hairStyle:1,hairColor:5};
   const saved = await player.hit('progress/avatar', avatar);
   assert.equal(saved.status,200);
   assert.equal(saved.data.scope,'global');

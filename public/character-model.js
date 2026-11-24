@@ -10,10 +10,12 @@ export const avatarOptions = {
   species: ['Humano', 'Humanoide', 'Alienígena', 'Robot'],
   build: ['Recta', 'Curvilínea', 'Robusta'],
   facialHair: ['Ninguno', 'Bigote', 'Barba', 'Perilla'],
+  hairStyle: ['Con cabello', 'Sin cabello'],
+  hairColor: ['Color original', 'Negro', 'Castaño', 'Rubio', 'Rojo', 'Azul', 'Violeta', 'Blanco'],
 };
 
 export const defaultAvatar = Object.freeze({
-  skin: 0, outfit: 0, headgear: 0, gender: 2, species: 0, build: 0, facialHair: 0,
+  skin: 0, outfit: 0, headgear: 0, gender: 2, species: 0, build: 0, facialHair: 0, hairStyle: 0, hairColor: 0,
 });
 
 export function validAvatarOption(field, value) {

@@ -73,10 +73,26 @@ export async function domSmoke(Window) {
     assert.match(el('members').textContent, /Prueba/);
 
     await until(() => el('kit-rank-scope')?.textContent.includes('Menor tiempo'));
-    document.querySelector('#kit-options [aria-label="Gorra"]').click();
+    const option = label => document.querySelector('#kit-options [aria-label="' + label + '"]');
+    option('Azul').click();
+    option('Sin cabello').click();
+    assert.equal(option('Azul').closest('fieldset').hidden, true);
+    option('Robot').click();
+    assert.equal(option('Con cabello').closest('fieldset').hidden, true);
+    option('Humano').click();
+    assert.equal(option('Sin cabello').getAttribute('aria-pressed'), 'true');
+    option('Con cabello').click();
+    assert.equal(option('Azul').closest('fieldset').hidden, false);
+    assert.equal(option('Azul').getAttribute('aria-pressed'), 'true');
+    el('kit-closeup').click();
+    assert.equal(el('kit-closeup').getAttribute('aria-pressed'), 'true');
+    el('kit-closeup').click();
+    option('Gorra').click();
+    option('Sin cabello').click();
     el('kit-save').click();
     await until(() => el('kit-status').textContent.includes('Apariencia guardada'));
-    assert.equal((await player.hit('progress/profile', {})).data.profile.avatar.headgear, 2);
+    const savedLook = (await player.hit('progress/profile', {})).data.profile.avatar;
+    assert.deepEqual([savedLook.headgear, savedLook.hairStyle, savedLook.hairColor], [2, 1, 5]);
     document.querySelector('[data-rank="sequence"]').click();
     await until(() => el('kit-rank-scope').textContent.includes('Más rondas seguidas'));
 
