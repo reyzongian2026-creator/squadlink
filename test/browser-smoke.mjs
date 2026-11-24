@@ -61,6 +61,14 @@ async function socialSmoke(host, guest, spectator) {
   await spectator.getByLabel('Tu apodo').fill('Luz');
   await spectator.locator('#submit-entry').click();
   await addFriend(host, spectator);
+  for (const width of [360, 900, 1440]) {
+    await host.setViewportSize({width, height:900});
+    assert.ok(await host.evaluate(() => {
+      const roster = document.querySelector('.friend-roster').getBoundingClientRect();
+      const form = document.querySelector('#friend-form').getBoundingClientRect();
+      return roster.bottom <= form.top && document.documentElement.scrollWidth <= innerWidth;
+    }), 'los contactos aparecen primero y los controles caben a ' + width);
+  }
 
   // Exercise the real time-bounded presence refresh. Share activity before knocking.
   const contact = host.locator('#friends');
@@ -271,6 +279,8 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     await a.getByRole('button', { name: 'Crear sala', exact: true }).first().click();
     await a.getByLabel('Tu apodo').fill('Gian');
     await a.getByLabel('Nombre de la sala').fill('Grupo de prueba');
+    assert.ok(await a.locator('#directory-publish').isChecked());
+    await a.locator('#directory-publish').uncheck();
     await a.getByLabel('Clave').fill('solo-para-prueba');
     await a.locator('#submit-entry').click();
     await a.locator('#room-code').waitFor({ state: 'visible' });

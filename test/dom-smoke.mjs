@@ -58,7 +58,7 @@ export async function domSmoke(Window) {
     await until(() => el('kit-rank-scope').textContent.includes('Más rondas seguidas'));
 
     const outsider = f.player();
-    assert.ok(!(await outsider.hit('directory')).data.rooms.some(item => item.code === code));
+    assert.ok((await outsider.hit('directory')).data.rooms.some(item => item.code === code), 'La nueva sala aparece para otro jugador por defecto');
     el('edit-room-fields').click();
     el('directory-game').value = 'VALORANT';
     el('directory-level').value = 'Intermedio';

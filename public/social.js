@@ -90,7 +90,10 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom }) {
       const dot = document.createElement("i");
       dot.className = online ? "dot online" : "dot";
       dot.setAttribute("aria-hidden", "true");
-      copy.append(dot);
+      const avatar = line("span", Array.from(title)[0]?.toLocaleUpperCase("es") || "?", "friend-avatar");
+      avatar.setAttribute("aria-hidden", "true");
+      avatar.append(dot);
+      box.append(avatar);
     }
     copy.append(line("strong", title));
     if (info) copy.append(line("p", info, "status"));
@@ -171,6 +174,7 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom }) {
           );
         });
     });
+    $("friend-requests").parentElement.hidden = !s.incoming.length && !s.outgoing.length;
     refreshList("friend-requests", [s.incoming, s.outgoing], () => [
       ...s.incoming.map((f) =>
         row(f.nick, "Quiere agregarte como amigo", [

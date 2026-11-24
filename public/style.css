@@ -1581,3 +1581,34 @@ dialog textarea {
   .web-client #directory { gap: 8px; }
   .web-client #directory-refresh { padding-inline: 8px; }
 }
+
+/* The roster stays first at every width; controls wrap within their own panel. */
+#social { container-type: inline-size; }
+#social-content { display: grid; gap: 14px; }
+#social-content[hidden] { display: none; }
+#social-content h3 { margin: 0; font-size: 1rem; line-height: 1.4; }
+#social .social-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; padding: 0; }
+#social :is(.friend-roster,.friend-inbox,.social-contacts,.social-presence) {
+  min-width: 0; border: 1px solid #454550; border-radius: 10px; padding: 14px;
+  background: #292a32; color: #f1f1f5;
+}
+#social .friend-list { border: 0; padding: 0; margin-top: 8px; }
+#friends .social-row { display: grid; grid-template-columns: 36px minmax(0,1fr) auto; gap: 12px; align-items: center; }
+#friends .social-row + .social-row { border-top: 1px solid #454550; }
+.friend-avatar { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #464766; color: #ebebff; font-weight: 700; }
+#friends .friend-avatar .dot { position: absolute; bottom: -1px; right: -1px; width: 11px; height: 11px; border: 2px solid #292a32; margin: 0; }
+#social .inline-form label { display: block; margin: 12px 0 6px; }
+#social .inline-form > div { flex-wrap: wrap; align-items: stretch; }
+#social .inline-form input { flex: 1 1 14ch; width: 0; min-width: min(100%,14ch); }
+#social .inline-form button { flex: 0 0 auto; }
+#social .social-code { margin-top: 12px; padding-top: 10px; border-top: 1px solid #454550; justify-content: space-between; gap: 6px; }
+#social .social-code button { max-width: 100%; }
+#social .requests:empty, #social-status:empty { display: none; }
+#social #game-privacy { margin-top: 8px; }
+body.desktop-shell #social .section-head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+#entry #visibility-help { margin: 0 0 12px; }
+@container (max-width: 620px) {
+  #social .social-grid { grid-template-columns: 1fr; }
+  #friends .social-row { grid-template-columns: 36px minmax(0,1fr); }
+  #friends .social-row .row-actions { grid-column: 2; }
+}

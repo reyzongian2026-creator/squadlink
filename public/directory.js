@@ -14,6 +14,8 @@ export function mountDirectory({ api, getRoom, join, create }) {
   let rooms = [],
     pending,
     loaded = false,
+    paged = false,
+    refreshQueued = false,
     nextOffset = null;
   function draw() {
     const term = query.value.toLocaleLowerCase("es").trim();
@@ -89,7 +91,10 @@ export function mountDirectory({ api, getRoom, join, create }) {
     list.replaceChildren(fragment);
   }
   async function reload(append = false) {
-    if (pending) return pending;
+    if (pending) {
+      if (!append) refreshQueued = true;
+      return pending;
+    }
     refresh.disabled = more.disabled = true;
     status.textContent = "Actualizando salas…";
     pending = api(
@@ -98,6 +103,8 @@ export function mountDirectory({ api, getRoom, join, create }) {
         : "directory",
     )
       .then((result) => {
+        const previous = JSON.stringify(rooms);
+        paged = append;
         rooms = append
           ? [
               ...new Map(
@@ -107,8 +114,7 @@ export function mountDirectory({ api, getRoom, join, create }) {
           : result.rooms;
         nextOffset = result.nextOffset ?? null;
         more.hidden = nextOffset === null;
-        loaded = true;
-        draw();
+        if (!loaded || previous !== JSON.stringify(rooms)) { loaded = true; draw(); }
         status.textContent = "";
       })
       .catch((error) => {
@@ -118,6 +124,10 @@ export function mountDirectory({ api, getRoom, join, create }) {
       .finally(() => {
         pending = null;
         refresh.disabled = more.disabled = false;
+        if (refreshQueued) {
+          refreshQueued = false;
+          return reload();
+        }
       });
     return pending;
   }
@@ -125,5 +135,10 @@ export function mountDirectory({ api, getRoom, join, create }) {
   refresh.onclick = () => reload();
   more.onclick = () => reload(true);
   window.addEventListener("focus", () => reload());
+  window.addEventListener("squad:directory-open", () => reload());
+  window.setInterval(() => {
+    const body = document.body.dataset;
+    if (!document.hidden && !paged && !pending && (body.channel === "directory" || body.workspace === "rooms")) reload();
+  }, 15000);
   return { reload, draw };
 }
