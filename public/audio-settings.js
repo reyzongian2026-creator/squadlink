@@ -87,19 +87,21 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   async function change(patch, confirmation = 'Preferencia de audio actualizada.') {
     if (saving) return;
     saving = true;
+    let message;
     volume.disabled = gain.disabled = true;
     microphone.disabled = speakers.disabled = noise.disabled = refresh.disabled = restore.disabled = true;
     try {
       const voice = getVoice();
       if (voice) await voice.configureAudio(patch);
       else saveAudioSettings({ ...readAudioSettings(), ...patch });
-      status.textContent = confirmation;
+      message = confirmation;
     } catch (err) {
-      status.textContent = err.message;
+      message = err.message;
       onStatus?.(err.message);
     } finally {
       saving = false;
       await render();
+      status.textContent = message;
     }
   }
   microphone.onchange = () => change({ inputId: microphone.value });
