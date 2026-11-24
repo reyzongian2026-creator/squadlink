@@ -163,6 +163,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  const {localAudioBrowser}=await import('../test/support/local-audio-browser.mjs');
  await localAudioBrowser(audioSettings);
  home=await navigate(audioSettings,'Lobby de voz','home');
+ const externalLobby=(await windowState()).views.find(v=>v.host==='home');
  let space=await navigate(home,'Crear sala','app');
  console.log('Motor de sala',space.url());
  await space.locator('#entry[open]').waitFor();assert.ok(await space.locator('#nickname').isHidden());await space.locator('#name').fill('Escuadra Lima');
@@ -171,6 +172,13 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await checkWindow(true);
  await space.getByText('Detalles de sala',{exact:true}).click();
  await space.waitForFunction(()=>/^[A-Z0-9]{6}$/.test(document.querySelector('#room-code')?.textContent));
+ async function openCallHome(){
+  const same=await navigate(space,'Lobby de voz','app');
+  assert.equal(same,space,'El lobby en llamada debe compartir su motor de voz');
+  await same.waitForFunction(()=>document.body.dataset.workspace==='call-home',null,{polling:100});
+  await same.locator('#call-home-panel').getByRole('button',{name:'Mi sala',exact:true}).waitFor();
+  return same;
+ }
  async function openCurrentRoom(){
   const roomPage=await navigate(home,'Mi sala','app');
   assert.equal(roomPage,space,'La llamada debe conservar su vista al navegar');
@@ -178,8 +186,8 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   await checkWindow(true);
  }
  const code=await space.locator('#room-code').innerText();assert.match(code,/^[A-Z0-9]{6}$/);
- home=await navigate(space,'Lobby de voz','home');
- await checkWindow(false);
+ home=await openCallHome();
+ await checkWindow(true);
  await home.getByRole('button',{name:/Escuadra Lima.*Tu sala/}).waitFor();
  await home.getByRole('button',{name:'Activar micrófono',exact:true}).click();
  await home.getByRole('button',{name:'Silenciar',exact:true}).waitFor();
@@ -189,14 +197,14 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await peer.locator('#directory-list [data-room-code="'+code+'"]').click();await peer.locator('#nickname').fill('Amigo');await peer.locator('#code').fill(code);await peer.locator('#submit-entry').click();await peer.locator('#mic').click();
  const sample=p=>p.evaluate(async()=>{for(const pc of window.testPeers){for(const stat of (await pc.getStats()).values()){if(stat.type==='inbound-rtp'&&stat.kind==='audio')return stat.totalAudioEnergy||0;}}return 0;});
  async function audio(previous){let values;for(let i=0;i<100;i++){values=await Promise.all([sample(space),sample(peer)]);if(values.every((v,j)=>v>previous[j]))return values;await delay(250);}throw Error('Falta voz bidireccional '+JSON.stringify(values));}
- const first=await audio([0,0]);await checkWindow(false);await memory('voz');
+ const first=await audio([0,0]);await checkWindow(true);await memory('voz');
  const beforeRoom=await windowState();
  const callView=beforeRoom.views.find(v=>v.host==='app');
- const visibleLobby=beforeRoom.views.find(v=>v.host==='home');
  assert.ok(callView?.pid>0);
+ await onlyCallRenderer(callView,externalLobby);
  await openCurrentRoom();
  await memory('voz con sala visible');
- await onlyCallRenderer(callView,visibleLobby);
+ await onlyCallRenderer(callView,externalLobby);
  await testVoiceQuality(space,peer);
  const {musicSmoke,assertRadioShortcut}=await import('../test/support/music-browser.mjs');
  async function radioAndVoice() {
@@ -255,6 +263,26 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   },hostname);
   assert.deepEqual(input,{code:'KeyR',alt:true,shift:true},hostname+' recibió un acorde incorrecto');
  }
+ // While minimized the native surface is detached, but its session, media and
+ // IPC must remain alive. At restore it must fill the content area and own focus.
+ async function checkCallSurface(attached){
+  let reading;
+  for(let i=0;i<50;i++){
+   reading=await app.evaluate(({BaseWindow,webContents},{windowId,callId})=>{
+    const win=BaseWindow.fromId(windowId), wc=webContents.fromId(callId);
+    const children=win.contentView.children;
+    const view=children.find(v=>v.webContents?.id===callId);
+    return {minimized:win.isMinimized(),children:children.map(v=>v.webContents?.id),
+     pid:wc?.getOSProcessId(),size:win.getContentSize(),bounds:view?.getBounds(),focused:wc?.isFocused()};
+   },{windowId:mainId,callId:callView.id});
+   assert.equal(reading.pid,callView.pid,'Debe sobrevivir el proceso de la llamada');
+   if(!attached && reading.minimized && reading.children.length===0)return;
+   if(attached && !reading.minimized && reading.children.at(-1)===callView.id && reading.focused &&
+     reading.bounds?.x===0 && reading.bounds.y===0 && reading.bounds.width===reading.size[0] && reading.bounds.height===reading.size[1])return;
+   await delay(100);
+  }
+  throw Error('Estado incorrecto de la vista de llamada '+(attached?'restaurada':'minimizada')+': '+JSON.stringify(reading));
+ }
  async function backgroundShortcut(label){
    const registered=await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Alt+Shift+R'));
    if(registered){
@@ -269,36 +297,55 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    }else console.log('El sistema reservó Alt+Shift+R; se comprobarán las teclas con foco.');
  }
  await musicSmoke(space,peer,async()=>{
+  const connection=await space.evaluateHandle(()=>window.testPeers.find(pc=>pc.connectionState==='connected'));
   try{
    await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
    await waitMinimized(true);
    await requireProgress(await radioAndVoice(),'Radio y voz con la ventana minimizada');
    await memory('voz y radio con sala minimizada');
-   await onlyCallRenderer(callView,visibleLobby);
+   await onlyCallRenderer(callView,externalLobby);
+   await checkCallSurface(false);
    await backgroundShortcut('sala minimizada');
+   // A pending navigation can race a real minimize event. Fire the same
+   // sidebar action without sending clicks to a hidden system window.
+   await space.getByRole('button',{name:'Amigos',exact:true}).evaluate(button=>button.click());
+   await space.waitForFunction(()=>document.body.dataset.workspace==='friends',null,{polling:100,timeout:5000});
+   await checkCallSurface(false);
   }finally{
    await app.evaluate(({BaseWindow})=>{const win=BaseWindow.getAllWindows()[0];win.restore();win.show();win.focus();});
    await waitMinimized(false);
   }
-  await requireProgress(await radioAndVoice(),'Radio y voz al restaurar la ventana');
-  home=await navigate(space,'Lobby de voz','home');
+  try{
+   await checkCallSurface(true);
+   assert.ok(await space.evaluate(pc=>pc && window.testPeers.includes(pc) && pc.connectionState==='connected' &&
+    pc.getSenders().some(s=>s.track?.kind==='audio' && s.track.readyState==='live'),connection),
+    'Restaurar debe conservar la conexión WebRTC y el micrófono');
+   await space.getByRole('heading',{name:'Tus amigos'}).waitFor();
+   await requireProgress(await radioAndVoice(),'Radio y voz al restaurar la ventana');
+  }finally{await connection.dispose();}
+  home=await openCallHome();
   await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   await requireProgress(await radioAndVoice(),'Radio y voz en el lobby');
-  const previousHome=home;
-  const lobbyBeforeMinimize=(await windowState()).views.find(v=>v.host==='home');
+  const inlineLobby=space.locator('#call-home-panel');
+  await inlineLobby.waitFor({state:'visible'});
   await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
   try{
    await waitMinimized(true);
    await requireProgress(await radioAndVoice(),'Radio y voz con el lobby minimizado');
    await memory('voz y radio con lobby minimizado');
-   await onlyCallRenderer(callView,lobbyBeforeMinimize);
+   await onlyCallRenderer(callView,externalLobby);
+   await checkCallSurface(false);
+   await inlineLobby.waitFor({state:'detached',timeout:5000});
    await backgroundShortcut('lobby minimizado');
   }finally{
    await app.evaluate(({BaseWindow})=>{const win=BaseWindow.getAllWindows()[0];win.restore();win.show();win.focus();});
    await waitMinimized(false);
   }
-  home=await surface('home');
-  assert.notEqual(home,previousHome,'Restaurar el lobby debe recrear su vista');
+  home=await surface('app');
+  assert.equal(home,space,'Restaurar el lobby integrado debe conservar su renderer');
+  await checkCallSurface(true);
+  await home.waitForFunction(()=>document.body.dataset.workspace==='call-home',null,{polling:100});
+  await inlineLobby.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   await requireProgress(await radioAndVoice(),'Radio y voz al restaurar el lobby');
   await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   await assertRadioShortcut(space,peer,()=>home.keyboard.press('Alt+Shift+KeyR'),'teclado Chromium en el lobby de escritorio');
@@ -312,11 +359,11 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   await navigate(home,'Arcade','app');
   await space.locator('[data-game="reflex"]').waitFor();
   await assertRadioShortcut(space,peer,()=>focusedRadioShortcut('app'),'teclas en Arcade');
-  home=await navigate(space,'Lobby de voz','home');
+  home=await openCallHome();
   await openCurrentRoom();
   await space.locator('#room-music [data-listen][aria-pressed="true"]').waitFor();
  });
- home=await navigate(space,'Lobby de voz','home');
+ home=await openCallHome();
  await navigate(home,'Arcade','app');await space.locator('[data-game="reflex"]').waitFor();
  const {duckNesBrowser}=await import('../test/duck-nes-browser.mjs');
  // Packaged Electron serves squad: from disk. Exercise that same handler on the
@@ -397,12 +444,14 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await navigate(home,'Dispositivos de audio','app');await space.getByText('Ganancia automática del micrófono').waitFor();
  await testManualGain(space,peer);
  await testListenBoost(space,peer);
- home=await navigate(space,'Lobby de voz','home');
+ home=await openCallHome();
  await openCurrentRoom();await space.locator('#room-name').waitFor({state:'visible'});
  await space.screenshot({path:path.join(capture,'Sala-Moderna.png')});
  console.log('Voz bidireccional durante la navegación',first,await audio(first));
- home=await navigate(space,'Lobby de voz','home');
- await home.getByRole('button',{name:'Salir de sala'}).click();space=await navigate(home,'Unirme con código','app');
+ home=await openCallHome();
+ home=await navigate(home,'Salir de sala','home');
+ await home.getByRole('button',{name:'Crear sala',exact:true}).waitFor();
+ space=await navigate(home,'Unirme con código','app');
  await space.locator('#code').fill(code);await space.locator('#submit-entry').click();await space.locator('#room-name').waitFor({state:'visible'});await checkWindow(true);
  console.log('Instalación, ajustes, sala, entrada por código y continuidad de voz verificados.');
  }finally{await browser?.close();await app?.close();backend.kill();}

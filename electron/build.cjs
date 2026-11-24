@@ -14,7 +14,8 @@ let html=readFileSync(path.join(client,'index.html'),'utf8')
   .replace('src="/install.js"','src="/desktop.js"')
   .replace('</body>','<script type="module" src="/feature.js"></script></body>');
 writeFileSync(path.join(client,'index.html'),html);
-for(const file of ['space.css','channels.css','channels.js','feature.js'])copyFileSync(path.join(out,file),path.join(client,file));
+for(const file of ['home.css','space.css','channels.css','channels.js','feature.js'])copyFileSync(path.join(out,file),path.join(client,file));
 const pack=require('./package.json');
 writeFileSync(path.join(out,'package.json'),JSON.stringify({name:pack.name,productName:'Squadlink',version:pack.version,main:pack.main,squadBuild:Number(process.env.GITHUB_RUN_NUMBER||0),squadAttempt:Number(process.env.GITHUB_RUN_ATTEMPT||1)}));
 esbuild.buildSync({entryPoints:[path.join(__dirname,'home.jsx')],outfile:path.join(out,'home.js'),bundle:true,minify:true,define:{'process.env.NODE_ENV':'"production"'}});
+esbuild.buildSync({entryPoints:[path.join(__dirname,'call-home.jsx')],outfile:path.join(client,'call-home.js'),format:'esm',bundle:true,minify:true,define:{'process.env.NODE_ENV':'"production"'}});

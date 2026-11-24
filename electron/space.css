@@ -139,3 +139,6 @@ body.desktop-shell #room:not([hidden]):not(.desktop-inactive) {
   #room .music-current::before {width:36px;height:36px;}
   #room .music-current [data-next] {grid-column:2;justify-self:start;}
 }
+
+body.desktop-shell[data-workspace="call-home"] > :is(.workspace-column,.channel-rail) { display:none; }
+#call-home-panel { grid-column:1 / -1; min-width:0; }

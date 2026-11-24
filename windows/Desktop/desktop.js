@@ -1,3 +1,4 @@
+import {createCallHomeController} from './call-home-controller.js';
 import { identityReady, desktopNickname, enterFromWindows, onConfirmedGuest, canReleaseGuestWorkspace, openDesktopProgress } from './app.js';
 const byId = id => document.getElementById(id);
 const bridge = window.squadBridge ?? window.chrome.webview;
@@ -49,6 +50,7 @@ const pages = {
 };
 
 if (window.squadBridge) {
+  pages['call-home'] = [];
   pages.rooms = ['directory'];
   pages.guide = ['news'];
 }
@@ -67,9 +69,11 @@ byId('loadout').before(profile);
 profile.dataset.desktopPage = 'player';
 
 const pageIds = new Set(Object.values(pages).flat());
+const callHome = window.squadBridge && createCallHomeController(bridge);
 let section = 'lobby';
 function show(next) {
   if (!Object.hasOwn(pages, next)) return;
+  if (next !== 'call-home') callHome?.hide();
   const previousSection = section;
   section = next;
   document.body.dataset.workspace = next;
@@ -169,6 +173,8 @@ observer.observe(friendRows, {...textChanges, attributeFilter: ['class']});
 observer.observe(requestRows, {childList: true, subtree: true, attributeFilter: ['data-action']});
 let releaseTimer, lastVisit;
 bridge.addEventListener('message', async ({data}) => {
+  if (data?.type === 'desktop:lobby-state') { callHome?.update(data.state); return; }
+  if (data?.type === 'desktop:lobby-visibility') { callHome?.setVisible(data.visible); return; }
   if (data?.type === 'desktop:submit') {
     clearTimeout(releaseTimer);
     enterFromWindows(data.data).then(
@@ -181,7 +187,12 @@ bridge.addEventListener('message', async ({data}) => {
   lastVisit = data.visit;
   document.body.classList.toggle("low-power", data.low === true);
   clearTimeout(releaseTimer);
-  if (data.action === 'background') {
+  if (data.action === 'call-home' && callHome) {
+    for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+    show('call-home');
+    callHome.show(data.state, data.visible !== false);
+  } else if (data.action === 'background') {
+    callHome?.hide();
     for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
     if (!data.low) return;
     releaseTimer = setTimeout(async () => {

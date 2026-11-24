@@ -34,9 +34,11 @@ const options={contextIsolation:true,nodeIntegration:false,sandbox:true,preload:
 function reveal(w){if(w&&!w.isDestroyed()){if(w.isMinimized())w.restore();w.show();w.focus();}}
 function snapshot(){return {...state,...prefs,radioState,hostSection:action?'workspace':hostSection,version:app.getVersion(),update:updater.snapshot()};}
 function hostContents(){return hostView?.webContents;}
+function callLobbyState(){return {...state,radioState,low:prefs.low};}
 function publish(){
  const wc=hostContents();
  if(wc&&!wc.isDestroyed())wc.send('snapshot',snapshot());
+ if(action?.key==='call-home' && !home.isMinimized())send({type:'desktop:lobby-state',state:callLobbyState()});
 }
 const radioAccelerator='Alt+Shift+R';
 let lastRadioPress=-Infinity;
@@ -69,7 +71,11 @@ function isHome(e){const wc=hostContents();return wc&&!wc.isDestroyed()&&e.sende
 function fromVoice(e){return view&&e.sender===view.webContents&&e.senderFrame===view.webContents.mainFrame;}
 function hostPage(event){if(!isHome(event))throw Error('Acceso no disponible.');}
 function send(data){if(view&&!view.webContents.isDestroyed())view.webContents.send('desk-message',data);}
-function dispatch(key,code){send({type:'desktop:action',action:key,code,visit,low:prefs.low});}
+function dispatch(key,code){
+ const message={type:'desktop:action',action:key,code,visit,low:prefs.low};
+ if(key==='call-home'){message.state=callLobbyState();message.visible=!home.isMinimized();}
+ send(message);
+}
 function canSuspendLobby(){return prefs.low && state.joined && !action && hostSection==='home';}
 function showHost(section='home'){
  if(action){
@@ -90,6 +96,17 @@ function contentBounds(){
   const bounds={x:0,y:0,width,height};
   hostView?.setBounds(bounds);
   if(action)view?.setBounds(bounds);
+}
+function presentWorkspace(minimized=home.isMinimized()){
+ if(!view || !action)return;
+ const parent=home.contentView;
+ if(minimized && prefs.low && state.joined){
+  parent.removeChildView(view);
+ }else{
+  if(!parent.children.includes(view))parent.addChildView(view);
+  contentBounds();
+  if(!minimized)view.webContents.focus();
+ }
 }
 function stopDetection(){generation++;clearInterval(detectTimer);detectTimer=null;detected=null;}
 async function scan(){if(scanning||!detectTimer)return;scanning=true;const ticket=generation;
@@ -120,10 +137,20 @@ function createHome(){
  const w=new BaseWindow(frame);
  w.on('minimize',()=>{
   // Keep the call and any unsaved settings alive while the lobby is off screen.
-  if(canSuspendLobby())releaseHost();
+  if(action){
+   if(action.key==='call-home')send({type:'desktop:lobby-visibility',visible:false});
+   presentWorkspace(true);
+  }else if(canSuspendLobby())releaseHost();
  });
  w.on('restore',()=>{
-  if(!closing && !action && !hostView){mountHost();hostContents()?.focus();}
+  if(closing)return;
+  if(action){
+   presentWorkspace(false);
+   if(action.key==='call-home'){
+    send({type:'desktop:lobby-state',state:callLobbyState()});
+    send({type:'desktop:lobby-visibility',visible:true});
+   }
+  }else if(!hostView){mountHost();hostContents()?.focus();}
  });
  w.on('resize',contentBounds);
  w.on('close',()=>{closing=true;disposeVoice();releaseHost();});
@@ -139,35 +166,39 @@ function ensureView(){
 }
 function open(key,code){
  if(updater.snapshot().phase==='installing'&&!state.joined)return;
- if(key==='home'||key==='preferences'){showHost(key);return;}
- if(!Object.hasOwn(titles,key))throw Error('Opción desconocida.');
+ if(key==='home' && state.joined && prefs.low)key='call-home';
+ else if(key==='home' || key==='preferences'){showHost(key);return;}
+ else if(!Object.hasOwn(titles,key))throw Error('Opción desconocida.');
  if(state.joined&&['create','join'].includes(key))key='lobby';
  if(key==='lobby'&&!state.joined)key='rooms';
  ensureView();
- if(!action)home.contentView.addChildView(view);
  visit++;
  action={key,code};
  if(prefs.low&&state.joined)releaseHost();
+ presentWorkspace();
  publish();
- contentBounds();
- view.webContents.focus();
  if(ready)dispatch(key,code);
 }
 function gameStatus(){send({type:'squadlink:game',enabled:Boolean(detectTimer),game:detected});}
-ipcMain.on('home',e=>{if(fromVoice(e))showHost();});
+ipcMain.on('home',e=>{if(fromVoice(e))open('home');});
 ipcMain.on('radio-shortcut',e=>{if(isHome(e)||fromVoice(e))toggleRadio();});
 ipcMain.on('desk-state',async(e,m)=>{
  if(!fromVoice(e)||!m||typeof m!=='object')return;
  if(m.type==='desktop:radio-state'){
   if(['playing','muted','empty'].includes(m.state)){radioState=m.state;publish();}
  }else if(m.type==='desktop:navigate'){
-  if(['home','lobby','rooms','friends','player','arcade','ranking','guide','preferences'].includes(m.page))open(m.page);
+  if(['home','lobby','rooms','friends','player','arcade','ranking','guide','preferences','settings'].includes(m.page))open(m.page);
+ }else if(m.type==='desktop:lobby-control'){
+  if(action?.key!=='call-home' || !state.joined)return;
+  if(m.action==='radio')toggleRadio();
+  else if(m.action==='mic' && state.canMic)dispatch('mic');
+  else if(m.action==='leave' && state.canLeave)dispatch('leave');
  }else if(m.type==='desktop:state'){
   if(m.identified===true&&!prefs.hasPlayer){
    const next={...prefs,hasPlayer:true};
    try{savePrefs(next);prefs=next;}catch{} // A read-only profile can still join this session.
   }
-  const before=state.joined;state={joined:m.joined===true,name:String(m.name||'').slice(0,80),nickname:String(m.nickname||'').slice(0,40),code:String(m.code||'').slice(0,6),mic:m.mic===true,canMic:m.canMic===true,members:Array.isArray(m.members)?m.members.slice(0,5):[]};publish();
+  const before=state.joined;state={joined:m.joined===true,name:String(m.name||'').slice(0,80),nickname:String(m.nickname||'').slice(0,40),code:String(m.code||'').slice(0,6),mic:m.mic===true,canMic:m.canMic===true,canLeave:m.canLeave!==false,members:Array.isArray(m.members)?m.members.slice(0,5):[]};publish();
   if(!ready){ready=true;if(action)dispatch(action.key,action.code);else dispatch('background');}
   if(state.joined!==before)syncRadioShortcut(state.joined);
   if(state.joined&&!before)open('lobby');
