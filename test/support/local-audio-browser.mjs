@@ -60,6 +60,13 @@ export async function localAudioBrowser(page) {
     const listen=panel.getByRole('button',{name:'Escuchar mi prueba',exact:true});
     await listen.waitFor({timeout:12000});
     assert.ok(await page.evaluate(()=>localAudioQA.inputs.length===1 && localAudioQA.inputs.every(t=>t.readyState==='ended')));
+    await slider.focus();
+    await slider.press('Home');
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem('squadlink.audio.v1')).listenVolume===0);
+    await listen.click();
+    await panel.getByText('Sube el volumen de las voces para escuchar la muestra.').waitFor();
+    await slider.press('End');
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem('squadlink.audio.v1')).listenVolume===2);
     await listen.click();
     await panel.getByText(/^Prueba terminada\./).waitFor({timeout:15000});
     await page.waitForFunction(()=>window.localAudioQA.contexts.every(c=>c.state==='closed') && !localAudioQA.urls.size);
