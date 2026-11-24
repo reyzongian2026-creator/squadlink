@@ -174,7 +174,7 @@ export async function domSmoke(Window) {
     el('create').click();
     el('name').value = 'Salida QA';
     el('entry-form').requestSubmit();
-    await until(() => !el('room').hidden && !el('mic').disabled);
+    await until(() => !el('room').hidden && !el('entry').open);
     expiredLeave = true;
     el('leave').click();
     await until(() => el('room').hidden && !el('home').hidden);
