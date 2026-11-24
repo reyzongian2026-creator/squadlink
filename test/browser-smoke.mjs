@@ -319,6 +319,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     assert.equal(iceRequests, 2);
     await a.unroute('**/api/ice');
     await microphonePresenceSmoke(a);
+    if (process.env.SQUADLINK_MIC_TRIAL) return;
     for (const page of [a,b]) await page.getByRole('button', { name: 'Activar micrófono' }).click();
     async function inbound(page, minBytes = 0) {
       const deadline = Date.now() + 30000;
@@ -413,5 +414,6 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
 
 if (process.argv.includes('--run')) {
   const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
-  await browserSmoke(chromium);
+  process.env.SQUADLINK_MIC_TRIAL = "1";
+  for (let trial=0;trial<12;trial++) {console.log("MIC_TRIAL",trial+1);await browserSmoke(chromium);}
 }

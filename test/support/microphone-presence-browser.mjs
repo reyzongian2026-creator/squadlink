@@ -56,6 +56,7 @@ export async function microphonePresenceSmoke(page) {
     assert.deepEqual(tracksDuringMute,[true,true,true], 'el hardware ya está apagado al anunciar o reintentar el silencio');
     const {self,room} = await page.evaluate(() => fetch('/api/session').then(response=>response.json()));
     assert.equal(room.members.find(person=>person.id===self.id).muted,true);
+    console.log('MIC_DIAGNOSTIC_PASSED',JSON.stringify({browser:await actual(),traffic,posts,tracksDuringMute}));
   } catch (err) {
     console.log('MIC_DIAGNOSTIC',JSON.stringify({browser:await actual(),traffic,posts,tracksDuringMute}));
     throw err;
