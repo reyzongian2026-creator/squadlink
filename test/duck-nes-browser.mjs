@@ -22,9 +22,11 @@ export async function duckNesBrowser(page) {
     return canvas.getContext('2d').getImageData(128, 120, 1, 1).data[0] === 255;
   });
   await panel.locator('canvas').click();
-  await panel.getByRole('button', {name: 'Start', exact: true}).click();
-  await panel.getByRole('button', {name: 'Pausar', exact: true}).click();
-  await panel.getByRole('button', {name: 'Reanudar', exact: true}).click();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('p');
+  await panel.getByRole('button', {name: 'Reanudar', exact: true}).waitFor();
+  await page.keyboard.press('p');
+  await panel.getByRole('button', {name: 'Pausar', exact: true}).waitFor();
   await page.getByRole('button', {name: 'Cerrar minijuego'}).click();
   await panel.waitFor({state: 'detached'});
 }

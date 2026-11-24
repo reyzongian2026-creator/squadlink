@@ -11,6 +11,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  try{
  let available=false;for(let i=0;i<100;i++){try{available=(await fetch('http://127.0.0.1:4179/api/directory')).ok;}catch{}if(available)break;await delay(100);}assert.ok(available);
  app=await _electron.launch({executablePath,args:['--user-data-dir='+profile],timeout:45000});
+ assert.equal(await app.evaluate(({app})=>app.getVersion()),require('./package.json').version,'La app instalada debe anunciar la versión de la compilación');
  app.context().setDefaultTimeout(15000);
  async function surface(host) {
   for(let i=0;i<200;i++){

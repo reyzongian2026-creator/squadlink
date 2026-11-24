@@ -16,7 +16,7 @@ function sampleWav() {
 export async function musicSmoke(host,guest) {
   const panel=page=>page.locator('#room-music');
   await panel(host).getByText('Añadir música',{exact:true}).click();
-  await panel(host).getByText('Archivo de audio',{exact:true}).click();
+  await panel(host).locator('.source-options').getByText('Archivo de audio',{exact:true}).click();
   await panel(host).locator('input[type=file]').setInputFiles({name:'Prueba compartida.wav',mimeType:'audio/wav',buffer:sampleWav()});
   await panel(host).getByRole('button',{name:'Añadir a la sala'}).click();
   for (const page of [host,guest]) {
