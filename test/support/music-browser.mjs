@@ -65,6 +65,11 @@ export async function musicSmoke(host,guest) {
     const volume = panel(host).getByRole('slider',{name:'Volumen de música'});
     await volume.focus(); await volume.press('Home'); await volume.press('ArrowRight');
     assert.equal(await panel(host).locator('audio').evaluate(audio=>audio.volume), 0.01);
+    await host.keyboard.press('Alt+Shift+KeyR');
+    await panel(host).locator('[data-listen][aria-pressed="false"]').waitFor();
+    assert.equal(await panel(host).locator('audio').count(),0);
+    await host.keyboard.press('Alt+Shift+KeyR');
+    await host.waitForFunction(()=>{const a=document.querySelector('#room-music audio'); return a && !a.paused && a.currentTime>0.1;});
     await panel(host).getByRole('button',{name:'Silenciar solo para mí'}).click();
   } finally {
     await host.unroute(station.url, stream);

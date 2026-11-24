@@ -16,7 +16,8 @@
 }
 .music-panel .music-header, .music-current { justify-content: space-between; }
 .music-panel .music-header { position: static; padding: 0; background: transparent; border: 0; }
-.music-header [data-listen] { min-height: 36px; }
+.music-header [data-listen] { min-height: 36px; display:inline-flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:.45rem; }
+.music-header [data-listen] kbd { font:inherit; font-size:.72em; font-weight:500; border:1px solid currentColor; border-radius:4px; padding:.1em .35em; }
 .music-header [data-listen][aria-pressed="true"] { box-shadow: inset 3px 0 #b9d99b; }
 .music-panel h3, .music-panel p { margin: 0; }
 .music-panel h3 { font-size: 1.05rem; }

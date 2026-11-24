@@ -59,7 +59,7 @@ function fileDuration(file, signal) {
 export function createMusic({mount, api, notify}) {
   mount.innerHTML = `
     <section class="music-panel" aria-labelledby="music-heading">
-      <header class="music-header"><h3 id="music-heading">Música de sala</h3><button type="button" data-listen class="secondary small" aria-pressed="false">Escuchar aquí</button></header>
+      <header class="music-header"><h3 id="music-heading">Música de sala</h3><button type="button" data-listen class="secondary small" aria-pressed="false" aria-keyshortcuts="Alt+Shift+R"><span data-listen-label>Escuchar aquí</span><kbd aria-hidden="true"></kbd></button></header>
       <div class="music-current" hidden><div class="music-track"><strong data-title></strong><small data-kind></small></div><button type="button" data-shared class="secondary small" hidden>Volver a la música de sala</button><button type="button" data-next class="secondary small">Siguiente</button></div>
       <div data-player></div>
       <label class="music-volume" hidden>Volumen de música <input type="range" min="0" max="100" value="60" aria-label="Volumen de música"><output>60 %</output></label>
@@ -148,9 +148,12 @@ export function createMusic({mount, api, notify}) {
     release = setPlayerVolume = syncPlayer = delivery = null;
     player.replaceChildren();
   }
+  const shortcutLabel = /Mac/i.test(navigator.platform) ? "⌥ ⇧ R" : "Alt + Mayús + R";
+  listen.querySelector("kbd").textContent = shortcutLabel;
+  listen.title = "Silenciar o reanudar solo en este equipo (" + shortcutLabel + ")";
   function drawListening() {
     listen.setAttribute("aria-pressed", String(optedIn));
-    listen.textContent = optedIn ? "Silenciar solo para mí" : "Escuchar aquí";
+    listen.querySelector("[data-listen-label]").textContent = optedIn ? "Silenciar solo para mí" : "Escuchar aquí";
     volumeLabel.hidden = !optedIn;
   }
   function setupPlayer() {
@@ -469,5 +472,12 @@ export function createMusic({mount, api, notify}) {
       setupPlayer();
     } else syncPlayer?.();
   }
-  return {update, close};
+  function toggleFromShortcut() {
+    if (!room) return;
+    if (!track && !optedIn) { notify?.("No hay música en reproducción."); return; }
+    setLocalListening(!optedIn);
+    setupPlayer();
+    notify?.(optedIn ? "Música activada en este equipo." : "Música silenciada solo para ti.");
+  }
+  return {update, close, toggleFromShortcut};
 }

@@ -363,6 +363,11 @@ function renderMembers() {
 }
 let roomMusicUI;
 let musicModule;
+window.addEventListener('keydown', event => {
+  if (!room || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.code !== 'KeyR') return;
+  event.preventDefault();
+  if (!event.repeat) roomMusicUI?.toggleFromShortcut();
+}, true);
 function updateMusic() {
   if (roomMusicUI) { roomMusicUI.update(room); return; }
   const currentCode = room.code;
