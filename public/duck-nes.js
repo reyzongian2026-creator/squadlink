@@ -106,6 +106,7 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
 
   let closed = false, version = 0, cartridge = null, nes = null, buttons = null;
   let audio = null, animation = 0, running = false, pointer = null;
+  let pendingStart = null;
   let frame = 0, nextTick = null, triggerUntil = 0;
   let rankedCart = false, startedGame = false;
   const held = new Set();
@@ -158,6 +159,7 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
     held.clear(); keyOwners.clear(); pressFrame.clear(); aiming.clear();
   }
   function stop() {
+    pendingStart = null;
     running = false;
     view.cancelAnimationFrame(animation);
     animation = 0; nextTick = null;
@@ -167,7 +169,9 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
     if (nes) nes.opts.onAudioSample = null;
   }
   function showPaused() {
+    if (!running && !pendingStart) return;
     stop();
+    play.disabled = false;
     play.textContent = 'Reanudar';
     status.textContent = 'Juego en pausa. Pulsa P para reanudar.';
   }
@@ -267,8 +271,9 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
 
   listen(play, 'click', async () => {
     if (running) { showPaused(); return; }
-    if (!cartridge || closed || play.disabled) return;
-    const id = version;
+    if (!cartridge || closed || play.disabled || doc.hidden) return;
+    const request = {};
+    pendingStart = request;
     play.disabled = true;
     try {
       const Context = view.AudioContext || view.webkitAudioContext;
@@ -279,7 +284,7 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
         } catch { audio = null; }
       }
       const { NES, Controller } = await loadCore();
-      if (id !== version || closed) return;
+      if (pendingStart !== request) return;
       const sample = audio ? makeAudio(audio) : null;
       if (!nes) {
         const ctx = canvas.getContext('2d', {alpha:false, willReadFrequently:doc.body.classList.contains('low-power')});
@@ -316,8 +321,9 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
       nextTick = null;
       animation = view.requestAnimationFrame(advance);
       canvas.focus({preventScroll: true});
+      pendingStart = null;
     } catch {
-      if (id !== version || closed) return;
+      if (pendingStart !== request) return;
       stop(); nes = null; play.disabled = false; play.textContent = 'Reintentar';
       chooser.hidden = false; chooser.open = true;
       fileField.value = '';
@@ -429,8 +435,8 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
   listen(canvas, 'pointerup', release);
   listen(canvas, 'pointercancel', release);
   listen(canvas, 'lostpointercapture', release);
-  listen(doc, 'visibilitychange', () => { if (doc.hidden && running) showPaused(); });
-  listen(view, 'blur', clearInput);
+  listen(doc, 'visibilitychange', () => { if (doc.hidden) showPaused(); });
+  listen(view, 'blur', event => { if (event.target === view) showPaused(); });
   return () => {
     closed = true; version++;
     if (expandedHere && doc.fullscreenElement) doc.exitFullscreen().catch(()=>{});

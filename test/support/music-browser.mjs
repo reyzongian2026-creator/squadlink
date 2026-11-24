@@ -116,6 +116,12 @@ export async function musicSmoke(host,guest,whileBothListen) {
       return audio?.currentSrc === url && !audio.paused && audio.currentTime > 0.15;
     },station.url,{timeout:15000});
     await playing(guest);
+    const stationRequest = host.waitForRequest(station.url, {timeout:8000});
+    await panel(host).locator('audio').evaluate(audio => audio.dispatchEvent(new Event('ended')));
+    await stationRequest;
+    await playing(host);
+    assert.equal(await panel(guest).locator('[data-title]').innerText(),station.name);
+
     await assertRadioShortcut(guest,host,()=>guest.keyboard.press('Alt+Shift+KeyR'),'navegador enfocado');
     if (whileBothListen) await whileBothListen();
     const hostTime = await panel(host).locator('audio').evaluate(audio=>audio.currentTime);
@@ -133,6 +139,8 @@ export async function musicSmoke(host,guest,whileBothListen) {
     const volume = panel(host).getByRole('slider',{name:'Volumen de música'});
     await volume.focus(); await volume.press('Home'); await volume.press('ArrowRight');
     assert.equal(await panel(host).locator('audio').evaluate(audio=>audio.volume), 0.01);
+    assert.equal(await host.evaluate(()=>localStorage.getItem('squadlink.music.volume')),'1');
+    assert.equal(await guest.evaluate(()=>localStorage.getItem('squadlink.music.volume')),null);
     await listen(host,true).click();
   } finally {
     await host.unroute(station.url, stream);

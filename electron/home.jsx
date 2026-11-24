@@ -1,6 +1,7 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {channels} from './channels.js';
+import {watchLobbyDirectory} from './lobby-directory.mjs';
 const api=window.squad;
 const shapes={
   sound:<><path d="M4 10v4m4-8v12m4-15v18m4-15v12m4-8v4"/></>,
@@ -18,6 +19,8 @@ function Icon({id}){return <svg aria-hidden="true" viewBox="0 0 24 24" fill="non
 function App(){
  const [state,update]=useState(null),[error,setError]=useState(''),[serverFeedback,setServerFeedback]=useState(''),[updateFeedback,setUpdateFeedback]=useState(''),[address,setAddress]=useState(''),[checking,setChecking]=useState(false);
  const [rooms,setRooms]=useState([]),[directoryStatus,setDirectoryStatus]=useState('Buscando salas…');
+ const directory=useRef(null);
+ const [directoryFailed,setDirectoryFailed]=useState(false);
  const prefs=state?.hostSection==='preferences';
  useEffect(()=>{const off=api.listen(update);api.state().then(update).catch(e=>setError(e.message));return off},[]);
  const server=state?.server;
@@ -25,31 +28,13 @@ function App(){
  const lobbyVisible=state?.hostSection==='home';
  useEffect(()=>{
   if(!server||!lobbyVisible)return;
-  const controller=new AbortController();
-  let loading=false;
-  setRooms([]);setDirectoryStatus('Buscando salas…');
-  async function refresh(){
-   if(loading||document.hidden)return;
-   loading=true;
-   try{
-    const response=await fetch('/api/directory',{signal:controller.signal,cache:'no-store'});
-    if(!response.ok)throw Error('Directorio sin conexión.');
-    const {rooms}=await response.json();
-    if(controller.signal.aborted)return;
-    setRooms(rooms.slice(0,3));
-    setDirectoryStatus(rooms.length?'':'Todavía no hay salas públicas.');
-   }catch{if(!controller.signal.aborted)setDirectoryStatus('No se pudo actualizar el directorio.');}
-   finally{loading=false;}
-  }
-  refresh();
-  const timer=window.setInterval(refresh,15000);
-  window.addEventListener('focus',refresh);
-  document.addEventListener('visibilitychange',refresh);
-  return ()=>{
-   controller.abort();clearInterval(timer);
-   window.removeEventListener('focus',refresh);
-   document.removeEventListener('visibilitychange',refresh);
-  };
+  setRooms([]);setDirectoryFailed(false);setDirectoryStatus('Buscando salas…');
+  const watcher=watchLobbyDirectory(items=>{
+   setRooms(items);setDirectoryFailed(false);
+   setDirectoryStatus(items.length?'':'Todavía no hay salas públicas.');
+  },()=>setDirectoryFailed(true));
+  directory.current=watcher;
+  return ()=>{watcher.stop();directory.current=null};
  },[server,lobbyVisible,state?.code]);
  async function run(work){setError('');try{return await work()}catch(e){setError(e.message.replace(/^Error invoking remote method.*?Error: /,''));}}
  function open(key,code){run(()=>api.open(code?{key,code}:key))}
@@ -131,7 +116,11 @@ function App(){
              <span className="room-label"><b>{r.name}</b><small>{[r.game,r.level].filter(Boolean).join(' · ')||'Sala de voz'}</small></span>
              <em aria-label={(r.code===state.code?'Tu sala · ':'')+r.count+' de '+r.capacity+' plazas ocupadas'}>{r.code===state.code?'Volver a mi sala':full?'Llena':r.count+'/'+r.capacity}</em>
            </button></li>})}</ul> :
-           <p className="empty" role="status"><Icon id="headset"/>{directoryStatus}</p>}
+           !directoryFailed && <p className="empty" role="status"><Icon id="headset"/>{directoryStatus}</p>}
+         {directoryFailed && <div className="directory-retry">
+           <p role="status">{rooms.length?'Se muestran las últimas salas disponibles.':'No se pudo cargar el directorio.'}</p>
+           <button onClick={()=>directory.current?.retry()}>Reintentar</button>
+         </div>}
        </section>
      </div>
    </main>}

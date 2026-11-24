@@ -5,21 +5,35 @@ function label(tag, text, className) {
   return node;
 }
 
+// Rebuild the visible pages together so a failed request leaves the current list usable.
+export async function loadDirectoryPages(api, previous, append = false) {
+  if (append && previous.nextOffset === null) return previous;
+  const rooms = new Map((append ? previous.rooms : []).map(room => [room.code, room]));
+  const requestedPages = append ? 1 : Math.max(1, previous.pages);
+  let pages = append ? previous.pages : 0;
+  let offset = append ? previous.nextOffset : 0;
+  for (let page = 0; page < requestedPages && offset !== null; page++) {
+    const result = await api(offset ? "directory?offset=" + offset : "directory");
+    for (const room of result.rooms) rooms.set(room.code, room);
+    pages++;
+    offset = result.nextOffset ?? null;
+  }
+  return { rooms: [...rooms.values()], pages, nextOffset: offset };
+}
+
 export function mountDirectory({ api, getRoom, visitCurrent, join, create }) {
   const list = document.getElementById("directory-list");
   const query = document.getElementById("directory-query");
   const status = document.getElementById("directory-status");
   const refresh = document.getElementById("directory-refresh");
   const more = document.getElementById("directory-more");
-  let rooms = [],
+  let listing = { rooms: [], pages: 0, nextOffset: null },
     pending,
     loaded = false,
-    paged = false,
-    refreshQueued = false,
-    nextOffset = null;
+    refreshQueued = false;
   function draw() {
     const term = query.value.toLocaleLowerCase("es").trim();
-    const results = rooms.filter((room) =>
+    const results = listing.rooms.filter((room) =>
       [room.name, room.game, room.level, room.description].some((value) =>
         (value || "").toLocaleLowerCase("es").includes(term),
       ),
@@ -103,24 +117,13 @@ export function mountDirectory({ api, getRoom, visitCurrent, join, create }) {
     }
     refresh.disabled = more.disabled = true;
     status.textContent = "Actualizando salas…";
-    pending = api(
-      append && nextOffset != null
-        ? "directory?offset=" + nextOffset
-        : "directory",
-    )
-      .then((result) => {
-        const previous = JSON.stringify(rooms);
-        paged = append;
-        rooms = append
-          ? [
-              ...new Map(
-                [...rooms, ...result.rooms].map((room) => [room.code, room]),
-              ).values(),
-            ]
-          : result.rooms;
-        nextOffset = result.nextOffset ?? null;
-        more.hidden = nextOffset === null;
-        if (!loaded || previous !== JSON.stringify(rooms)) { loaded = true; draw(); }
+    pending = loadDirectoryPages(api, listing, append)
+      .then((updated) => {
+        const changed = !loaded || JSON.stringify(listing.rooms) !== JSON.stringify(updated.rooms);
+        listing = updated;
+        loaded = true;
+        more.hidden = listing.nextOffset === null;
+        if (changed) draw();
         status.textContent = "";
       })
       .catch((error) => {
@@ -145,7 +148,7 @@ export function mountDirectory({ api, getRoom, visitCurrent, join, create }) {
     window.clearInterval(timer);
     if (!visible()) return;
     reload();
-    timer = window.setInterval(() => { if (!paged && !pending) reload(); }, 15000);
+    timer = window.setInterval(() => { if (listing.pages < 2 && !pending) reload(); }, 15000);
   }
   window.addEventListener("focus", () => { if (visible()) reload(); });
   window.addEventListener("squad:directory-open", updatePolling);

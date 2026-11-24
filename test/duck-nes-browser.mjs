@@ -29,6 +29,11 @@ export async function duckNesBrowser(page, installDiagnostics) {
   await panel.getByRole('button', {name: 'Reanudar', exact: true}).waitFor();
   await page.keyboard.press('p');
   await panel.getByRole('button', {name: 'Pausar', exact: true}).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await panel.getByRole('button', {name: 'Reanudar', exact: true}).waitFor();
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.keyboard.press('p');
+  await panel.getByRole('button', {name: 'Pausar', exact: true}).waitFor();
   await page.getByRole('button', {name: 'Cerrar minijuego'}).click();
   await panel.waitFor({state: 'detached'});
 

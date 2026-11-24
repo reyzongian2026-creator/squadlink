@@ -58,6 +58,7 @@ li button {
   display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 10px;
   text-align: left; width: 100%; padding: 7px 3px; background: transparent; border-color: transparent;
 }
+.directory-retry { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding-block:8px; color:var(--muted); }
 .room-symbol { width: 32px; height: 32px; background:#37354a; border-radius: 8px; }
 .room-label b, .room-label small { display: block; overflow-wrap: anywhere; }
 .room-label small, li em { color: var(--muted); font-size: .8rem; font-style: normal; }
