@@ -296,7 +296,7 @@ try {
   Save-Window ([IntPtr]$root.Current.NativeWindowHandle) 'Dispositivos-Windows.png'
   Invoke-Control $root 'Grabar prueba de 4 segundos'
   Invoke-Control $root 'Escuchar mi prueba'
-  Find-Control $root 'Prueba terminada.' | Out-Null
+  Find-Control $root 'Prueba terminada.' $true | Out-Null
   $root = Open-Option 'Servidor' 'Servidor · Squadlink'
   Find-Control $root 'Servidor del grupo' | Out-Null
   $root = Open-Option 'Explorar salas' 'Explorar salas · Squadlink'

@@ -1,6 +1,7 @@
 // Requires Playwright on the test machine only. A single process owns this isolated server.
 import assert from 'node:assert/strict';
 import { duckNesBrowser } from './duck-nes-browser.mjs';
+import {micSampleBrowser} from './support/mic-sample-browser.mjs';
 import {microphonePresenceSmoke} from './support/microphone-presence-browser.mjs';
 import {musicSmoke,leaveFailureSmoke} from './support/music-browser.mjs';
 import { once } from 'node:events';
@@ -236,8 +237,9 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     }
     const origin = sharedOrigin || 'http://127.0.0.1:' + server.address().port;
     browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
+    if (!sharedOrigin) await micSampleBrowser(browser,origin);
     const errors = [];
-    async function client() {
+    async function client(fragment = '') {
       const ctx = await browser.newContext({ permissions: ['microphone'] });
       await ctx.addInitScript(() => {
         window.qaPeers = [];
@@ -256,7 +258,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
       });
       const page = await ctx.newPage();
       page.on('pageerror', error => errors.push(error.message));
-      await page.goto(origin);
+      await page.goto(origin + fragment);
       return page;
     }
     const a = await client();
@@ -287,7 +289,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     assert.ok(!eagerResources.includes('/arcade-practice.js') && !eagerResources.includes('/arcade-practice.css'));
     assert.ok(!eagerResources.includes('/arcade.js'), 'el arcade solo se descarga cuando se abre');
     const {localAudioBrowser}=await import('./support/local-audio-browser.mjs');
-    const audioClient=await client();
+    const audioClient=await client('/#main');
     try { await localAudioBrowser(audioClient); }
     finally { await audioClient.context().close(); }
     await a.getByRole('button', { name: 'Crear sala', exact: true }).first().click();
@@ -349,7 +351,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     await musicSmoke(a,b);
     await a.locator('.connection-details > summary').click();
     await a.getByRole('button', { name: 'Medir conexión de voz' }).click();
-    await a.locator('#voice-measurements').getByText(/Ana.*(Directa|Por retransmisor)/).waitFor();
+    await a.locator('#voice-measurements').getByText(/Ana.*(Directa|Por retransmisor).*Último jitter .*ms.*Pérdida en la muestra .*%/).waitFor();
     await openChannel(a, 'arcade');
     for (const [game, goal] of [['flick',12],['precision',16]]) {
       await a.locator('[data-game="'+game+'"]').click();
