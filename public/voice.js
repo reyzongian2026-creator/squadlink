@@ -1,13 +1,19 @@
-import { readAudioSettings, saveAudioSettings } from './audio-settings.js';
+import { prepareVoiceCapture } from './voice-capture.js';
+import { microphoneConstraints, readAudioSettings, saveAudioSettings } from './audio-settings.js';
+
+const restartStepMs = 4000;
+const maxRestartDelayMs = 30000;
 
 // One audio transceiver per pair. Listening does not require microphone access.
 export class VoiceRoom {
-  constructor({ selfId, iceServers = [], sendSignal, onStatus = () => {}, onPeerState = () => {} }) {
-    Object.assign(this, { selfId, iceServers, sendSignal, onStatus, onPeerState });
+  constructor({ selfId, iceServers = [], sendSignal, onStatus = () => {}, onPeerState = () => {}, onMicrophoneEnded = () => {} }) {
+    Object.assign(this, { selfId, iceServers, sendSignal, onStatus, onPeerState, onMicrophoneEnded });
     this.peers = new Map();
+    this.memberGain = new Map();
     this.members = new Set();
     this.stream = null;
     this.captures = new Set();
+    this.filters = new Map();
     this.captureRequest = 0;
     this.settings = readAudioSettings();
     this.wantsMicrophone = false;
@@ -28,6 +34,7 @@ export class VoiceRoom {
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
     const audio = document.createElement('audio');
     audio.autoplay = false;
+    audio.volume = this.settings.listenVolume * (this.memberGain.get(id) ?? 1);
     const outputId = this.pendingOutputId ?? this.settings.outputId;
     const sinkReady = outputId && audio.setSinkId
       ? audio.setSinkId(outputId).catch(() => {
@@ -35,15 +42,18 @@ export class VoiceRoom {
       })
       : Promise.resolve();
     const peer = { id, pc, audio, transceiver: null, incoming: Promise.resolve(), candidates: [],
-      offerer: this.selfId < id, restartTimer: null, attempts: 0, dropped: false };
+      offerer: this.selfId < id, restartTimer: null, restartDelay: restartStepMs, dropped: false };
     this.peers.set(id, peer);
     pc.onicecandidate = ({ candidate }) => {
       if (candidate && !peer.dropped) this.relay(peer, { candidate: candidate.toJSON() });
     };
     pc.ontrack = ({ track }) => {
-      audio.srcObject = new MediaStream([track]);
-      sinkReady.then(() => peer.dropped || audio.play()).catch(() => {
-        if (!peer.dropped) this.onStatus('Pulsa el control de audio para escuchar a tu equipo.');
+      if (peer.dropped || track.kind !== 'audio' || audio.srcObject?.getAudioTracks()[0] === track) return;
+      const stream = new MediaStream([track]);
+      audio.srcObject = stream;
+      const current = () => !peer.dropped && audio.srcObject === stream;
+      sinkReady.then(() => current() && audio.play()).catch(error => {
+        if (current() && error.name !== 'AbortError') this.onStatus('Pulsa el control de audio para escuchar a tu equipo.');
       });
     };
     pc.onconnectionstatechange = () => {
@@ -52,14 +62,14 @@ export class VoiceRoom {
       if (state === 'connected') {
         clearTimeout(peer.restartTimer);
         peer.restartTimer = null;
-        peer.attempts = 0;
+        peer.restartDelay = restartStepMs;
       } else if (state === 'disconnected' || state === 'failed') {
         if (peer.offerer) this.scheduleRestart(peer);
         if (state === 'failed') this.onStatus('La conexión de voz se interrumpió. Comprueba tu red.');
       }
     };
     if (peer.offerer) {
-      const track = this.stream?.getAudioTracks()[0];
+      const track = this.outgoingTrack();
       peer.transceiver = pc.addTransceiver(track ?? 'audio', { direction: 'sendrecv' });
       this.queue(peer, () => this.offer(peer));
     }
@@ -67,10 +77,11 @@ export class VoiceRoom {
   }
 
   scheduleRestart(peer) {
-    if (peer.restartTimer || peer.attempts >= 3 || peer.dropped) return;
+    if (peer.restartTimer !== null || peer.dropped || peer.pc.connectionState === 'connected') return;
     peer.restartTimer = setTimeout(() => {
       peer.restartTimer = null;
-      peer.attempts++;
+      // A long outage must not strand a participant who is still in the room.
+      peer.restartDelay = Math.min(peer.restartDelay + restartStepMs, maxRestartDelayMs);
       this.queue(peer, async () => {
         if (peer.pc.connectionState === 'connected') return;
         // An unanswered offer may have been lost with the event stream.
@@ -80,7 +91,7 @@ export class VoiceRoom {
         await this.offer(peer, true);
         this.scheduleRestart(peer);
       });
-    }, 4000 * (peer.attempts + 1));
+    }, peer.restartDelay);
   }
 
   queue(peer, operation) {
@@ -128,7 +139,7 @@ export class VoiceRoom {
           // Reuse the incoming transceiver. Creating a second one would add a second audio m-line.
           peer.transceiver = pc.getTransceivers().find(t => t.receiver.track.kind === 'audio');
           peer.transceiver.direction = 'sendrecv';
-          await peer.transceiver.sender.replaceTrack(this.stream?.getAudioTracks()[0] ?? null);
+          await peer.transceiver.sender.replaceTrack(this.outgoingTrack());
           await pc.setLocalDescription(await pc.createAnswer());
           await this.relay(peer, { description: pc.localDescription.toJSON() });
         }
@@ -158,11 +169,13 @@ export class VoiceRoom {
     if (failures.length) throw new Error('No se pudo cambiar el micrófono en la llamada.');
   }
 
+  outgoingTrack(stream = this.stream) {
+    return (this.filters.get(stream)?.stream ?? stream)?.getAudioTracks()[0] ?? null;
+  }
+
   async openMicrophone(settings, request) {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Para activar el micrófono, abre la app mediante HTTPS o localhost.');
-    const audio = { channelCount: { ideal: 1 }, echoCancellation: true,
-      noiseSuppression: settings.noiseSuppression, autoGainControl: true };
-    if (settings.inputId) audio.deviceId = { exact: settings.inputId };
+    const audio = microphoneConstraints(settings);
     let next;
     try { next = await navigator.mediaDevices.getUserMedia({ audio, video: false }); }
     catch (err) {
@@ -176,12 +189,30 @@ export class VoiceRoom {
     }
     this.captures.add(next);
     const old = this.stream;
+    const filter = prepareVoiceCapture(next, settings);
+    this.filters.set(next, filter);
+    const filtered = await filter.ready;
+    if (this.closed || request !== this.captureRequest) {
+      this.releaseCapture(next);
+      return false;
+    }
     this.stream = next;
-    try { await this.replaceSenders(next.getAudioTracks()[0], request); }
+    if (!filtered && globalThis.AudioWorkletNode) this.onStatus('Se usan los filtros de voz del dispositivo.');
+    const track = next.getAudioTracks()[0];
+    track.onended = () => this.handleMicrophoneEnded(next);
+    if (track.readyState === 'ended') {
+      this.handleMicrophoneEnded(next);
+      return false;
+    }
+    try { await this.replaceSenders(this.outgoingTrack(next), request); }
     catch (err) {
       if (request === this.captureRequest && !this.closed) {
         this.stream = old;
-        try { await this.replaceSenders(old?.getAudioTracks()[0] ?? null, request); } finally { this.releaseCapture(next); }
+        if (old?.getAudioTracks()[0]?.readyState === 'ended') {
+          this.handleMicrophoneEnded(old);
+          throw err;
+        }
+        try { await this.replaceSenders(this.outgoingTrack(old), request); } finally { this.releaseCapture(next); }
       } else this.releaseCapture(old);
       throw err;
     }
@@ -189,9 +220,22 @@ export class VoiceRoom {
     return this.stream === next && !this.closed;
   }
 
+  handleMicrophoneEnded(stream) {
+    if (this.closed || this.stream !== stream) return;
+    this.setMicrophone(false).catch(err => {
+      if (!this.closed && !this.wantsMicrophone) this.onStatus(err.message);
+    });
+    this.onMicrophoneEnded();
+  }
+
   releaseCapture(stream) {
     if (this.captures.delete(stream)) {
-      for (const track of stream.getTracks()) track.stop();
+      this.filters.get(stream)?.close();
+      this.filters.delete(stream);
+      for (const track of stream.getTracks()) {
+        track.onended = null;
+        track.stop();
+      }
     }
   }
 
@@ -236,9 +280,20 @@ export class VoiceRoom {
         throw new Error('No se pudo usar esa salida. Comprueba que esté conectada y autorizada.');
       } finally { this.pendingOutputId = undefined; }
     }
-    if ((next.inputId !== previous.inputId || next.noiseSuppression !== previous.noiseSuppression) && this.wantsMicrophone) {
+    const deviceChanged = next.inputId !== previous.inputId;
+    const filtersChanged = next.noiseSuppression !== previous.noiseSuppression ||
+      next.autoGainControl !== previous.autoGainControl;
+    if ((deviceChanged || filtersChanged) && this.wantsMicrophone) {
       const request = ++this.captureRequest;
-      try { await this.openMicrophone(next, request); }
+      try {
+        const liveTrack = this.stream?.getAudioTracks()[0];
+        if (!deviceChanged && liveTrack?.readyState === 'live' && liveTrack.applyConstraints) {
+          await liveTrack.applyConstraints(microphoneConstraints(next));
+          this.filters.get(this.stream)?.setNoise(next.noiseSuppression);
+        } else {
+          await this.openMicrophone(next, request);
+        }
+      }
       catch (err) {
         if (request === this.captureRequest) this.wantsMicrophone = !!this.stream;
         throw err;
@@ -246,13 +301,19 @@ export class VoiceRoom {
     }
     if (!this.closed) {
       this.settings = next;
+      if (next.listenVolume !== previous.listenVolume) {
+        for (const [id, peer] of this.peers) peer.audio.volume = next.listenVolume * (this.memberGain.get(id) ?? 1);
+      }
       saveAudioSettings(next);
     }
   }
 
   setVolume(id, gain) {
+    if (this.closed || !Number.isFinite(gain)) return;
+    const value = Math.max(0, Math.min(1, gain));
+    this.memberGain.set(id, value);
     const peer = this.peers.get(id);
-    if (peer && Number.isFinite(gain)) peer.audio.volume = Math.max(0, Math.min(1, gain));
+    if (peer) peer.audio.volume = value * this.settings.listenVolume;
   }
 
   async resumePlayback() {
@@ -277,5 +338,6 @@ export class VoiceRoom {
     this.captureRequest++;
     for (const id of this.peers.keys()) this.removePeer(id);
     this.stopCaptures();
+    this.memberGain.clear();
   }
 }

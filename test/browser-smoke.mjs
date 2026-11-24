@@ -222,6 +222,14 @@ async function audioPreferencesSmoke(page) {
   await page.reload();
   await openSettings();
   assert.equal(await noise.isChecked(), selected, 'la preferencia de audio persiste tras recargar');
+  const volume = settings.getByLabel('Volumen de las voces que escucho');
+  await volume.press('Home');
+  assert.equal(await volume.inputValue(), '0');
+  await settings.getByRole('button', {name:'Restablecer volumen y filtros de voz'}).click();
+  await settings.getByText(/Volumen de voz al 70/).waitFor();
+  assert.equal(await volume.inputValue(), '70');
+  assert.equal(await noise.isChecked(), true);
+  assert.equal(await settings.getByLabel('Ganancia automática del micrófono').isChecked(), false);
 }
 
 
