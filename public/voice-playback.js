@@ -56,23 +56,26 @@ export class VoicePlayback {
       const gain = ctx.createGain();
       const limiter = ctx.createWaveShaper();
       const destination = ctx.createMediaStreamDestination();
-      const next = {source, gain, limiter, destination};
+      // Chromium needs an HTML media consumer on the original RTC stream to
+      // keep decoding it after the audible element switches to the filtered stream.
+      const decoder = document.createElement('audio');
+      decoder.muted = true;
+      const next = {source, gain, limiter, destination, decoder};
       this.boosted.set(peer, next);
       destination.channelCount = 1;
       limiter.curve = limitingCurve();
       gain.gain.value = level / 2;
       source.connect(gain).connect(limiter).connect(destination);
-      // Only the existing, sink-selected <audio> plays the output. Nothing is
-      // connected to ctx.destination; a blocked context leaves direct audio on.
-      if (ctx.state === 'running') this.attach(peer, destination.stream);
-      else {
-        this.attach(peer, peer.remoteStream);
-        ctx.resume().then(() => {
-          if (this.boosted.get(peer) === next) this.attach(peer, destination.stream);
-        }).catch(() => {
-          if (this.boosted.get(peer) === next) this.fallback(peer);
-        });
-      }
+      // Keep direct audio until the muted decoder is playing and the context
+      // is ready. The existing sink-selected element is the only audible route.
+      this.attach(peer, peer.remoteStream);
+      decoder.srcObject = peer.remoteStream;
+      const ready = ctx.state === 'running' ? Promise.resolve() : ctx.resume();
+      Promise.all([decoder.play(),ready]).then(() => {
+        if (this.boosted.get(peer) === next) this.attach(peer, destination.stream);
+      }).catch(() => {
+        if (this.boosted.get(peer) === next) this.fallback(peer);
+      });
     } catch {
       this.fallback(peer);
     }
@@ -92,6 +95,8 @@ export class VoicePlayback {
     const graph = this.boosted.get(peer);
     if (graph) {
       this.boosted.delete(peer);
+      graph.decoder.pause();
+      graph.decoder.srcObject = null;
       graph.source.disconnect();
       graph.gain.disconnect();
       graph.limiter.disconnect();

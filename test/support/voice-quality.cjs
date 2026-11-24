@@ -198,10 +198,19 @@ async function capture(probe) {
 function observePlayer() {
   // VoiceRoom uses a detached audio element. Observe its real source and leave the native setter intact.
   const prototype = HTMLMediaElement.prototype;
+  const candidates = new Set();
+  Object.defineProperty(window,'qaPlayback',{get() {
+    const audible = [...candidates].filter(player=>player.srcObject && !player.muted && !player.paused && player.volume>0);
+    if (audible.length>1) throw Error('Más de un reproductor audible para un único interlocutor.');
+    return audible[0];
+  }});
   const descriptor = Object.getOwnPropertyDescriptor(prototype,'srcObject');
   Object.defineProperty(prototype,'srcObject',{...descriptor,set(stream) {
     descriptor.set.call(this,stream);
-    if (this instanceof HTMLAudioElement && stream?.getAudioTracks().length) window.qaPlayback = this;
+    if (this instanceof HTMLAudioElement) {
+      if (stream?.getAudioTracks().length) candidates.add(this);
+      else candidates.delete(this);
+    }
   }});
 }
 
@@ -381,6 +390,10 @@ async function testListenBoost(electron,peer) {
     await Promise.all([electron,peer].map(page=>page.evaluate(()=>window.qaSetSignal('soft'))));
     const at100 = await read(100);
     const at200 = await read(200);
+    console.log('Señal antes del altavoz y RTP (dBFS)',JSON.stringify({
+      at100:{player:at100.playback.referenceDbfs,inbound:at100.incoming.referenceDbfs,outbound:at100.outgoing.referenceDbfs},
+      at200:{player:at200.playback.referenceDbfs,inbound:at200.incoming.referenceDbfs,outbound:at200.outgoing.referenceDbfs}
+    }));
     const gain = verifyGain(at100.playback,at200.playback,20*Math.log10(2),900);
     const incomingDelta = verifyGain(at100.incoming,at200.incoming,0,900);
     const outgoingDelta = verifyGain(at100.outgoing,at200.outgoing,0,500);
