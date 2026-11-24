@@ -67,6 +67,13 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   const listenLevel = levelControl('Volumen de las voces que escucho', 200, percent => percent + ' %');
   const micGain = inputLevel.slider;
   const volume = listenLevel.slider;
+  function syncLevels(settings) {
+    micGain.value = String(settings.micGainDb);
+    inputLevel.updateLabel();
+    volume.value = String(Math.round(settings.listenVolume * 100));
+    listenLevel.updateLabel();
+  }
+  syncLevels(getVoice()?.settings ?? readAudioSettings());
   const actual = document.createElement('p');
   actual.setAttribute('role', 'status');
   const testArea = document.createElement('div');
@@ -128,21 +135,22 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   };
   let reading = 0;
   let saving = false;
-  async function render() {
-    const sequence = ++reading;
-    let devices = [];
-    try { devices = await media?.enumerateDevices?.() ?? []; } catch {}
-    if (sequence !== reading) return;
+  let devices = [];
+  async function render(refreshDevices = true) {
+    if (refreshDevices) {
+      const sequence = ++reading;
+      let list;
+      try { list = await media?.enumerateDevices?.() ?? []; } catch { list = []; }
+      if (sequence !== reading) return;
+      devices = list;
+    }
     const settings = getVoice()?.settings ?? readAudioSettings();
     renderOptions(microphone, devices, settings.inputId, 'audioinput');
     renderOptions(speakers, devices, settings.outputId, 'audiooutput');
     noise.checked = settings.noiseSuppression;
     gain.checked = settings.autoGainControl;
-    micGain.value = String(settings.micGainDb);
-    inputLevel.updateLabel();
+    syncLevels(settings);
     micGain.disabled = saving;
-    volume.value = String(Math.round(settings.listenVolume * 100));
-    listenLevel.updateLabel();
     gain.disabled = saving || !media?.getSupportedConstraints?.().autoGainControl;
     volume.disabled = saving;
     syncProcessing();
@@ -168,7 +176,8 @@ export function mountAudioSettings(container, getVoice, onStatus) {
       onStatus?.(err.message);
     } finally {
       saving = false;
-      await render();
+      const levelsOnly = Object.keys(patch).every(key => key === 'micGainDb' || key === 'listenVolume');
+      await render(!levelsOnly);
       status.textContent = message;
     }
   }

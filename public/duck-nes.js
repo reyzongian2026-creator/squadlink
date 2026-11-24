@@ -72,6 +72,7 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
   const mario = game === 'mario3';
   const view = mount.ownerDocument.defaultView;
   const doc = mount.ownerDocument;
+  const checkInstalled = ['localhost','127.0.0.1','[::1]'].includes(view.location.hostname) || view.location.protocol === 'squad:';
   const aborter = new view.AbortController();
   const listen = (target, type, action, capture=false) => target.addEventListener(type, action, { signal: aborter.signal, capture });
   const panel = doc.createElement('div');
@@ -79,7 +80,7 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
   const help = mario
     ? 'Enter para Start. En el mapa usa las flechas y Espacio para entrar al nivel. Durante la partida, Espacio o Z salta y X corre.'
     : 'Enter para Start y Mayús para Select. Apunta con el ratón o las flechas y dispara con clic o Espacio.';
-  panel.innerHTML = `<details open class="nes-cartridge"><summary>Cartucho de ${title}</summary><label>Seleccionar archivo .nes<input type="file" accept=".nes"></label></details>
+  panel.innerHTML = `<details ${checkInstalled ? 'hidden' : 'open'} class="nes-cartridge"><summary>Cartucho de ${title}</summary><label>Seleccionar archivo .nes<input type="file" accept=".nes"></label></details>
     <p class="nes-help">${help}${mario ? '' : ' El cartucho contiene destellos rápidos.'}</p>
     <div class="nes-screen"><canvas width="256" height="240" hidden tabindex="0" aria-label="Pantalla NES de ${title}"></canvas>
       <span class="nes-sight" aria-hidden="true" hidden></span></div>
@@ -122,7 +123,8 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
     }
   }
   const buttonReleases = new Map();
-  status.textContent = 'Selecciona tu cartucho de ' + title + '.';
+  const chooseMessage = 'Selecciona tu cartucho de ' + title + '.';
+  status.textContent = checkInstalled ? 'Abriendo ' + title + '…' : chooseMessage;
 
   const full = control('full');
   let expandedHere = false;
@@ -217,7 +219,7 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
       }
       if (id !== version || closed) return;
       const chooser = panel.querySelector('.nes-cartridge');
-      if (installed) { chooser.open = false; chooser.querySelector('summary').textContent = title + ' · Cartucho instalado'; }
+      chooser.hidden = installed;
       rankedCart = matches;
       cartridge = bytes;
       play.disabled = false;
@@ -229,12 +231,18 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
     }
   }
   listen(fileField, 'change', () => { void loadFile(fileField.files?.[0]); });
-  if (['localhost','127.0.0.1','[::1]'].includes(view.location.hostname) || view.location.protocol === 'squad:') {
+  if (checkInstalled) {
     view.fetch('/' + game + '.nes', {signal:aborter.signal}).then(async response => {
       if (!response.ok) return;
       const file = await response.blob();
       if (!version && !closed) await loadFile(file,true);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => {
+      if (closed || cartridge) return;
+      const chooser = panel.querySelector('.nes-cartridge');
+      chooser.hidden = false;
+      chooser.open = true;
+      if (!version) status.textContent = chooseMessage;
+    });
   }
 
   listen(play, 'click', async () => {

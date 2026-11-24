@@ -43,6 +43,24 @@ jobs:
           $remove=Start-Process (Join-Path $target 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
           if ($remove.ExitCode -or (Test-Path (Join-Path $target 'Squadlink.exe'))) {throw 'Falló la desinstalación'}
           (Get-FileHash $setup).Hash+'  Squadlink-Moderno-Setup-x64.exe' | Set-Content artifacts/electron/SHA256.txt
+      - name: Probar la instalación opcional de cartuchos personales
+        run: |
+          $package=New-Item -ItemType Directory (Join-Path $env:RUNNER_TEMP 'Paquete personal')
+          $cartridges=New-Item -ItemType Directory (Join-Path $package.FullName 'cartridges')
+          $setup=(Copy-Item artifacts/electron/Squadlink-Moderno-Setup-x64.exe $package.FullName -PassThru).FullName
+          $target=Join-Path $env:RUNNER_TEMP 'Arcade personal'
+          node --input-type=module -e "import {writeFileSync} from 'node:fs'; import {diagnosticCartridge} from './test/duck-nes-fixture.mjs'; writeFileSync(process.argv[1], diagnosticCartridge())" (Join-Path $cartridges.FullName 'duck-nes.nes')
+          if ($LASTEXITCODE) {exit $LASTEXITCODE}
+          Copy-Item (Join-Path $cartridges.FullName 'duck-nes.nes') (Join-Path $cartridges.FullName 'mario3.nes')
+          $result=Start-Process $setup -ArgumentList "/VERYSILENT /NORESTART /DIR=`"$target`"" -Wait -PassThru
+          if ($result.ExitCode) {throw 'Falló la instalación con cartuchos'}
+          foreach ($name in 'mario3.nes','duck-nes.nes') {
+            $expected=(Get-FileHash (Join-Path $cartridges.FullName $name)).Hash
+            $installed=Join-Path $target "resources\app\cartridges\$name"
+            if ((Get-FileHash $installed).Hash -ne $expected) {throw "El cartucho $name no se instaló correctamente"}
+          }
+          $remove=Start-Process (Join-Path $target 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
+          if ($remove.ExitCode) {throw 'Falló la desinstalación con cartuchos'}
       - uses: actions/upload-artifact@v4
         with:
           name: Squadlink-Electron-Windows-x64

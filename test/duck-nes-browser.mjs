@@ -8,6 +8,7 @@ export async function duckNesBrowser(page) {
   const panel = page.locator('.duck-nes');
   const input = panel.locator('input[type=file]');
   const play = panel.getByRole('button', {name: 'Jugar', exact: true});
+  await input.waitFor({state:'visible'});
   assert.ok(await play.isDisabled());
   await input.setInputFiles({name: 'truncado.nes', mimeType: 'application/octet-stream', buffer: Buffer.from([0, 1, 2])});
   await page.locator('#game-mount [role=status]').filter({hasText: 'cabecera iNES'}).waitFor();
@@ -29,4 +30,23 @@ export async function duckNesBrowser(page) {
   await panel.getByRole('button', {name: 'Pausar', exact: true}).waitFor();
   await page.getByRole('button', {name: 'Cerrar minijuego'}).click();
   await panel.waitFor({state: 'detached'});
+
+  // Both desktop slots can start with a bundled diagnostic ROM on a fresh profile.
+  const origin = new URL(page.url());
+  if (origin.protocol !== 'squad:' && !['localhost','127.0.0.1','[::1]'].includes(origin.hostname)) return;
+  for (const game of ['duck-nes', 'mario3']) {
+    const route = '**/' + game + '.nes';
+    await page.route(route, request => request.fulfill({contentType:'application/octet-stream', body:Buffer.from(diagnosticCartridge())}));
+    try {
+      await page.locator('[data-game="' + game + '"]').click();
+      await page.locator('#game-mount [role=status]').filter({hasText:'Cartucho instalado'}).waitFor();
+      assert.ok(await input.isHidden());
+      await play.press('Enter');
+      await panel.getByRole('button', {name:'Pausar', exact:true}).waitFor();
+      await page.getByRole('button', {name:'Cerrar minijuego'}).click();
+      await panel.waitFor({state:'detached'});
+    } finally {
+      await page.unroute(route);
+    }
+  }
 }

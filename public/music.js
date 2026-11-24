@@ -40,8 +40,8 @@ function fileDuration(file, signal) {
 export function createMusic({mount, api, notify}) {
   mount.innerHTML = `
     <section class="music-panel" aria-labelledby="music-heading">
-      <header class="music-header"><h3 id="music-heading">Música de sala</h3><button type="button" data-listen class="secondary small" aria-pressed="false">Escuchar</button></header>
-      <div class="music-current" hidden><div class="music-track"><strong data-title></strong><small data-kind></small></div><button type="button" data-next class="secondary small">Siguiente</button></div>
+      <header class="music-header"><h3 id="music-heading">Música de sala</h3><button type="button" data-listen class="secondary small" aria-pressed="false">Escuchar aquí</button></header>
+      <div class="music-current" hidden><div class="music-track"><strong data-title></strong><small data-kind></small></div><button type="button" data-shared class="secondary small" hidden>Volver a la música de sala</button><button type="button" data-next class="secondary small">Siguiente</button></div>
       <div data-player></div>
       <label class="music-volume" hidden>Volumen de música <input type="range" min="0" max="100" value="60" aria-label="Volumen de música"><output>60 %</output></label>
       <p class="music-empty" hidden>La cola está vacía.</p>
@@ -108,6 +108,15 @@ export function createMusic({mount, api, notify}) {
   let room = null, track = null, clockOffset = 0, optedIn = false;
   let release = null, setPlayerVolume = null, syncPlayer = null, delivery = null, skipId = null, lastQueue = "";
   let upload, personalStation = null;
+  const muteKey = "squadlink.music.muted";
+  let locallyMuted = false;
+  try { locallyMuted = localStorage.getItem(muteKey) === "true"; } catch {}
+  function setLocalListening(enabled) {
+    optedIn = enabled;
+    locallyMuted = !enabled;
+    try { localStorage.setItem(muteKey, String(locallyMuted)); } catch {}
+    drawListening();
+  }
   const position = () => roomPosition(room?.music?.startedAt, clockOffset);
   const post = (action, data) => api("music/" + action, data);
   function feedback(text) { notice.textContent = text; }
@@ -118,7 +127,7 @@ export function createMusic({mount, api, notify}) {
   }
   function drawListening() {
     listen.setAttribute("aria-pressed", String(optedIn));
-    listen.textContent = optedIn ? "Dejar de escuchar" : "Escuchar";
+    listen.textContent = optedIn ? "Silenciar solo para mí" : "Escuchar aquí";
     volumeLabel.hidden = !optedIn;
   }
   function setupPlayer() {
@@ -226,19 +235,13 @@ export function createMusic({mount, api, notify}) {
       else activeChoice("station")?.focus();
       return;
     }
-    optedIn = !optedIn;
-    if (!optedIn && personalStation) {
-      personalStation = null;
-      update(room);
-    }
-    drawListening();
+    setLocalListening(!optedIn);
     setupPlayer();
   };
   function playPersonal(station) {
     const same = personalStation?.stationId === station.id;
     personalStation = {id:"personal/" + station.id, stationId:station.id, kind:"radio", title:station.name};
-    optedIn = true;
-    drawListening();
+    setLocalListening(true);
     update(room);
     if (same) setupPlayer();
     el(".music-add").open = false;
@@ -246,6 +249,10 @@ export function createMusic({mount, api, notify}) {
   el("[data-personal]").onclick = () => {
     const station = radioStations.find(item => item.id === activeChoice("station")?.value);
     if (room && station) playPersonal(station);
+  };
+  el("[data-shared]").onclick = () => {
+    personalStation = null;
+    update(room);
   };
   volume.oninput = () => {
     el("output").textContent = volume.value + " %";
@@ -301,7 +308,7 @@ export function createMusic({mount, api, notify}) {
         } catch (error) {
           if (upload !== controller) return;
           if (error.status !== 400 || !/YouTube|Selecciona una emisora del catálogo/i.test(error.message)) throw error;
-          if (startListening) {
+          if (startListening && !locallyMuted) {
             playPersonal(station);
             notify?.("Escuchando solo aquí. El servidor de esta sala todavía no admite emisoras compartidas.");
           } else {
@@ -310,7 +317,7 @@ export function createMusic({mount, api, notify}) {
           return;
         }
         if (upload !== controller) return;
-        if (startListening && !optedIn) {
+        if (startListening && !locallyMuted && !optedIn) {
           optedIn = true;
           drawListening();
           setupPlayer();
@@ -350,6 +357,7 @@ export function createMusic({mount, api, notify}) {
     if (Number.isFinite(music?.serverNow)) clockOffset = music.serverNow - Date.now();
     track = currentTrack;
     next.hidden = Boolean(personalStation);
+    el("[data-shared]").hidden = !personalStation;
     current.hidden = !track;
     el(".music-empty").hidden = Boolean(track);
     title.textContent = track?.title || "";

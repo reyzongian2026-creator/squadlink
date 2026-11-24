@@ -85,7 +85,55 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await home.getByRole('button',{name:'Mi sala',exact:true}).click();
  await testVoiceQuality(space,peer);
  const {musicSmoke}=await import('../test/support/music-browser.mjs');
- await musicSmoke(space,peer);
+ async function radioAndVoice() {
+  return Promise.all([space,peer].map(async page=>{
+   const media=await page.evaluate(()=>{
+    const audio=document.querySelector('#room-music audio');
+    return {time:audio?.currentTime,source:audio?.currentSrc,playing:!!audio && !audio.paused,
+     room:document.querySelector('#room-code').textContent, count:document.querySelector('#count').textContent};
+   });
+   return {...media,energy:await sample(page)};
+  }));
+ }
+ async function requireProgress(initial,label) {
+  let latest;
+  for(let i=0;i<32;i++) {
+   latest=await radioAndVoice();
+   for(const [j,m] of latest.entries()){
+    assert.equal(m.room,code,label);assert.match(m.count,/2\s*\/\s*5/,label);
+    assert.ok(m.playing && m.source===initial[j].source,label+' perdió la radio de la sala');
+   }
+   if(latest.every((m,j)=>m.time>initial[j].time+0.45 && m.energy>initial[j].energy)){
+    console.log(label,JSON.stringify(latest.map((m,j)=>({radioSeconds:m.time-initial[j].time,voiceEnergy:m.energy-initial[j].energy}))));
+    return;
+   }
+   await delay(200);
+  }
+  throw Error(label+' no avanzó: '+JSON.stringify({initial,latest}));
+ }
+ async function waitMinimized(expected) {
+  for(let i=0;i<35;i++) {
+   if(await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].isMinimized())===expected)return;
+   await delay(200);
+  }
+  throw Error('La ventana no alcanzó el estado minimizado='+expected);
+ }
+ await musicSmoke(space,peer,async()=>{
+  try{
+   await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
+   await waitMinimized(true);
+   await requireProgress(await radioAndVoice(),'Radio y voz con la ventana minimizada');
+  }finally{
+   await app.evaluate(({BaseWindow})=>{const win=BaseWindow.getAllWindows()[0];win.restore();win.show();win.focus();});
+   await waitMinimized(false);
+  }
+  await requireProgress(await radioAndVoice(),'Radio y voz al restaurar la ventana');
+  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
+  await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
+  await requireProgress(await radioAndVoice(),'Radio y voz en el lobby');
+  await home.getByRole('button',{name:'Mi sala',exact:true}).click();
+  await space.locator('#room-music [data-listen][aria-pressed="true"]').waitFor();
+ });
  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
  await home.getByRole('button',{name:'Arcade',exact:true}).click();await space.locator('[data-game="reflex"]').waitFor();
  const {duckNesBrowser}=await import('../test/duck-nes-browser.mjs');

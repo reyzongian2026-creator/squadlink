@@ -18,6 +18,8 @@ WizardStyle=modern
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 [Files]
 Source: "..\artifacts\portable\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "{src}\cartridges\mario3.nes"; DestDir: "{app}\resources\app\cartridges"; Flags: external ignoreversion skipifsourcedoesntexist
+Source: "{src}\cartridges\duck-nes.nes"; DestDir: "{app}\resources\app\cartridges"; Flags: external ignoreversion skipifsourcedoesntexist
 [Icons]
 Name: "{group}\Squadlink Moderno"; Filename: "{app}\Squadlink.exe"; IconFilename: "{app}\resources\app\Squadlink.ico"
 [Run]

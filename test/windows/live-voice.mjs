@@ -13,7 +13,8 @@ try {
   const page = await browser.newPage({permissions:['microphone']});
   await page.addInitScript({path:'test/windows/audio-fixture.js'});
   await page.goto('http://127.0.0.1:4179');
-  await page.locator('#join').click();
+  await page.getByRole('link', {name:'Lobby de voz', exact:true}).click();
+  await page.getByRole('button', {name:'Unirme con código', exact:true}).click();
   await page.locator('#nickname').fill('Segundo jugador');
   await page.locator('#code').fill(code);
   await page.locator('#submit-entry').click();
