@@ -38,8 +38,11 @@ jobs:
           $target=Join-Path $env:RUNNER_TEMP 'Squadlink Moderno'
           $result=Start-Process $setup -ArgumentList "/VERYSILENT /NORESTART /DIR=`"$target`"" -Wait -PassThru
           if ($result.ExitCode) {throw 'Falló la instalación'}
-          node electron/smoke.cjs (Join-Path $target 'Squadlink.exe')
-          if ($LASTEXITCODE) {exit $LASTEXITCODE}
+          foreach($variant in @('control','early')){
+            $env:SQUADLINK_LAB_SPARE=$variant
+            node electron/smoke.cjs (Join-Path $target 'Squadlink.exe')
+            if ($LASTEXITCODE) {exit $LASTEXITCODE}
+          }
           node test/windows/update-cache-ui.cjs (Join-Path $target 'Squadlink.exe')
           if ($LASTEXITCODE) {exit $LASTEXITCODE}
           $remove=Start-Process (Join-Path $target 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru

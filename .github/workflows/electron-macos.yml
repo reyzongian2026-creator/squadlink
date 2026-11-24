@@ -38,7 +38,9 @@ jobs:
           kill "$fixture_pid"
           wait "$fixture_pid" || true
           trap - EXIT
-          node electron/smoke.cjs "$RUNNER_TEMP/preview/Squadlink Moderno.app/Contents/MacOS/Electron"
+          for variant in control early; do
+            SQUADLINK_LAB_SPARE="$variant" node electron/smoke.cjs "$RUNNER_TEMP/preview/Squadlink Moderno.app/Contents/MacOS/Electron"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: Squadlink-Moderno-macOS-arm64

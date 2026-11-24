@@ -9,6 +9,25 @@ const {createUpdateController}=require('./update-controller.cjs');
 const {createUpdateCache}=require('./update-cache.cjs');
 const mac=process.platform==='darwin';
 const titles={create:'Crear sala',join:'Unirme con código',lobby:'Mi sala',rooms:'Explorar salas',friends:'Amigos',player:'Mi jugador',arcade:'Arcade',guide:'Guía de sala',ranking:'Clasificación',settings:'Dispositivos de audio'};
+// Experimental native lifecycle log. It never creates an extra session for inspection.
+let lastProcesses='';
+const processLog=[];
+globalThis.labProcesses=processLog;
+app.on('session-created',ses=>processLog.push({event:'session',time:Date.now(),profile:ses.storagePath,source:new Error().stack}));
+app.on('web-contents-created',(_e,wc)=>{
+ processLog.push({event:'contents',time:Date.now(),id:wc.id,type:wc.getType()});
+ wc.on('did-frame-finish-load',(_e,isMain,processId,routingId)=>processLog.push({event:'frame',time:Date.now(),id:wc.id,isMain,processId,routingId,url:wc.getURL()}));
+ wc.once('destroyed',()=>processLog.push({event:'destroyed',time:Date.now(),id:wc.id}));
+});
+app.whenReady().then(()=>{
+ if(process.env.SQUADLINK_LAB_SPARE==='early')void session.defaultSession;
+ const sample=()=>{
+  const metrics=app.getAppMetrics().filter(m=>m.type==='Tab').map(m=>m.pid).sort();
+  const signature=metrics.join(',');
+  if(signature!==lastProcesses){lastProcesses=signature;processLog.push({event:'pids',time:Date.now(),metrics});}
+ };
+ setInterval(sample,125).unref();
+});
 const prefsFile=()=>path.join(app.getPath('userData'),'desktop.json');
 function savePrefs(value){
  const file=prefsFile();

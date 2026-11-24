@@ -74,9 +74,20 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  assert.equal((await home.evaluate(()=>window.squad.state())).server,'http://127.0.0.1:4179');
  await home.getByText('Todavía no hay salas públicas.').waitFor();
  await home.screenshot({path:path.join(capture,'Inicio-Moderno.png')});
+ async function stamp(label){
+  const value=await app.evaluate(({app,webContents},label)=>{
+   let frames=webContents.getAllWebContents().flatMap(w=>{
+    try{return w.mainFrame.framesInSubtree.map(f=>({wc:w.id,url:f.url,pid:f.osProcessId}));}catch{return [];}
+   });
+   const metrics=app.getAppMetrics().filter(m=>m.type==='Tab').map(m=>[m.pid,m.memory.workingSetSize]);
+   return {variant:process.env.SQUADLINK_LAB_SPARE,label,time:Date.now(),frames,metrics,events:globalThis.labProcesses.splice(0)};
+  },label);
+  console.log('SPARETRACE '+JSON.stringify(value));
+ }
  async function memory(label){
   // Electron reports working-set KiB per process. Keep timing and sample size
   // identical to the .22 benchmark, including all native helper processes.
+  await stamp(label);
   const samples=[];
   for(let i=0;i<5;i++){
    const values=await app.evaluate(({app})=>app.getAppMetrics().map(m=>m.memory.workingSetSize));
@@ -205,7 +216,9 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await openCurrentRoom();
  await memory('voz con sala visible');
  await onlyCallRenderer(callView,externalLobby);
+ await stamp('before quality');
  await testVoiceQuality(space,peer);
+ await stamp('after quality');
  const {musicSmoke,assertRadioShortcut}=await import('../test/support/music-browser.mjs');
  async function radioAndVoice() {
   return Promise.all([space,peer].map(async page=>{
@@ -296,7 +309,9 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
     await assertRadioShortcut(space,peer,sendGlobal,(windows?'teclas del sistema Windows, ':'callback global registrado en macOS, ')+label);
    }else console.log('El sistema reservó Alt+Shift+R; se comprobarán las teclas con foco.');
  }
+ await stamp('before radio');
  await musicSmoke(space,peer,async()=>{
+  await stamp('playing radio');
   const connection=await space.evaluateHandle(()=>window.testPeers.find(pc=>pc.connectionState==='connected'));
   try{
    await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
@@ -333,6 +348,9 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    await waitMinimized(true);
    await requireProgress(await radioAndVoice(),'Radio y voz con el lobby minimizado');
    await memory('voz y radio con lobby minimizado');
+   await delay(15000);
+   await stamp('15 seconds minimized');
+   await requireProgress(await radioAndVoice(),'Tras 15 segundos minimizado');
    await onlyCallRenderer(callView,externalLobby);
    await checkCallSurface(false);
    await inlineLobby.waitFor({state:'detached',timeout:5000});
