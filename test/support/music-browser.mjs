@@ -149,3 +149,64 @@ export async function musicSmoke(host,guest,whileBothListen) {
   await panel(guest).getByRole('button',{name:'Siguiente'}).click();
   for(const page of [host,guest]) await page.locator('#members [data-music-bot]').waitFor({state:'detached'});
 }
+
+export async function leaveFailureSmoke(guest) {
+  const station = radioStations[0];
+  const panel = guest.locator('#room-music');
+  const audioRoute = route => route.fulfill({contentType:'audio/wav',body:sampleWav()});
+  const reply = Promise.withResolvers();
+  let attempts = 0;
+  const leaveRoute = async route => {
+    assert.equal(route.request().method(),'POST');
+    attempts++;
+    if (attempts > 1) return route.continue();
+    await reply.promise;
+    await route.fulfill({status:503,json:{error:'Salida temporalmente no disponible.'}});
+  };
+  await guest.route(station.url,audioRoute);
+  await guest.route('**/api/leave',leaveRoute);
+  try {
+    const picker = panel.locator('.music-add');
+    if (!await picker.evaluate(el=>el.open)) await picker.locator('summary').click();
+    await picker.locator('.source-options').getByText('Radio en directo',{exact:true}).click();
+    await picker.locator('.genre-options').getByText(station.genre,{exact:true}).click();
+    await picker.locator('.station-options label').filter({hasText:station.name}).click();
+    await picker.getByRole('button',{name:'Añadir a la sala'}).click();
+    await panel.locator('[data-title]').filter({hasText:station.name}).waitFor();
+    if (await panel.locator('[data-listen]').getAttribute('aria-pressed')!=='true') {
+      await panel.locator('[data-listen]').click();
+    }
+    const player = await guest.waitForFunction(url=>{
+      const el=document.querySelector('#room-music audio');
+      return el?.currentSrc===url && !el.paused && el.currentTime>0.15 && el;
+    },station.url);
+    assert.ok(await guest.evaluate(()=>window.qaTracks.some(t=>t.readyState==='live') &&
+      window.qaPeers.some(pc=>pc.connectionState==='connected')));
+    await Promise.all([
+      guest.waitForRequest(req=>new URL(req.url()).pathname==='/api/leave' && req.method()==='POST'),
+      guest.getByRole('button',{name:'Salir de la sala'}).click()
+    ]);
+    const stopped = oldPlayer => oldPlayer.paused && !oldPlayer.hasAttribute('src') &&
+      !document.querySelector('#room-music audio') && window.qaTracks.every(t=>t.readyState==='ended') &&
+      window.qaPeers.every(pc=>pc.connectionState==='closed');
+    assert.ok(await guest.evaluate(stopped,player),'Mientras el POST sigue pendiente deben cerrarse voz y radio.');
+    await guest.keyboard.press('Alt+Shift+KeyR');
+    assert.ok(await guest.evaluate(stopped,player),'El atajo no debe reabrir el audio durante la salida.');
+    reply.resolve();
+    const retry = guest.getByRole('button',{name:'Reintentar salida'});
+    await retry.waitFor();
+    await guest.keyboard.press('Alt+Shift+KeyR');
+    assert.ok(await guest.evaluate(stopped,player),'El 503 debe conservar el audio cerrado.');
+    const confirmed = guest.waitForResponse(res=>new URL(res.url()).pathname==='/api/leave' && res.ok());
+    await retry.click();
+    await confirmed;
+    await guest.locator('#room').waitFor({state:'hidden'});
+    await guest.locator('#home').waitFor();
+    assert.equal(attempts,2);
+    await player.dispose();
+  } finally {
+    reply.resolve();
+    await guest.unroute('**/api/leave',leaveRoute);
+    await guest.unroute(station.url,audioRoute);
+  }
+}

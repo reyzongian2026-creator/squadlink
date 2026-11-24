@@ -1,7 +1,7 @@
 // Requires Playwright on the test machine only. A single process owns this isolated server.
 import assert from 'node:assert/strict';
 import { duckNesBrowser } from './duck-nes-browser.mjs';
-import {musicSmoke} from './support/music-browser.mjs';
+import {musicSmoke,leaveFailureSmoke} from './support/music-browser.mjs';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { createServer } from '../server.mjs';
@@ -259,6 +259,23 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
       return page;
     }
     const a = await client();
+    let iceRequests = 0;
+    const retryICE = Promise.withResolvers();
+    await a.route('**/api/ice', async route => {
+      if (++iceRequests === 1) return route.fulfill({status:503,json:{error:'ICE no disponible'}});
+      await retryICE.promise;
+      await route.continue();
+    });
+    await a.evaluate(() => {
+      const NativeSource = window.EventSource;
+      window.qaRoomSources = 0;
+      window.EventSource = class extends NativeSource {
+        constructor(url, options) {
+          super(url, options);
+          if (new URL(url,location.origin).pathname === '/api/events') window.qaRoomSources++;
+        }
+      };
+    });
     const b = await client();
     for (const width of [360, 390, 1440]) {
       await a.setViewportSize({ width, height: 900 });
@@ -288,6 +305,18 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     await b.getByLabel('Clave').fill('solo-para-prueba');
     await b.locator('#submit-entry').click();
     await a.locator('#members').getByText('Ana', { exact: true }).waitFor();
+    const retryVoice = a.getByRole('button', {name:'Reintentar conexión de voz'});
+    await retryVoice.waitFor();
+    assert.ok(await a.locator('#mic').isDisabled());
+    await retryVoice.click();
+    assert.ok(await retryVoice.isDisabled());
+    await a.locator('#listen').evaluate(button => button.dispatchEvent(new Event('click')));
+    retryICE.resolve();
+    await a.waitForFunction(() => !document.querySelector('#mic').disabled);
+    assert.deepEqual(await a.evaluate(() => [window.qaRoomSources,window.qaTracks.length,window.qaPeers.length]), [1,0,1],
+      'el reintento conserva el canal de eventos, conecta al miembro actual y mantiene el micro apagado');
+    assert.equal(iceRequests, 2);
+    await a.unroute('**/api/ice');
     for (const page of [a,b]) await page.getByRole('button', { name: 'Activar micrófono' }).click();
     async function inbound(page, minBytes = 0) {
       const deadline = Date.now() + 30000;
@@ -362,8 +391,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     await openChannel(a, 'main');
     await a.locator('#mic').click();
     await a.waitForFunction(() => window.qaTracks.length > 0 && window.qaTracks.every(t => t.readyState === 'ended'));
-    await b.getByRole('button', { name: 'Salir de la sala' }).click();
-    await b.waitForFunction(() => window.qaTracks.length > 0 && window.qaTracks.every(t => t.readyState === 'ended') && window.qaPeers.every(p => p.connectionState === 'closed'));
+    await leaveFailureSmoke(b);
     await a.waitForFunction(() => !document.querySelector('#members').textContent.includes('Ana'));
     const spectator = await client();
     await socialSmoke(a, b, spectator);

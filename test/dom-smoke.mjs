@@ -17,9 +17,11 @@ export async function domSmoke(Window) {
     for (const key of ['document','window','location','history','localStorage','navigator']) {
       Object.defineProperty(globalThis, key, { configurable: true, value: key === 'window' ? win : win[key] });
     }
-    let offline = false;
+    let offline = false, expiredLeave = false;
     let expiredSocialSession = false, expiredSession = false;
     globalThis.fetch = async (url, options) => {
+      if (expiredLeave && url === '/api/leave')
+        return Response.json({error:'Sesión caducada'}, {status:401});
       if (offline) throw new TypeError("sin conexión simulada");
       if (expiredSession && url === '/api/session' && !options?.method)
         return Response.json({error: 'Sesión caducada'}, {status: 401});
@@ -61,7 +63,8 @@ export async function domSmoke(Window) {
     el('kit-save').click();
     await until(() => el('kit-status').textContent.includes('Apariencia guardada'));
     assert.equal((await player.hit('progress/profile', {})).data.profile.avatar.headgear, 2);
-    document.querySelector('[data-rank="sequence"]').click();
+    el('kit-rank-game').value = 'sequence';
+    el('kit-rank-game').dispatchEvent(new win.Event('change'));
     await until(() => el('kit-rank-scope').textContent.includes('Más rondas seguidas'));
 
     const outsider = f.player();
@@ -166,6 +169,17 @@ export async function domSmoke(Window) {
     expiredSession = expiredSocialSession = true;
     win.dispatchEvent(new win.Event('focus'));
     await until(() => guestSignals === signalsBeforeExpiry + 1 && el('room').hidden);
+    assert.equal(localStorage.getItem('squadlink.nick'), 'Prueba');
+    expiredSession = expiredSocialSession = false;
+    el('create').click();
+    el('name').value = 'Salida QA';
+    el('entry-form').requestSubmit();
+    await until(() => !el('room').hidden && !el('mic').disabled);
+    expiredLeave = true;
+    el('leave').click();
+    await until(() => el('room').hidden && !el('home').hidden);
+    assert.equal(el('leave').disabled, false);
+    assert.equal(el('leave').textContent, 'Salir de la sala');
     assert.equal(localStorage.getItem('squadlink.nick'), 'Prueba');
     console.log('DOM y HTTP: personaje, XP, ranking, publicación y retiro de sala, privacidad del código, amistad, actividad, admisión a sala protegida, código manual, arcade, preferencias de apodo y reintento de salida verificados.');
   } finally {
