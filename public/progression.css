@@ -32,12 +32,12 @@
 .kit-stage {
   display: grid;
   place-items: center;
-  background-color: #232130;
-  background-image: linear-gradient(#39364580 1px,transparent 1px), linear-gradient(90deg,#39364580 1px,transparent 1px);
-  background-size: 18px 18px;
+  overflow: hidden;
+  width: 100%;
+  background: radial-gradient(ellipse at 51% 34%, #33414e 0%, #202936 48%, #151924 86%);
 }
-#kit-voxel { width: min(100%, 190px); filter: drop-shadow(0 8px 8px #11101b77); }
-#kit-voxel svg { width: 100%; display: block; }
+#kit-voxel { width: min(100%, 266px); aspect-ratio: 320 / 510; }
+#kit-voxel svg { width: 100%; height: 100%; display: block; }
 .kit-controls, .kit-ranking { padding: var(--panel-inset); }
 #kit-nick, #kit-status, #kit-rank-status, #kit-ranking .name { overflow-wrap: anywhere; }
 .kit-controls fieldset {
@@ -89,5 +89,7 @@
 @media (max-width: 440px) {
   .kit-editor { grid-template-columns: minmax(0, 1fr); }
   .kit-stage { border-bottom: 1px solid var(--border); }
-  #kit-voxel { width: 106px; }
+  #kit-voxel { width: min(55%, 172px); }
 }
+
+#kit-ranking .player-portrait { width:2rem; height:2rem; }

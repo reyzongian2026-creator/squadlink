@@ -103,7 +103,8 @@ function roomView(room) {
   return {code:room.code, name:room.name, locked:Boolean(room.key), createdAt:room.createdAt, ownerId:room.ownerId,
     directory:room.directory, music:musicView(room),
     members:[...room.members.values()].map(({id,nick,muted,joinedAt,visitId,social}) =>
-      ({id,nick,muted,joinedAt,visitId,game:social?.game || '',since:social?.since ?? null}))};
+      ({id,nick,muted,joinedAt,visitId,game:social?.game || '',since:social?.since ?? null,
+        ...(social?.appearance && {appearance:social.appearance})}))};
 }
 function matchesVisit(session, {room, visitId}) {
   return (room === undefined || room === session.room?.code) &&
@@ -214,6 +215,25 @@ export function createServer(options = {}) {
     if (!room.members.size) { music.clear(room); rooms.delete(room.code); }
     else broadcastRoom(room);
   }
+  function rememberAppearance(device, profile) {
+    if (!device || !profile || device.id !== profile.id || profile.revision <= (device.appearanceRevision ?? -1)) return;
+    device.appearanceRevision = profile.revision;
+    const next = profile.characterCreated ? {avatar:profile.avatar, level:profile.level} : null;
+    if (JSON.stringify(next) === JSON.stringify(device.appearance ?? null)) return;
+    device.appearance = next;
+    if (device.session?.room) broadcastRoom(device.session.room);
+  }
+  function loadRoomAppearance(session) {
+    const device = session.social;
+    if (!device || device.appearanceLoaded || device.appearanceRevision != null || device.loadingAppearance) return;
+    device.loadingAppearance = true;
+    void progression.storedAppearance(device.id).then(profile => {
+      device.appearanceLoaded = true;
+      rememberAppearance(device, profile);
+    }).catch(() => {
+      // The initials remain available if the progress store is offline.
+    }).finally(() => { device.loadingAppearance = false; });
+  }
   function enter(session, room) {
     if (session.room === room) return;
     if (session.room) reject(409, 'Sal de tu sala actual para entrar a otra.');
@@ -225,6 +245,7 @@ export function createServer(options = {}) {
     session.muted = true;
     session.disconnected = Date.now();
     room.members.set(session.id, session);
+    loadRoomAppearance(session);
     broadcastRoom(room);
   }
   const server = http.createServer(async (req, res) => {
@@ -271,10 +292,21 @@ export function createServer(options = {}) {
       if (!session) reject(401, 'Elige tu apodo para continuar.');
       session.used = Date.now();
       if (route === 'GET /api/session') return send(res, 200, {self:{id:session.id,nick:session.nick}, room:roomView(session.room)});
-      if (req.method === 'POST' && path.startsWith('/api/social/'))
-        return send(res, 200, social.handle(path.slice('/api/social/'.length), session, data));
-      if (req.method === 'POST' && path.startsWith('/api/progress/'))
-        return send(res, 200, await progression.handle(path.slice('/api/progress/'.length), session, data));
+      if (req.method === 'POST' && path.startsWith('/api/social/')) {
+        const previous = session.social;
+        const result = social.handle(path.slice('/api/social/'.length), session, data);
+        if (session.room && session.social && previous !== session.social) {
+          if (session.social.appearance) broadcastRoom(session.room);
+          loadRoomAppearance(session);
+        }
+        return send(res, 200, result);
+      }
+      if (req.method === 'POST' && path.startsWith('/api/progress/')) {
+        const device = session.social;
+        const result = await progression.handle(path.slice('/api/progress/'.length), session, data);
+        rememberAppearance(device, result.profile);
+        return send(res, 200, result);
+      }
       if (route === 'POST /api/directory') {
         const room = session.room;
         if (!room || room.ownerId !== session.id) reject(403, 'Solo el anfitrión puede editar la publicación.');

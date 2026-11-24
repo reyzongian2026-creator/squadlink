@@ -199,3 +199,30 @@ test('el editor conserva combinaciones libres entre versiones y solo completa la
   const restored = await s.a(s.fixtureWith());
   assert.deepEqual((await s.api(restored,'profile')).profile,recolored);
 });
+
+test('la sala publica solo el aspecto guardado y lo recupera tras reiniciar sin abrir el editor',async t=>{
+  const s=await setup(t), a=await s.a(), guest=s.instance.player();
+  await guest.hit('session',{nick:'Invitado'});
+  const room=(await a.hit('rooms',{name:'Equipo'})).data.room;
+  const before=(await guest.hit('join',{code:room.code})).data.room;
+  assert.ok(before.members.every(m=>!('appearance' in m)));
+  const {profile}=await s.api(a,'avatar',normalizeAvatar({species:3,gender:1,facialHair:2}));
+  const expected={avatar:profile.avatar,level:profile.level};
+  const [host,visitor]=(await guest.hit('session')).data.room.members;
+  assert.deepEqual(host.appearance,expected);
+  assert.equal('appearance' in visitor,false);
+  await s.api(a,'record',{game:'ducks',value:6});
+  const [leader]=(await s.api(a,'ranking',{game:'ducks'})).players;
+  assert.deepEqual(leader.avatar,expected.avatar);
+  assert.equal(leader.characterCreated,true);
+
+  const resumed=await s.a(s.fixtureWith());
+  await resumed.hit('rooms',{name:'Equipo otra vez'});
+  let member;
+  for (let i=0; i<50; i++) {
+    [member]=(await resumed.hit('session')).data.room.members;
+    if (member.appearance) break;
+    await new Promise(resolve=>setTimeout(resolve,10));
+  }
+  assert.deepEqual(member.appearance,expected);
+});

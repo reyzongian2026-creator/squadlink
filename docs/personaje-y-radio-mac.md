@@ -1,12 +1,14 @@
 # Personaje y radio en Squadlink
 
-Guía de **0.5.0-preview.13** para Windows x64 y Mac con Apple Silicon. Puedes comprobar tu versión en **Ajustes → Actualizaciones**.
+Guía para Windows x64 y Mac con Apple Silicon. Puedes comprobar tu versión en **Ajustes → Actualizaciones**.
 
 ## Elegir el rostro y guardar la apariencia
 
-Abre **Mi personaje**. Cada especie (humano, humanoide, alienígena y robot) tiene tres rostros. Pulsa **Hombre**, **Mujer** o **Especie no identificada** para ver el cambio al instante. Puedes combinar cualquiera con la silueta, el vello facial y los accesorios que elijas. Mientras el editor muestra **Cambios sin guardar**, la selección es una vista previa. Pulsa **Guardar apariencia** para conservarla al cerrar la app. La primera vez, el botón te permite crear el personaje o elegir tu apodo.
+Abre **Mi personaje**. Cada especie (humano, humanoide, alienígena y robot) tiene tres rostros. Pulsa **Hombre**, **Mujer** o **Sin identificar** para ver el cambio al instante. Puedes combinar cualquiera con la silueta, el vello facial y los accesorios que elijas. Mientras el editor muestra **Cambios sin guardar**, la selección es una vista previa. Pulsa **Guardar apariencia** para conservarla al cerrar la app. La primera vez, el botón te permite crear el personaje o elegir tu apodo.
 
-![Los doce rostros de Squadlink organizados por especie e identidad](media/rostros-preview-13.png)
+El editor muestra al personaje de cuerpo entero con aspecto 3D. En la sala y en la clasificación aparece su retrato con los rasgos y accesorios elegidos. Son imágenes prerenderizadas que conservan el detalle al ampliar el personaje y no requieren animación durante una llamada.
+
+![Las doce apariencias de Squadlink, agrupadas por especie e identidad](media/personajes-3d.webp)
 
 En **Evoluciones** puedes consultar las siete etapas. Reflejos y Memoria conceden XP. Cada 100 XP se sube un nivel hasta el 50, que se alcanza con 4.900 XP. El aura dorada aparece en el nivel 10, la azul en el 30 y la prismática en el 50.
 

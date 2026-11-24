@@ -158,6 +158,11 @@ export function createProgression({reject,throttle,now=Date.now,env=process.env,
     return run;
   }
   return {
+    async storedAppearance(id) {
+      // Read the authenticated player's saved row once when joining, without creating a profile.
+      const row = await db.update(id, current => current);
+      return row && display(row);
+    },
     async handle(action,session,data) {
       const device = session.social;
       if (!device || device.session !== session) reject(409,'Conecta tu perfil de jugador.');

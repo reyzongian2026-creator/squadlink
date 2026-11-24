@@ -1562,3 +1562,6 @@ body.desktop-shell #social .section-head { position: absolute; width: 1px; heigh
 }
 
 .arcade-category { margin: 1rem 0 .55rem; font-size: 1rem; }
+
+.player-portrait { display:inline-grid; place-items:center; flex:none; width:38px; height:38px; overflow:hidden; border-radius:11px; background:#35434a; color:#e5eff5; font:700 .8rem/1 system-ui; }
+.player-portrait svg { width:100%; height:100%; display:block; }

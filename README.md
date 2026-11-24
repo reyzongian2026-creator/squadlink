@@ -14,6 +14,8 @@ A partir de la .21 puedes cancelar una descarga durante una llamada. Cuando una 
 
 Elige Windows x64 o Mac con Apple Silicon. En Windows, ejecuta el instalador. En Mac, extrae el ZIP y mueve Squadlink a Aplicaciones. La app para Mac tiene firma local y carece de notarización de Apple.
 
+En **Mi personaje**, elige entre doce apariencias de estilo 3D y combina rostro, silueta, colores y accesorios. Al guardar, tu retrato también aparece en la sala y en la clasificación. El aura evoluciona con tu nivel: azul en el 30 y prismática en el 50.
+
 El arcade incluye Cambio de blanco, Precisión, Mata patos, 2048 y Tres en raya. Estos juegos se ejecutan en el dispositivo. En DOOM puedes jugar la campaña libre Freedoom: Phase 1 con Chocolate Doom. Pulsa **Cargar DOOM** para descargar el juego (unos 35 MB la primera vez) y luego **Jugar**. Usa WASD para moverte, el ratón para girar, clic izquierdo para disparar y Espacio para abrir puertas. Esc libera el cursor. Salir del juego detiene su audio y conserva la llamada. [Proyecto de Chocolate Doom y Freedoom para navegador](https://github.com/danborden1/doom-web)
 
 En **Arcade**, la copia personal abre los cartuchos instalados de Mario y Mata patos con **Enter**. En el instalador personal de Windows, abre el único EXE para instalar el programa y ambos cartuchos juntos. En la edición pública, elige tu archivo .nes una vez por juego y equipo. Al volver a Arcade se abre la copia guardada en ese perfil. En Mario, usa las flechas para moverte, Espacio o Z para saltar y X para correr. En Duck Hunt, pulsa Enter para empezar, apunta con el ratón y dispara con clic. Pulsa P para pausar.
