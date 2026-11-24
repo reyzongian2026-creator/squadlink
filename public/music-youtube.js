@@ -9,10 +9,10 @@
   function send(action, values = {}) {
     if (parentOrigin) parent.postMessage({channel, action, ...values}, parentOrigin);
   }
-  function unavailable() {
+  function unavailable(event) {
     status.hidden = false;
     status.textContent = "Video no disponible.";
-    send("unavailable");
+    send("unavailable", {code: Number(event?.data) || 0});
   }
   function duration() {
     const seconds = viewer?.getDuration();
