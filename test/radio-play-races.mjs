@@ -7,7 +7,7 @@ import {radioStations} from '../public/radio-stations.js';
 const {Window} = await import(process.env.HAPPY_DOM_MODULE || 'happy-dom');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-function mountRadio(t) {
+function mountRadio(t, {api, notify, empty = false} = {}) {
   const win = new Window({url:'https://squadlink.test'});
   const doc = win.document, panel = doc.createElement('div');
   doc.body.append(panel);
@@ -25,16 +25,16 @@ function mountRadio(t) {
   };
   win.HTMLMediaElement.prototype.pause = function () { this.dataset.paused='yes'; };
   win.HTMLMediaElement.prototype.load = function () {};
-  const ui = createMusic({mount:panel, api:async(...args)=>apiCalls.push(args)});
+  const ui = createMusic({mount:panel, notify, api: api || (async(...args)=>apiCalls.push(args))});
   const queue = n => {
     const station=radioStations[n];
     ui.update({code:'PEPE01',music:{queue:[{id:'track-'+n,kind:'radio',stationId:station.id,title:station.name}]}});
   };
   t.after(()=>win.happyDOM.abort());
-  queue(0);
   const get = selector => panel.querySelector(selector);
   const listen = () => get('[data-listen]').click();
-  listen();
+  if (empty) ui.update({code:'PEPE01',music:{queue:[]}});
+  else { queue(0); listen(); }
   return {attempts,apiCalls,queue,get,listen,ui};
 }
 
@@ -101,4 +101,50 @@ test('silenciar, cambiar de emisora y salir cancelan una reproducción pendiente
   assert.equal(get('.music-notice').textContent,'');
   assert.equal(attempts.length,3);
   assert.deepEqual(apiCalls,[]);
+});
+
+test('una respuesta antigua al añadir radio conserva la escucha personal o compartida que arrancó después', async t => {
+  for (const personal of [true, false]) {
+    await t.test(personal ? 'emisora personal' : 'emisora compartida', async t => {
+      const reply = Promise.withResolvers();
+      const messages = [];
+      const {ui, get, listen, queue, attempts} = mountRadio(t, {
+        empty:true, api:() => reply.promise, notify:message => messages.push(message)
+      });
+      const pending = get('form').onsubmit({preventDefault() {}});
+      if (personal) {
+        get('.music-add').open = true;
+        get('input[name="music-station"]:checked').checked = false;
+        get('input[name="music-station"][value="' + radioStations[1].id + '"]').checked = true;
+        get('[data-personal]').click();
+      } else {
+        queue(1);
+        listen();
+      }
+      const audio = get('audio');
+      assert.ok(audio);
+      assert.equal(get('[data-title]').textContent, radioStations[1].name);
+      const count = attempts.length;
+      const status = get('.music-notice').textContent;
+      reply.reject(Object.assign(Error('Enlace de YouTube inválido.'), {status:400}));
+      await pending;
+      assert.equal(get('[data-title]').textContent, radioStations[1].name);
+      assert.equal(get('audio'), audio);
+      assert.equal(attempts.length, count);
+      assert.equal(get('.music-notice').textContent, status);
+      assert.match(messages.at(-1), /no admite emisoras compartidas/);
+      ui.close();
+    });
+  }
+});
+
+test('una sala antigua y aún vacía puede iniciar la emisora elegida solo en este equipo', async t => {
+  const {ui, get, attempts} = mountRadio(t, {
+    empty:true, api:async () => { throw Object.assign(Error('Enlace de YouTube inválido.'), {status:400}); }
+  });
+  await get('form').onsubmit({preventDefault() {}});
+  assert.equal(get('[data-title]').textContent, radioStations[0].name);
+  assert.match(get('[data-kind]').textContent, /Solo aquí/);
+  assert.equal(attempts.length, 1);
+  ui.close();
 });

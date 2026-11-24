@@ -116,10 +116,37 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await checkAppearance('bald',['hair','face-hair']);
  console.log('Color de cabello, gorra y cabeza sin cabello comprobados en el editor y el retrato instalados.');
 
+ const accessory=onboarding.getByRole('group',{name:'Accesorio',exact:true});
+ const natural=accessory.getByRole('button',{name:'Al natural',exact:true});
+ await natural.focus();
+ await natural.press('End');
+ const visor=accessory.getByRole('button',{name:'Visor',exact:true,pressed:true});
+ await visor.waitFor();
+ assert.ok(await visor.evaluate(button=>document.activeElement===button));
+ await visor.press('Home');
+ await accessory.getByRole('button',{name:'Al natural',exact:true,pressed:true}).waitFor();
+ assert.ok(await natural.evaluate(button=>document.activeElement===button));
+ console.log('Inicio y Fin cambian el accesorio seleccionado y el foco dentro del grupo.');
+
  await onboarding.getByRole('button',{name:'Elegir apodo y guardar',exact:true}).click();
  await onboarding.getByLabel('Tu apodo').fill('Prueba Electron');
  await onboarding.locator('#submit-entry').click();
  await onboarding.getByText('Apariencia guardada.',{exact:true}).waitFor();
+ async function savedCharacter(page){
+  return page.evaluate(async()=>{
+   const result=await fetch('/api/progress/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+   if(!result.ok)throw Error('No se pudo consultar el personaje guardado: '+result.status);
+   const {profile}=await result.json();
+   return {id:profile.id,created:profile.characterCreated,look:profile.avatar};
+  });
+ }
+ const originalCharacter=await savedCharacter(onboarding);
+ assert.ok(originalCharacter.created && originalCharacter.id);
+ assert.equal(originalCharacter.look.hairStyle,1);
+ assert.equal(originalCharacter.look.hairColor,5);
+ assert.equal(originalCharacter.look.headgear,0);
+ await clickOption('Visor');
+ await onboarding.getByRole('button',{name:'Visor',exact:true,pressed:true}).waitFor();
  let home=await navigate(onboarding,'Lobby de voz','home');console.log('Ventana principal',home.url());
  const diagnostics=page=>{page.on('pageerror',err=>console.log('RENDER',err.message));page.on('console',m=>{if(m.type()==='error')console.log('RENDER',m.text())});};
  diagnostics(home);app.context().on('page',diagnostics);
@@ -521,6 +548,24 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   await space.getByRole('button',{name:label,exact:true}).click();
   await space.waitForFunction(key=>document.body.dataset.workspace===key,section);
   await checkWindow(true);
+  if(section==='player'){
+   await space.getByRole('button',{name:'Sin cabello',exact:true,pressed:true}).waitFor();
+   const recoveredVisor=space.getByRole('button',{name:'Visor',exact:true,pressed:true});
+   const recoverDraft=space.getByRole('button',{name:'Recuperar borrador',exact:true});
+   await recoverDraft.or(recoveredVisor).first().waitFor();
+   if(await recoverDraft.isVisible())await recoverDraft.click();
+   await recoveredVisor.waitFor();
+   assert.deepEqual((await savedCharacter(space)).look,originalCharacter.look,'El borrador no debe sobrescribir el perfil guardado.');
+   await space.getByRole('button',{name:'Al natural',exact:true}).click();
+   await space.getByRole('button',{name:'Con cabello',exact:true}).click();
+   await space.getByRole('button',{name:'Azul',exact:true,pressed:true}).waitFor();
+   await space.getByRole('button',{name:'Guardar apariencia',exact:true}).click();
+   await space.getByText('Apariencia guardada.',{exact:true}).waitFor();
+   const updated=await savedCharacter(space);
+   assert.equal(updated.id,originalCharacter.id);
+   assert.deepEqual(updated.look,{...originalCharacter.look,hairStyle:0});
+   console.log('El editor recuperó el borrador tras salir al lobby y guardó su cambio de cabello en el mismo perfil durante la llamada.');
+  }
   if(section==='friends'){
    await space.getByRole('heading',{name:'Tus amigos'}).waitFor();
    await space.screenshot({path:path.join(capture,'Amigos-Moderno.png')});

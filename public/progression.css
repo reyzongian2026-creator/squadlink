@@ -4,24 +4,40 @@
 .kit-heading h2,.kit-panels h3,.kit-card-info p { margin:0; }
 .kit-panels { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(220px,.8fr); gap:var(--section-gap); align-items:start; }
 .kit-editor,.kit-ranking { min-width:0; border:1px solid var(--border); border-radius:16px; background:var(--panel); }
-.kit-editor { display:grid; grid-template-columns:minmax(155px,.85fr) minmax(205px,1.5fr); overflow:hidden; }
+.kit-editor { display:grid; grid-template-columns:minmax(155px,.85fr) minmax(205px,1.5fr); overflow:clip; }
 .kit-portrait { min-width:0; background:#201d29; border-right:1px solid var(--border); }
+.kit-portrait {
+  position: sticky;
+  top: 8px;
+  align-self: start;
+}
+/* Expanded progression details can exceed the viewport and must scroll normally. */
+.kit-portrait:has(.kit-path[open]) { position: static; }
 .kit-stage {
-  position: relative;
-  padding-top: 2.6rem;
   display: grid;
-  place-items: center;
-  overflow: hidden;
-  width: 100%;
+  justify-items: center;
+  align-content: start;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  min-width: 0;
   background: radial-gradient(ellipse at 51% 34%, #33414e 0%, #202936 48%, #151924 86%);
 }
-#kit-voxel { width: min(100%, 266px); aspect-ratio: 320 / 510; }
-#kit-voxel.kit-closeup { aspect-ratio: 1; }
+#kit-voxel { width: min(100%, 266px, 32vh); aspect-ratio: 320 / 510; }
+#kit-voxel.kit-closeup { width: min(100%, 266px, 51vh); aspect-ratio: 1; }
 #kit-closeup {
-  position: absolute; z-index: 1; top: .5rem; left: 50%; transform: translateX(-50%);
-  white-space: nowrap; padding: .3rem .58rem; border: 1px solid #637185; border-radius: 8px;
-  background: #1c2430; color: #f0f3f7; font: inherit; font-size: .75rem; cursor: pointer;
+  max-width: 100%;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid #637185;
+  border-radius: 8px;
+  background: #1c2430;
+  color: #f0f3f7;
+  font: inherit;
+  font-size: .75rem;
+  line-height: 1.2;
+  cursor: pointer;
 }
+#kit-closeup:focus-visible { outline: 2px solid #eff5ff; outline-offset: 2px; }
 #kit-closeup[aria-pressed=true] { background: #38455c; border-color: #b4c7e9; }
 .kit-controls fieldset[hidden] { display: none; }
 #kit-voxel svg { width: 100%; height: 100%; display: block; }
@@ -60,9 +76,21 @@
 #kit-ranking li { display:grid; grid-template-columns:1.35rem 2rem minmax(0,1fr) auto; align-items:center; gap:.5rem; padding:.5rem 0; border-bottom:1px solid var(--border); font-size:.85rem; }
 #kit-ranking .place { color:var(--muted); font:.78rem var(--mono); }
 @media(max-width:940px) { .kit-panels { grid-template-columns:1fr; } }
-@media(max-width:580px) { .kit-editor { grid-template-columns:1fr; } .kit-portrait { border-right:0; display:grid; grid-template-columns:minmax(100px,36%) 1fr; border-bottom:1px solid var(--border); } .kit-stage { min-height:0; } .kit-card-info { border:0; } }
+@media (max-width: 580px) {
+  .kit-editor { grid-template-columns: minmax(94px, 33%) minmax(0, 1fr); }
+  .kit-card-info { padding: 10px 7px; }
+  .kit-controls { min-width: 0; padding: 12px 10px; }
+  .kit-controls :is(button, fieldset) { max-width: 100%; }
+  #kit-stages li { flex-wrap: wrap; gap: 2px; }
+}
+
 .rank-choice { display:grid; gap:6px; font-size:.86rem; color:#c9cbd8; margin:14px 0 8px; }
 .rank-choice select { width:100%; min-width:0; padding:9px 12px; background:#282a35; color:#f3f4fa; border:1px solid #545866; border-radius:8px; font:inherit; }
 #kit-sync { color:#cac5e3; font-size:.85rem; }
 
 #kit-ranking .player-portrait { width:2rem; height:2rem; }
+
+.kit-choice-name { margin-inline-start: .55em; font-weight: 400; color: var(--muted); }
+#kit-draft:not([hidden]) { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; margin-block-start: .75rem; }
+#kit-draft > span { flex-basis: 100%; color: var(--muted); font-size: .8rem; }
+#kit-options button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }

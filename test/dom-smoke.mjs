@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import {avatarFlow} from './support/avatar-flow.mjs';
+import {appearanceDraft} from './support/appearance-draft.mjs';
 import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -9,6 +11,8 @@ import {mixedAvatar} from './support/mixed-avatar.mjs';
 
 // A DOM emulator validates event handlers and state changes, not layout or media.
 export async function domSmoke(Window) {
+  await appearanceDraft(Window);
+  await avatarFlow(Window);
   await audioLevelPreview(Window);
   await mixedAvatar(Window);
   const disposals = [];

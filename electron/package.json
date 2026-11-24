@@ -1,6 +1,6 @@
 {
   "name": "squadlink-desktop",
-  "version": "0.5.0-preview.26",
+  "version": "0.5.0-preview.27",
   "private": true,
   "main": "main.cjs",
   "scripts": {
