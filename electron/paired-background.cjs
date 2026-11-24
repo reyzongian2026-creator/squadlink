@@ -116,7 +116,7 @@ async function one(exe,version,run,radio,spki){
   await music.getByRole('button',{name:'Escuchar solo aquí'}).click();
   await until(async()=>(await signal(space))?.radio>1,'radio HTTPS local con ritmo real');
   stage('volver al lobby de la llamada');
-  const lobby=await nav(space,'Lobby de voz',version===23?'home':'app');
+  const lobby=await nav(space,'Lobby de voz','home');
   await lobby.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   const sample=async()=>{
    // Read the receiver continuously in the separate participant browser. Native
@@ -164,7 +164,7 @@ async function one(exe,version,run,radio,spki){
     ws.onerror=()=>{clearTimeout(timer);reject(Error('CDP'));};
    });
   }catch(e){console.log('Observación CDP adicional:',e.message);}
-  console.log('MEDIDA '+JSON.stringify({version,run,foreground:foreground.ram,values:arr.filter((_,i)=>[0,5,15,20,25,30].includes(i)),
+  console.log((run>0?'MEDIDA ':'CALENTAMIENTO ')+JSON.stringify({version,run,foreground:foreground.ram,values:arr.filter((_,i)=>[0,5,15,20,25,30].includes(i)),
    medianRam:median(arr.slice(15).map(x=>x.ram)),medianCpu:median(arr.slice(16).map(x=>x.cpu)),
    meanCpu:arr.slice(16).reduce((v,r,i)=>v+r.cpu*(r.t-arr[15+i].t),0)/elapsed,
    rxKbps:8*(b.rx-a.rx)/1000/elapsed,txKbps:8*(b.tx-a.tx)/1000/elapsed,radioKbps:8*(b.radioBytes-a.radioBytes)/1000/elapsed,commands,cdpInfo}));
@@ -182,6 +182,6 @@ async function one(exe,version,run,radio,spki){
  try{
   await until(async()=>{try{return(await fetch(base+'/api/directory')).ok;}catch{}},'servidor');
   console.log('Máquina '+JSON.stringify({os:os.release(),cpu:os.cpus()[0].model,logical:os.cpus().length}));
-  for(const [i,v] of [23,24,24,23].entries())await one(v===23?v23:v24,v,i+1,radio,spki);
+  for(const [i,v] of [23,24,23,24,24,23].entries())await one(v===23?v23:v24,v,i-1,radio,spki);
  }finally{backend.kill();radio.server.closeAllConnections();radio.server.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -33,14 +33,14 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            file=Squadlink-Moderno-Setup-x64.exe; workflow=45376332873; artifact=Squadlink-Electron-Windows-x64
+            file=Squadlink-Moderno-Setup-x64.exe; workflow=45379226898; artifact=Squadlink-Electron-Windows-x64
             basehash=e1da36fb1138c3c6cb83748325651029b951f08b936fff6c1ff37410c0771886
           else
-            file=Squadlink-Moderno-macOS-arm64.zip; workflow=45376332929; artifact=Squadlink-Moderno-macOS-arm64
+            file=Squadlink-Moderno-macOS-arm64.zip; workflow=45379226731; artifact=Squadlink-Moderno-macOS-arm64
             basehash=3143ba63abcdf1398757928619f828d5e69b9aab3b573243c09d078a4ffa1723
           fi
           gh release download moderno-v0.5.0-preview.23 -p "$file" -D v23
-          test "$(gh run view "$workflow" --json headSha --jq .headSha)" = '3eebc6114dadba4f00a08232fb02898d798369dc'
+          test "$(gh run view "$workflow" --json headSha --jq .headSha)" = '378fa20234664d27d8c5cb49eb80fb213c5f2c5f'
           gh run watch "$workflow" --exit-status --interval 8
           gh run download "$workflow" -n "$artifact" -D v24
           node -e 'const fs=require("fs"),{createHash}=require("crypto");for(const ver of ["23","24"]){const file=process.argv[1],p="v"+ver+"/",hash=createHash("sha256").update(fs.readFileSync(p+file)).digest("hex");if(ver==="23"?hash!==process.argv[2]:!fs.readFileSync(p+"SHA256.txt","utf8").toLowerCase().includes(hash))throw Error("SHA inesperado "+p);console.log(ver,hash,file)}' "$file" "$basehash"
