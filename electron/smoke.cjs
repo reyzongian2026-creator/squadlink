@@ -59,13 +59,24 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  const qaBytes='contenido de prueba';
  await app.evaluate((_,{asset,qaBytes,digest})=>{
   const original=globalThis.fetch;
+  let pendingFirstDownload=true;
   const tag='moderno-v9.9.9-preview.1';
   const url='https://github.com/reyzongian2026-creator/squadlink/releases/download/'+tag+'/'+asset;
   globalThis.fetch=(input,options)=>{
    if(String(input).startsWith('https://api.github.com/repos/reyzongian2026-creator/squadlink/releases?')){
     return Promise.resolve(Response.json([{tag_name:tag,assets:[{name:asset,state:'uploaded',size:Buffer.byteLength(qaBytes),digest:'sha256:'+digest,browser_download_url:url}]}]));
    }
-   if(input===url)return Promise.resolve(new Response(qaBytes));
+   if(input===url){
+    if(pendingFirstDownload){
+     pendingFirstDownload=false;
+     globalThis.qaUpdateTransferStarted=true;
+     return new Promise((_,reject)=>{
+      const stop=()=>reject(options.signal.reason);
+      if(options.signal.aborted)stop();else options.signal.addEventListener('abort',stop,{once:true});
+     });
+    }
+    return Promise.resolve(new Response(qaBytes));
+   }
    return original(input,options);
   };
  },{asset,qaBytes,digest:require('node:crypto').createHash('sha256').update(qaBytes).digest('hex')});
@@ -81,6 +92,11 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  }
  await home.getByRole('heading',{name:'Ajustes',exact:true}).waitFor();
  await home.getByRole('button',{name:'Descargar actualización'}).click();
+ for(let i=0;i<100 && !await app.evaluate(()=>globalThis.qaUpdateTransferStarted);i++)await delay(50);
+ assert.ok(await app.evaluate(()=>globalThis.qaUpdateTransferStarted));
+ await home.getByRole('button',{name:'Cancelar descarga'}).click();
+ await home.getByText('Descarga cancelada.',{exact:false}).waitFor();
+ await home.getByRole('button',{name:/Descargar actualización|Reintentar descarga/}).click();
  await home.getByRole('button',{name:'Instalar y reiniciar'}).waitFor();
  const updateCache=path.join(profile,'update-cache');
  const staged=fs.readdirSync(updateCache).find(dir=>dir.startsWith('squadlink-update-'));
@@ -104,6 +120,13 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await checkWindow(true);
  await space.getByText('Detalles de sala',{exact:true}).click();
  await space.waitForFunction(()=>/^[A-Z0-9]{6}$/.test(document.querySelector('#room-code')?.textContent));
+ async function openCurrentRoom(){
+  // On macOS the click can release the low-memory home renderer before Playwright returns.
+  try { await home.getByRole('button',{name:'Mi sala',exact:true}).click(); }
+  catch(error){ if(process.platform!=='darwin'||!home.isClosed())throw error; }
+  await space.locator('#room-name').waitFor({state:'visible'});
+  await checkWindow(true);
+ }
  const code=await space.locator('#room-code').innerText();assert.match(code,/^[A-Z0-9]{6}$/);
  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
  await checkWindow(false);
@@ -117,7 +140,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  const sample=p=>p.evaluate(async()=>{for(const pc of window.testPeers){for(const stat of (await pc.getStats()).values()){if(stat.type==='inbound-rtp'&&stat.kind==='audio')return stat.totalAudioEnergy||0;}}return 0;});
  async function audio(previous){let values;for(let i=0;i<100;i++){values=await Promise.all([sample(space),sample(peer)]);if(values.every((v,j)=>v>previous[j]))return values;await delay(250);}throw Error('Falta voz bidireccional '+JSON.stringify(values));}
  const first=await audio([0,0]);await memory('voz');
- await home.getByRole('button',{name:'Mi sala',exact:true}).click();
+ await openCurrentRoom();
  await testVoiceQuality(space,peer);
  const {musicSmoke,assertRadioShortcut}=await import('../test/support/music-browser.mjs');
  async function radioAndVoice() {
@@ -213,7 +236,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   await space.locator('[data-game="reflex"]').waitFor();
   await assertRadioShortcut(space,peer,()=>focusedRadioShortcut('app'),'teclas en Arcade');
   await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
-  await home.getByRole('button',{name:'Mi sala',exact:true}).click();
+  await openCurrentRoom();
   await space.locator('#room-music [data-listen][aria-pressed="true"]').waitFor();
  });
  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
@@ -298,7 +321,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await testManualGain(space,peer);
  await testListenBoost(space,peer);
  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
- await home.getByRole('button',{name:'Mi sala',exact:true}).click();await space.locator('#room-name').waitFor({state:'visible'});
+ await openCurrentRoom();await space.locator('#room-name').waitFor({state:'visible'});
  await space.screenshot({path:path.join(capture,'Sala-Moderna.png')});
  console.log('Voz bidireccional durante la navegación',first,await audio(first));
  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');

@@ -6,6 +6,7 @@ const {createPlayerVault,writePrivateFile,checkPass}=require('./player-vault.cjs
 const base='https://squadlink-lobby.onrender.com';
 const {findUpdate,downloadUpdate,verifyDownloaded}=require('./update-release.cjs');
 const {createUpdateController}=require('./update-controller.cjs');
+const {createUpdateCache}=require('./update-cache.cjs');
 const mac=process.platform==='darwin';
 const titles={create:'Crear sala',join:'Unirme con código',lobby:'Mi sala',rooms:'Explorar salas',friends:'Amigos',player:'Mi jugador',arcade:'Arcade',guide:'Guía de sala',ranking:'Clasificación',settings:'Dispositivos de audio'};
 const prefsFile=()=>path.join(app.getPath('userData'),'desktop.json');
@@ -207,24 +208,31 @@ ipcMain.handle('prefs',(e,data)=>{
  if(next.server!==prefs.server){disposeVoice();state=blank();microphone=false;}
  prefs=next;if(ready&&action)dispatch(action.key,action.code);publish();
 });
-const updateCache=()=>path.join(app.getPath('userData'),'update-cache');
-let cacheReady;
-async function prepareUpdateCache(){
- const root=updateCache();
- await fs.promises.mkdir(root,{recursive:true,mode:0o700});
- // Another Squadlink instance cannot use this cache while we hold the profile lock.
- const entries=await fs.promises.readdir(root,{withFileTypes:true});
- await Promise.all(entries.filter(entry=>entry.isDirectory() && entry.name.startsWith('squadlink-update-')).map(entry=>
-  fs.promises.rm(path.join(root,entry.name),{recursive:true,force:true}).catch(()=>{})));
- return root;
+const updateRoot=()=>path.join(app.getPath('userData'),'update-cache');
+let pendingUpdateCache;
+function getUpdateCache(){
+ if(!pendingUpdateCache){
+  const cipher=safeStorage.isEncryptionAvailable() ? {
+   seal:text=>safeStorage.encryptString(text), open:bytes=>safeStorage.decryptString(bytes)
+  } : {};
+  pendingUpdateCache=createUpdateCache(updateRoot(),{
+   currentVersion:app.getVersion(), platform:process.platform, arch:process.arch, ...cipher
+  });
+ }
+ return pendingUpdateCache;
 }
 const updater=createUpdateController({
- find:()=>findUpdate({currentVersion:app.getVersion()}),
- download:async(release,onProgress)=>{
-  cacheReady??=prepareUpdateCache().catch(error=>{cacheReady=undefined;throw error;});
-  const root=await cacheReady;
-  if(!root)throw Error('No se pudo abrir la carpeta de actualizaciones.');
-  return downloadUpdate(release,{tempDir:root,onProgress});
+ cache:{
+  restore:()=>getUpdateCache().restore(),
+  save:(release,local)=>getUpdateCache().save(release,local),
+  forget:()=>getUpdateCache().forget()
+ },
+ find:({hasDownload}={})=>findUpdate({currentVersion:app.getVersion(),signal:hasDownload ? AbortSignal.timeout(5000) : undefined}),
+ download:async(release,onProgress,signal)=>{
+  const root=updateRoot();
+  await fs.promises.mkdir(root,{recursive:true,mode:0o700});
+  if(!(await fs.promises.lstat(root)).isDirectory())throw Error('La carpeta de actualizaciones no está disponible.');
+  return downloadUpdate(release,{tempDir:root,onProgress,signal});
  },
  verify:verifyDownloaded,
  prepare:async(release,filePath)=>{
@@ -243,13 +251,12 @@ const updater=createUpdateController({
  quit:()=>app.quit(),
  notify:publish
 });
-for(const [channel,method] of [['updates','check'],['download','download'],['install-update','install']]){
+for(const [channel,method] of [['updates','check'],['download','download'],['cancel-download','cancelDownload'],['install-update','install']]){
  ipcMain.handle(channel,e=>{hostPage(e);return updater[method]();});
 }
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.webp':'image/webp','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon'};
 const csp="default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data:;connect-src 'self';media-src 'self' blob: https:;object-src 'none';frame-src 'self';base-uri 'none';form-action 'self'";
 async function start(){
- cacheReady=prepareUpdateCache().catch(()=>{cacheReady=undefined;});
  try{const saved=JSON.parse(fs.readFileSync(prefsFile(),'utf8'));prefs={server:parseServer(saved.server),low:saved.low!==false,hasPlayer:saved.hasPlayer===true};}catch{}
  const ses=session.fromPartition(options.partition);
  ses.protocol.handle('squad',async req=>{

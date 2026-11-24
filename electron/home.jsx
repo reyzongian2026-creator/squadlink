@@ -19,21 +19,27 @@ function Icon({id}){return <svg aria-hidden="true" viewBox="0 0 24 24" fill="non
 function UpdatePanel({state,run}){
  const {phase,version,percent,message}=state.update;
  useEffect(()=>{if(phase==='idle')run(()=>api.updates());},[phase]);
- const status=message || ({
+ const title=({
   checking:'Buscando una versión nueva…', current:'Tienes la última versión.',
-  available:'Versión disponible · '+version, downloading:'Descargando '+version+' · '+percent+' %',
-  ready:state.joined?'Descarga lista. Sal de la sala cuando quieras instalar.':'Versión '+version+' verificada y lista para instalar.',
+  available:'Versión disponible · '+version, downloading:'Descargando '+version+'…',
+  ready:'Versión '+version+' verificada y lista para instalar.',
   installing:'Preparando la instalación. Squadlink volverá a abrirse.'
  }[phase] || '');
+ const reminder=phase==='ready' && state.joined ? 'Sal de la sala cuando quieras reiniciar.' : '';
+ const status=[title,message,reminder].filter(Boolean).join(' ');
  return <section aria-labelledby="updates-title">
    <h2 id="updates-title">Actualizaciones</h2>
    <p>Versión instalada · {state.version}</p>
-   <p role="status" aria-live="polite">{phase==='downloading'?'Descargando '+version+'…':status}</p>
+   <p role="status" aria-live="polite">{status}</p>
    {phase==='downloading'&&<div className="download-progress"><progress max="100" value={percent} aria-label="Descarga de la actualización"/><span>{percent} %</span></div>}
    <div className="choices">
     {['idle','current','check-error'].includes(phase)&&<button onClick={()=>run(()=>api.updates())}>Buscar actualizaciones</button>}
     {phase==='available'&&<button onClick={()=>run(()=>api.download())}>{message?'Reintentar descarga':'Descargar actualización'}</button>}
-    {phase==='ready'&&<button disabled={state.joined} onClick={()=>run(()=>api.install())}>Instalar y reiniciar</button>}
+    {phase==='downloading'&&<button onClick={()=>run(()=>api.cancelDownload())}>Cancelar descarga</button>}
+    {phase==='ready'&&<>
+      <button disabled={state.joined} onClick={()=>run(()=>api.install())}>Instalar y reiniciar</button>
+      <button onClick={()=>run(()=>api.updates())}>Buscar otra versión</button>
+    </>}
    </div>
  </section>;
 }

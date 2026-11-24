@@ -18,7 +18,7 @@ jobs:
       - name: Verificar el lobby y la sesión
         run: |
           npm test
-          node --test electron/gateway.test.cjs electron/update-release.test.cjs electron/update-controller.test.cjs
+          node --test electron/gateway.test.cjs electron/update-release.test.cjs electron/update-controller.test.cjs electron/update-cache.test.cjs
       - name: Compilar la interfaz de Electron y React
         working-directory: electron
         run: |
@@ -39,6 +39,8 @@ jobs:
           $result=Start-Process $setup -ArgumentList "/VERYSILENT /NORESTART /DIR=`"$target`"" -Wait -PassThru
           if ($result.ExitCode) {throw 'Falló la instalación'}
           node electron/smoke.cjs (Join-Path $target 'Squadlink.exe')
+          if ($LASTEXITCODE) {exit $LASTEXITCODE}
+          node test/windows/update-cache-ui.cjs (Join-Path $target 'Squadlink.exe')
           if ($LASTEXITCODE) {exit $LASTEXITCODE}
           $remove=Start-Process (Join-Path $target 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
           if ($remove.ExitCode -or (Test-Path (Join-Path $target 'Squadlink.exe'))) {throw 'Falló la desinstalación'}

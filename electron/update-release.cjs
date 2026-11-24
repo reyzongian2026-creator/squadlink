@@ -195,4 +195,10 @@ async function verifyDownloaded(update,filePath) {
   }
 }
 
-module.exports = {findUpdate,downloadUpdate,verifyDownloaded};
+function isUpdateFor(update,{currentVersion,platform,arch}) {
+  verifyMetadata(update);
+  const current = versionParts(currentVersion);
+  return Boolean(current && update.platform === platform && update.arch === arch && newer(versionParts(update.version),current));
+}
+
+module.exports = {findUpdate,downloadUpdate,verifyDownloaded,isUpdateFor};

@@ -29,7 +29,7 @@ jobs:
       - name: Abrir la app y probar el lobby en macOS
         run: |
           ditto -x -k artifacts/macos/Squadlink-Moderno-macOS-arm64.zip "$RUNNER_TEMP/preview"
-          node --test electron/gateway.test.cjs electron/update-release.test.cjs electron/update-controller.test.cjs
+          node --test electron/gateway.test.cjs electron/update-release.test.cjs electron/update-controller.test.cjs electron/update-cache.test.cjs
           node test/windows/voice-lobby.mjs &
           fixture_pid=$!
           trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT
