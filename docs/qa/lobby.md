@@ -173,3 +173,21 @@ Se repitió el recorrido de escritorio con dos participantes y audio sintético 
 [Prueba de Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45379710929) · [Prueba de macOS](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45379711145)
 
 En esta compilación de macOS, el lobby minimizado con la radio activa marcó 535,9 MiB con la opción predeterminada y 553,9 MiB con el integrado opcional.
+
+
+### Entrar directamente a voz y radio
+
+En cada sistema, el mismo equipo ejecutó las versiones en orden .23, .24, .24 y .23, con perfiles nuevos y dos participantes. Durante la llamada se reprodujo por HTTPS una señal PCM de prueba de 128 kb/s y se verificó que la voz siguiera llegando en ambos sentidos. En macOS se usaron llaveros temporales y se excluyó una llamada de calentamiento por versión antes de las cuatro mediciones. Windows usó la compilación 3eebc61, cuyo comportamiento del lobby de Windows se conserva en la versión publicada. El segundo cliente estaba en otro proceso de navegador y quedó fuera del consumo de Squadlink. Se tomó una lectura del lobby visible y una por segundo durante los 30 segundos después de minimizar. La tabla muestra el promedio de las dos ejecuciones por versión. Para la RAM minimizada se usó la mediana entre los segundos 15 y 30.
+
+| Sistema | Escenario | .23 | .24 |
+|---|---|---:|---:|
+| Windows | RAM del lobby visible | 581,5 MiB | 457,4 MiB |
+| Windows | RAM con el lobby minimizado | 429,7 MiB | 428,6 MiB |
+| Windows | CPU media con el lobby minimizado | 2,7 % | 2,8 % |
+| macOS | RAM del lobby visible | 637,6 MiB | 648,4 MiB |
+| macOS | RAM con el lobby minimizado | 520,0 MiB | 536,1 MiB |
+| macOS | CPU media con el lobby minimizado | 4,9 % | 5,3 % |
+
+[Prueba emparejada de Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45376487059) · [Prueba emparejada de macOS](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45379811538)
+
+Con el lobby minimizado, la RAM de Windows varió aproximadamente 1 MiB entre versiones. En Mac la nueva versión empleó 16 MiB más en promedio en ese recorrido. Al minimizar desde la propia sala, la prueba de escritorio registró reducciones de 102 MiB en Windows y de 55 MiB en Mac. La comparación se hizo entre versiones de Squadlink. Para contrastar con Discord se necesitaría medir las dos aplicaciones con el mismo equipo y las mismas condiciones de llamada.
