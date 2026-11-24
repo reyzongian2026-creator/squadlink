@@ -132,6 +132,7 @@ function ensureView(){
  wc.loadURL('squad://app/?server='+encodeURIComponent(prefs.server));
 }
 function open(key,code){
+ if(updater.snapshot().phase==='installing'&&!state.joined)return;
  if(key==='home'||key==='preferences'){showHost(key);return;}
  if(!Object.hasOwn(titles,key))throw Error('Opción desconocida.');
  if(state.joined&&['create','join'].includes(key))key='lobby';

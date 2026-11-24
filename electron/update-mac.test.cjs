@@ -11,7 +11,18 @@ const modulePath = require.resolve('./update-mac.cjs');
 
 async function area(t) {
   const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'squadlink-update-test-')));
-  t.after(() => fs.rm(dir,{recursive:true,force:true}));
+  t.after(async () => {
+    // Any real desktop launched by this test uses only this private profile.
+    const lock=await fs.readlink(path.join(dir,'perfil','SingletonLock')).catch(()=>null);
+    const pid=Number(lock?.match(/-(\d+)$/)?.[1]);
+    if (pid>1) {
+      try { process.kill(pid,'SIGTERM'); } catch {}
+      await waitUntil(async () => {
+        try { process.kill(pid,0); return false; } catch { return true; }
+      },8).catch(()=>{});
+    }
+    await fs.rm(dir,{recursive:true,force:true});
+  });
   return dir;
 }
 
@@ -107,12 +118,6 @@ test('el ZIP compilado arranca en su ruta original con el perfil y el cartucho a
     const userDataPath=path.join(dir,'perfil');
     await fs.mkdir(userDataPath);
     const marker=path.join(userDataPath,'squad-test');await fs.writeFile(marker,'perfil anterior');
-    // The isolated profile has its own Electron singleton lock.
-    t.after(async () => {
-      const lock=await fs.readlink(path.join(userDataPath,'SingletonLock')).catch(()=>null);
-      const pid=Number(lock?.match(/-(\d+)$/)?.[1]);
-      if (pid>1) { try { process.kill(pid,'SIGTERM'); } catch {} }
-    });
     await handoff({zipPath,expectedVersion,appPath,userDataPath});
     await waitUntil(async()=> !(await fs.readdir(dir)).some(file=>file.startsWith('.squadlink-update-')),120);
     assert.equal(await readVersion(appPath),expectedVersion,'el nuevo renderizador confirmó su arranque');

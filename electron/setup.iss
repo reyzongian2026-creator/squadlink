@@ -49,18 +49,38 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Parent: THandle;
+  SessionDir: String;
+  Index: Integer;
 begin
   Result := '';
   if not IsSquadUpdate or ParentExited then Exit;
-  Parent := OpenProcess($100000, False, UpdateParent);  { SYNCHRONIZE only }
-  if Parent = 0 then begin
-    ParentExited := DLLGetLastError = 87;  { Process has already exited }
-  end else begin
-    try
-      ParentExited := WaitForSingleObject(Parent, 30000) = 0;
-    finally
-      CloseHandle(Parent);
+  SessionDir := ExpandConstant('{param:SQUADSESSION|}');
+  if (Length(SessionDir) <> 19) or (Copy(SessionDir, 1, 13) <> 'squad-update-') then begin
+    Result := 'No se pudo comprobar la sesión de actualización.';
+    Exit;
+  end;
+  for Index := 14 to 19 do
+    if Pos(SessionDir[Index], '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz') = 0 then begin
+      Result := 'Sesión de actualización no válida.';
+      Exit;
     end;
+  SessionDir := ExpandConstant('{src}\') + SessionDir;
+  Parent := OpenProcess($100000, False, UpdateParent);  { SYNCHRONIZE only }
+  if (Parent = 0) and (DLLGetLastError <> 87) then begin
+    Result := 'No se pudo comprobar el proceso de Squadlink.';
+    Exit;
+  end;
+  try
+    if not DirExists(SessionDir) or not SaveStringToFile(SessionDir + '\ready', '1', False) then begin
+      Result := 'La aplicación canceló esta actualización.';
+      Exit;
+    end;
+    if Parent = 0 then
+      ParentExited := True  { The given process no longer exists }
+    else
+      ParentExited := WaitForSingleObject(Parent, 30000) = 0;
+  finally
+    if Parent <> 0 then CloseHandle(Parent);
   end;
   if not ParentExited then
     Result := 'Squadlink sigue abierto. Se conservó la instalación actual.';

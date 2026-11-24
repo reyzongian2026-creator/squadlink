@@ -51,7 +51,7 @@ async function preserveCartridges(current, staged, candidate) {
     await files.rm(dest,{force:true});
     await files.copyFile(source,dest,fs.constants.COPYFILE_EXCL);
   }
-  await run('/usr/bin/codesign',['--force','--sign','-',staged]);
+  await run('/usr/bin/codesign',['--force','--sign','-','--preserve-metadata=entitlements,requirements,flags,runtime',staged]);
   await run('/usr/bin/codesign',['--verify','--deep','--strict',staged]);
 }
 
@@ -100,7 +100,8 @@ async function prepareMacUpdate({zipPath, expectedVersion, appPath, userDataPath
     }
     await run('/usr/bin/ditto',['-x','-k',path.resolve(zipPath),work]);
     const candidate = await inspect(staged);
-    if (candidate.version !== expectedVersion || (!current.adHoc && current.team !== candidate.team))
+    if (candidate.version !== expectedVersion ||
+        (!current.adHoc && (candidate.adHoc || !current.team || current.team === 'not set' || current.team !== candidate.team)))
       throw Error('La firma o la versión no coincide con la actualización esperada.');
     await preserveCartridges(installed,staged,candidate);
     const helper = path.join(work,'install-helper');

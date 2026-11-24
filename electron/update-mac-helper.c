@@ -131,7 +131,7 @@ int main(int argc, char **argv) {
     close(queue);
     if (exited != 1 || (event.flags & EV_ERROR)) { clean(work); return 1; }
     char *restart[] = {"/usr/bin/open","-n",installed,profile ? "--args" : NULL,profile,NULL};
-    if (!same_bundle(installed,dev,old) || !same_bundle(staged,dev,next) || verify(staged) != 0 ||
+    if (!same_bundle(installed,dev,old) || !same_bundle(staged,dev,next) || verify(installed) != 0 || verify(staged) != 0 ||
         renamex_np(installed,staged,RENAME_SWAP) != 0) {
         if (same_bundle(installed,dev,old)) run(restart);
         clean(work);

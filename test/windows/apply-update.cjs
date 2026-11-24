@@ -1,6 +1,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs/promises');
 const path=require('node:path');
+const os=require('node:os');
 const {createRequire}=require('node:module');
 const {installWindowsUpdate}=require('../../electron/update-windows.cjs');
 const desktopRequire=createRequire(require.resolve('../../electron/package.json'));
@@ -19,7 +20,17 @@ async function run() {
   const old=await _electron.launch({executablePath,args:['--user-data-dir='+profile],timeout:45000});
   try {
     assert.equal(await old.evaluate(({app})=>app.getVersion()),'0.0.1');
-    await installWindowsUpdate(installer,{executablePath,parentPid:old.process().pid,userDataPath:profile});
+    const options={executablePath,parentPid:old.process().pid,userDataPath:profile};
+    const failed=await fs.mkdtemp(path.join(os.tmpdir(),'squad-setup-failure-'));
+    try {
+      const earlyExit=path.join(failed,'prueba.exe');
+      // This fixture exits on the Inno switches before it can signal readiness.
+      await fs.copyFile(path.join(process.env.SystemRoot,'System32','where.exe'),earlyExit);
+      await assert.rejects(installWindowsUpdate(earlyExit,options),/antes de confirmar/);
+      assert.equal(await old.evaluate(({app})=>app.getVersion()),'0.0.1');
+      assert.deepEqual(await fs.readdir(failed),['prueba.exe']);
+    } finally { await fs.rm(failed,{recursive:true,force:true}); }
+    await installWindowsUpdate(installer,options);
     await delay(2200);
     assert.equal(old.process().exitCode,null,'El instalador cerró la aplicación por su cuenta.');
     assert.equal(JSON.parse(await fs.readFile(appPackage,'utf8')).version,'0.0.1');
