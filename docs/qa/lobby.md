@@ -77,3 +77,11 @@ El instalador personal de Windows incluye los cartuchos como archivos internos. 
 [Validación de Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45348499403) · [Validación de macOS Apple Silicon](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45348499393)
 
 En los equipos de CI, la suma de memoria residente de los procesos de Electron fue de 431,7 MiB en inicio y 568,3 MiB en voz para Windows, y de 544,8 MiB y 630,1 MiB respectivamente para macOS. Son lecturas puntuales con instrumentación durante una llamada sintética. Sigue pendiente la comparación con Discord en el mismo equipo y bajo la misma carga.
+
+## Recuperación de voz y salida de sala en 0.5.0-preview.18
+
+Si falla la conexión inicial de voz, «Reintentar conexión de voz» permite seguir en la misma sala. La prueba provocó un fallo al solicitar los servidores ICE y efectuó un doble reintento mientras entraba otro jugador. Comprobó que hubo una sola suscripción a eventos, que la recuperación utilizó los miembros actuales y que el micrófono siguió apagado hasta activarlo. Después comprobó audio en ambos sentidos.
+
+Al pulsar «Salir de la sala», el cliente cierra inmediatamente el micrófono, WebRTC y el reproductor musical. La prueba retuvo la petición de salida, respondió con un error 503 y pulsó el atajo de radio antes y después del error. La operación pudo reintentarse y regresar al lobby. Una prueba de interfaz adicional simuló que la sesión ya había caducado y comprobó que se volvía al inicio conservando el apodo local.
+
+[Integración de voz en navegador](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45352277081) · [Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45352121282) · [Mac con Apple Silicon](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45352121278)

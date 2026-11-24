@@ -19,7 +19,7 @@ En **Mi sala → Radio y música → Añadir música** puedes compartir una emis
 1. Abre Squadlink y elige tu apodo. El dispositivo lo recuerda para la próxima sesión.
 2. Pulsa **Crear sala** y escribe un nombre. **Mostrar en Salas públicas** está activado al crearla. Desmárcalo si prefieres compartirla solo por código o invitación. Puedes exigir una clave incluso en una sala publicada y añadir juego, nivel y descripción.
 3. Comparte el **código de sala** de seis caracteres. Tu amigo abre **Unirme con código** en el mismo lobby e introduce el código y la clave, si la configuraste.
-4. Cada jugador pulsa **Activar micrófono** y concede el permiso. En los ajustes de voz puede elegir micrófono y salida, activar reducción de ruido y consultar el diagnóstico cuando el dispositivo lo admite.
+4. Si falla la conexión inicial de voz, pulsa **Reintentar conexión de voz** en la misma sala. Cada jugador pulsa **Activar micrófono** y concede el permiso. En los ajustes de voz puede elegir micrófono y salida, activar reducción de ruido y consultar el diagnóstico cuando el dispositivo lo admite.
 
 ![Lobby de Squadlink con los accesos para crear sala y unirse](docs/media/lobby.webp)
 
