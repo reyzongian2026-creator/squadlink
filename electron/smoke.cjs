@@ -62,11 +62,24 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  async function audio(previous){let values;for(let i=0;i<100;i++){values=await Promise.all([sample(space),sample(peer)]);if(values.every((v,j)=>v>previous[j]))return values;await delay(250);}throw Error('Falta voz bidireccional '+JSON.stringify(values));}
  const first=await audio([0,0]);await memory('voz');
  await home.getByRole('button',{name:'Arcade',exact:true}).click();await space.getByRole('button',{name:/Reflejos/}).waitFor();
- for(const id of ['flick','precision','merge']){
+ for(const id of ['flick','precision','merge','three','ducks','doom']){
   await space.locator('[data-game="'+id+'"]').click();
   await space.locator('#game-mount .practice-status').waitFor();
   if(id==='merge')await space.getByRole('button',{name:'Izquierda'}).click();
-  else {await space.getByRole('button',{name:'Empezar',exact:true}).click();await space.getByRole('button',{name:'Blanco'}).click();}
+  else if(id==='three')await space.locator('.three-cell').first().click();
+  else if(id==='doom'){
+   assert.equal(await space.locator('.doom-player').count(),0);
+   await space.getByRole('button',{name:'Cargar DOOM',exact:true}).click();
+   const game=space.frameLocator('.doom-player');
+   await game.getByRole('button',{name:'TAP TO START'}).click({timeout:120000});
+   await game.locator('#canvas').waitFor();
+   await game.locator('#pad:not(.hidden)').waitFor();
+   await checkWindow(true);
+  }else{
+   await space.getByRole('button',{name:'Empezar',exact:true}).click();
+   if(id==='ducks')await space.getByRole('button',{name:'Pato 1',exact:true}).press('Enter');
+   else await space.getByRole('button',{name:'Blanco',exact:true}).click();
+  }
   await space.getByRole('button',{name:'Cerrar minijuego'}).click();
  }
  for(const [label,section] of [['Amigos','friends'],['Mi personaje','player'],['Clasificación','ranking'],['Guía de sala','guide'],['Salas','rooms']]){

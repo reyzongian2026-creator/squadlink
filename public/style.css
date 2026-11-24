@@ -1615,3 +1615,5 @@ body.desktop-shell #social .section-head { position: absolute; width: 1px; heigh
 .art-flick { background:linear-gradient(120deg,#233953,#414775); }
 .art-precision { background:linear-gradient(120deg,#214244,#285d52); }
 .art-merge { background:linear-gradient(120deg,#4b3356,#724865); }
+
+.art-ducks {background:linear-gradient(160deg,#779faa,#475d44);color:#eff5d8}.art-doom {background:linear-gradient(145deg,#5b252c,#30262b);color:#ffbd79}.art-doom b {font:900 1.7rem/1 system-ui;letter-spacing:.08em}

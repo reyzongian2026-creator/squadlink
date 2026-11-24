@@ -137,7 +137,7 @@ ipcMain.handle('updates',async e=>{
 });
 ipcMain.handle('download',async e=>{hostPage(e);if(updateUrl)await shell.openExternal(updateUrl);});
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.webp':'image/webp','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon'};
-const csp="default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data:;connect-src 'self';media-src 'self' blob:;object-src 'none';frame-src 'none';base-uri 'none';form-action 'self'";
+const csp="default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data:;connect-src 'self';media-src 'self' blob:;object-src 'none';frame-src https://danborden1.github.io/doom-web/;base-uri 'none';form-action 'self'";
 async function start(){
  try{const saved=JSON.parse(fs.readFileSync(prefsFile(),'utf8'));prefs={server:parseServer(saved.server),low:saved.low!==false};}catch{}
  const ses=session.fromPartition(options.partition);

@@ -215,8 +215,84 @@ function three(mount, status) {
   reset();
 }
 
+
+function ducks(mount, status) {
+  const pond = element('div', 'duck-pond');
+  const total = 10;
+  let current = 0, hits = 0, timer, active = false;
+  const start = button('Empezar', 'primary practice-start', () => {
+    current = hits = 0;
+    active = true;
+    start.hidden = true;
+    pond.hidden = false;
+    next();
+  });
+  function next() {
+    clearTimeout(timer);
+    pond.replaceChildren();
+    if (current === total) {
+      active = false;
+      pond.hidden = true;
+      start.hidden = false;
+      start.textContent = 'Otra partida';
+      status.textContent = hits + ' de ' + total + ' patos · Récord local ' + record('ducks',hits) + '/10.';
+      start.focus();
+      return;
+    }
+    current++;
+    const duration = 2600 - 85 * current;
+    const duck = button('🦆', 'flying-duck', () => { hits++; next(); });
+    duck.setAttribute('aria-label', 'Pato ' + current);
+    duck.style.top = (8 + Math.random() * 54) + '%';
+    duck.style.setProperty('--flight', Math.max(0, pond.clientWidth - 58) + 'px');
+    duck.style.setProperty('--duration', duration + 'ms');
+    duck.style.animationDirection = current % 2 ? 'normal' : 'reverse';
+    pond.append(duck);
+    duck.focus({preventScroll:true});
+    status.textContent = 'Pato ' + current + ' de ' + total + ' · ' + hits + ' aciertos';
+    timer = setTimeout(next, duration);
+  }
+  function visibility() {
+    if (!active) return;
+    clearTimeout(timer);
+    pond.style.animationPlayState = document.hidden ? 'paused' : 'running';
+    const duck = pond.firstElementChild;
+    if (duck) duck.style.animationPlayState = pond.style.animationPlayState;
+    if (!document.hidden) {
+      current--;
+      next();
+    }
+  }
+  pond.hidden = true;
+  status.textContent = 'Toca cada pato antes de que cruce la laguna. Pasan diez por partida.';
+  mount.append(pond, start);
+  document.addEventListener('visibilitychange', visibility);
+  return () => { active = false; clearTimeout(timer); document.removeEventListener('visibilitychange', visibility); };
+}
+
+function doom(mount, status) {
+  const url = 'https://danborden1.github.io/doom-web/';
+  const start = button('Cargar DOOM', 'primary practice-start', () => {
+    if (!navigator.onLine) {
+      status.textContent = 'Conéctate a internet y vuelve a pulsar Cargar DOOM.';
+      return;
+    }
+    start.hidden = true;
+    const player = element('iframe', 'doom-player');
+    player.title = 'Chocolate Doom con Freedoom';
+    player.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+    player.setAttribute('allow', "microphone 'none'; camera 'none'; geolocation 'none'");
+    player.referrerPolicy = 'no-referrer';
+    status.textContent = 'Pulsa TAP TO START cuando termine la descarga. Flechas para moverte, Ctrl para disparar y Espacio para abrir puertas.';
+    mount.append(player);
+    player.src = url;
+  });
+  status.textContent = 'Juega Freedoom: Phase 1 en el motor Chocolate Doom. La primera carga requiere internet y unos 35 MB.';
+  mount.append(start);
+}
+
 export function openPractice(id, mount) {
-  if (!['flick','precision','merge','three'].includes(id)) throw Error('Juego desconocido');
+  if (!['flick','precision','merge','three','ducks','doom'].includes(id)) throw Error('Juego desconocido');
   if (!document.querySelector('link[data-practice-style]')) {
     const style = document.createElement('link');
     style.rel = 'stylesheet';
@@ -230,6 +306,8 @@ export function openPractice(id, mount) {
   let dispose;
   if (id === 'merge') dispose = puzzle(mount, status);
   else if (id === 'three') three(mount, status);
+  else if (id === 'ducks') dispose = ducks(mount, status);
+  else if (id === 'doom') doom(mount, status);
   else aim(id, mount, status);
   return () => { dispose?.(); mount.replaceChildren(); };
 }

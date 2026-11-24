@@ -9,3 +9,11 @@
 .three-board {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;max-width:min(230px,55vh);margin:auto}
 .three-cell {aspect-ratio:1;min-height:35px;border:1px solid #58556a;border-radius:7px;background:#302f40;color:white;font:700 1.65rem system-ui;cursor:pointer}
 .three-cell:disabled {opacity:1;cursor:default}.three-cell[data-win] {background:#445c32;color:#e2ffaa}
+
+.duck-pond {position:relative;height:clamp(160px,36vh,270px);overflow:hidden;border:1px solid #567d86;border-radius:10px;background:linear-gradient(#8fc5ce 0%,#daebcc 65%,#648c6a 66%,#467c82 71%,#315666 100%)}
+.flying-duck {position:absolute;left:0;width:56px;height:52px;padding:0;min-width:0;background:transparent;border:0;line-height:1;font-size:35px;cursor:crosshair;touch-action:manipulation;animation:duck-cross var(--duration) linear both}
+.flying-duck:focus-visible {outline:2px dashed #284249;outline-offset:-3px}
+@keyframes duck-cross {from {transform:translateX(0)} to {transform:translateX(var(--flight))}}
+@media (prefers-reduced-motion:reduce) {.flying-duck {animation:none;left:40%}}
+#game-dialog:has(.doom-player) {width:min(860px,calc(100% - 20px))}
+.doom-player {display:block;width:100%;height:clamp(230px,65dvh,660px);border:0;background:#111}
