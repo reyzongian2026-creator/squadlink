@@ -905,6 +905,20 @@ dialog input {
   gap: 10px 16px;
   padding: 10px 0;
 }
+#audio-settings .audio-tests:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 24px;
+}
+.audio-tests > div {
+  display: grid;
+  flex: 1 1 15rem;
+  justify-items: start;
+  gap: 6px;
+}
+.audio-tests meter { width: min(100%, 16rem); }
+.audio-tests p:empty { display: none; }
 #audio-settings label {
   font-size: 0.85rem;
   margin: 0;

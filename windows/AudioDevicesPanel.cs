@@ -9,6 +9,8 @@ internal sealed class AudioDevicesPanel : UserControl
     private readonly TrackBar micGain=new() {AccessibleName="Ganancia del micrófono en decibelios", Minimum=0, Maximum=18, TickFrequency=3, LargeChange=3, Dock=DockStyle.Fill};
     private readonly Button test=new() {Text="Grabar prueba de 4 segundos",AutoSize=true}, refresh=new() {Text="Actualizar dispositivos",AutoSize=true};
     private readonly Label filters=new() {AutoSize=true}, status=new() {AutoSize=true}, testStatus=new() {AutoSize=true};
+    private readonly Button speakerTest=new() {Text="Probar altavoz",AutoSize=true,Visible=false};
+    private readonly Label speakerStatus=new() {AutoSize=true};
     public event Action<string,object?>? Change;
     public AudioDevicesPanel()
     {
@@ -27,14 +29,15 @@ internal sealed class AudioDevicesPanel : UserControl
         Row("Ganancia del micrófono",ShowLevel(micGain, value => value==0 ? "0 dB" : $"+{value} dB"));
         Row("Salida de audio",output); Row("Volumen de las voces",ShowLevel(volume, value => $"{value} %"));
         Row(null,noise); Row(null,gain); Row(null,filters);
-        var actions=new FlowLayoutPanel {AutoSize=true}; actions.Controls.Add(test); actions.Controls.Add(refresh);
-        Row(null,actions); Row(null,testStatus); Row(null,status); Controls.Add(grid);
+        var actions=new FlowLayoutPanel {AutoSize=true}; actions.Controls.Add(test); actions.Controls.Add(speakerTest); actions.Controls.Add(refresh);
+        Row(null,actions); Row(null,testStatus); Row(null,speakerStatus); Row(null,status); Controls.Add(grid);
         input.SelectionChangeCommitted+=(_,_)=>Change?.Invoke("input",((Device?)input.SelectedItem)?.Id);
         output.SelectionChangeCommitted+=(_,_)=>Change?.Invoke("output",((Device?)output.SelectedItem)?.Id);
         micGain.MouseUp+=(_,_)=>Change?.Invoke("micGainDb",micGain.Value);
         micGain.KeyUp+=(_,_)=>Change?.Invoke("micGainDb",micGain.Value);
         volume.MouseUp+=(_,_)=>Change?.Invoke("volume",volume.Value); volume.KeyUp+=(_,_)=>Change?.Invoke("volume",volume.Value);
         noise.Click+=(_,_)=>Change?.Invoke("noise",noise.Checked); gain.Click+=(_,_)=>Change?.Invoke("gain",gain.Checked);
+        speakerTest.Click+=(_,_)=>Change?.Invoke("speakerTest",null);
         test.Click+=(_,_)=>Change?.Invoke("test",null); refresh.Click+=(_,_)=>Change?.Invoke("refresh",null);
         Enabled=false;
     }
@@ -73,6 +76,10 @@ internal sealed class AudioDevicesPanel : UserControl
             micGain.Enabled=false;
         }
         test.Text=msg.GetProperty("test").GetString(); test.Visible=msg.GetProperty("showTest").GetBoolean(); test.Enabled=msg.GetProperty("canTest").GetBoolean();
+        speakerTest.Visible=test.Visible && msg.TryGetProperty("speakerTest",out _);
+        if (speakerTest.Visible && msg.TryGetProperty("speakerTest",out var label)) speakerTest.Text=label.GetString();
+        speakerTest.Enabled=msg.TryGetProperty("canSpeakerTest",out var canPlay) && canPlay.ValueKind==JsonValueKind.True;
+        speakerStatus.Text=msg.TryGetProperty("speakerStatus",out var soundStatus) ? soundStatus.GetString() : "";
         refresh.Enabled=msg.GetProperty("canRefresh").GetBoolean(); filters.Text=msg.GetProperty("filters").GetString();
         status.Text=msg.GetProperty("status").GetString(); testStatus.Text=msg.GetProperty("testStatus").GetString();
     }

@@ -109,7 +109,12 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  assert.equal((await home.evaluate(()=>window.squad.state())).low,false);
  await home.getByRole('button',{name:'Bajo consumo'}).click();
  await checkWindow(false);
- await home.getByRole('button',{name:'Lobby de voz'}).click();
+ await home.getByRole('button',{name:'Dispositivos de audio',exact:true}).click();
+ const audioSettings=await surface('app');
+ const {localAudioBrowser}=await import('../test/support/local-audio-browser.mjs');
+ await localAudioBrowser(audioSettings);
+ await audioSettings.getByRole('button',{name:'Lobby de voz',exact:true}).click();
+ home=await surface('home');
  await home.getByRole('button',{name:'Crear sala',exact:true}).click();
  let space;
  for(let i=0;i<120&&!space;i++){space=app.context().pages().find(p=>p.url().startsWith('squad://app/'));if(!space)await delay(100);}

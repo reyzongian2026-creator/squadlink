@@ -1,7 +1,7 @@
 // WaveShaper inputs are bounded to [-1, 1]. The preceding gain uses half the
 // requested multiplier, preserving headroom for the +6 dB transfer curve.
 let boostCurve;
-function limitingCurve() {
+export function limitingCurve() {
   if (boostCurve) return boostCurve;
   boostCurve = Float32Array.from({length:4097}, (_, i) => {
     const sample = (i / 2048 - 1) * 2;

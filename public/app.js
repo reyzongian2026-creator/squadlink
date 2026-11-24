@@ -898,6 +898,7 @@ function setupWebChannels() {
       : enclosingPanel?.dataset.channelPanel.split(" ")[0] || (fragment.startsWith("kit-") ? "loadout" : "main");
     if (channel !== "main" && body.classList.contains("in-match")) $("compact").click();
     if (channel !== "arcade") closeGame();
+    if (channel !== "main") $("audio-panel").open = false;
     body.dataset.channel = channel;
     if (channel === "directory") directory.reload();
     for (const panel of panels) {

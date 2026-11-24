@@ -6,6 +6,7 @@ export function prepareVoiceCapture(input, settings) {
   let micGainDb = settings.micGainDb ?? 0;
   const capture = {
     stream: input,
+    get audioContext() { return closed ? null : context; },
     setNoise(enabled) {
       noise = enabled;
       if (filter) filter.parameters.get('reduceNoise').value = enabled ? 1 : 0;

@@ -1,3 +1,4 @@
+import { mountSpeakerTest } from './speaker-test.js';
 import { mountMicTest } from './mic-test.js';
 
 export function microphoneConstraints(settings) {
@@ -77,12 +78,28 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   const actual = document.createElement('p');
   actual.setAttribute('role', 'status');
   const testArea = document.createElement('div');
+  testArea.className = 'audio-tests';
+  const micArea = document.createElement('div');
+  const speakerArea = document.createElement('div');
+  testArea.append(micArea, speakerArea);
+  const help = document.createElement('p');
+  help.textContent = 'Puedes probar el micrófono y el altavoz antes de entrar a la sala.';
+  const micTest = mountMicTest(micArea, () => microphoneConstraints(readAudioSettings()), readAudioSettings);
+  const speakerTest = mountSpeakerTest(speakerArea, readAudioSettings);
+  micArea.addEventListener('click', event => {
+    if (event.target.closest('button')) speakerTest.cancel();
+  }, true);
+  speakerArea.addEventListener('click', event => {
+    if (event.target.closest('button')) micTest.cancelActive();
+  }, true);
+  const cancelTests = () => { micTest.cancel(); speakerTest.cancel(); };
   const syncProcessing = () => {
+    const inRoom = !!getVoice() || document.getElementById('room')?.hidden === false;
+    if (inRoom) cancelTests();
+    testArea.hidden = inRoom;
+    help.hidden = !inRoom;
     actual.textContent = describeProcessing(getVoice()?.stream?.getAudioTracks()[0]);
-    if (getVoice() || !document.getElementById('room')?.hidden) micTest.cancel();
-    testArea.hidden = !!getVoice() || !document.getElementById('room')?.hidden;
   };
-  const micTest = mountMicTest(testArea, () => microphoneConstraints(readAudioSettings()), () => readAudioSettings());
   const refresh = document.createElement('button');
   refresh.type = 'button';
   refresh.className = 'secondary';
@@ -96,6 +113,8 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   const host = window.squadBridge ?? window.chrome?.webview;
   const sampleButton = testArea.querySelector('button');
   const sampleStatus = testArea.querySelector('[role="status"]');
+  const speakerButton = speakerArea.querySelector('button');
+  const speakerStatus = speakerArea.querySelector('[role="status"]');
   function notifyHost() {
     if (!host || document.body.dataset.workspace !== 'settings') return;
     const selector = el => ({value: el.value, enabled: !el.disabled, options: [...el.options].map(o=>[o.value, o.text])});
@@ -104,14 +123,16 @@ export function mountAudioSettings(container, getVoice, onStatus) {
       noise:toggle(noise), gain:toggle(gain), micGainDb:Number(micGain.value), canMicGain:!micGain.disabled,
       volume:Number(volume.value), canVolume:!volume.disabled,
       test:sampleButton.textContent, canTest:!sampleButton.disabled, showTest:!testArea.hidden,
-      testStatus:sampleStatus?.textContent || '', filters:actual.textContent, status:status.textContent, canRefresh:!refresh.disabled});
+      speakerTest:speakerButton.textContent, canSpeakerTest:!speakerButton.disabled,
+      speakerStatus:speakerStatus?.textContent || '', testStatus:sampleStatus?.textContent || '', filters:actual.textContent, status:status.textContent, canRefresh:!refresh.disabled});
   }
   const audioCommand = ({data}) => {
     if (data?.type === 'desktop:action' && data.action === 'settings') { queueMicrotask(notifyHost); return; }
     if (data?.type !== 'desktop:audio-change' || document.body.dataset.workspace !== 'settings') return;
-    const el = {input:microphone, output:speakers, micGainDb:micGain, volume, noise, gain, test:sampleButton, refresh, restore}[data.key];
+    const el = {input:microphone, output:speakers, micGainDb:micGain, volume, noise, gain, test:sampleButton, speakerTest:speakerButton, refresh, restore}[data.key];
     if (!el || el.disabled) return;
-    if (el===sampleButton || el===refresh || el===restore) { if(el!==sampleButton || !testArea.hidden) el.click(); return; }
+    if (el === sampleButton || el === speakerButton) { if (!testArea.hidden) el.click(); return; }
+    if (el === refresh || el === restore) { el.click(); return; }
     if (el.type==='checkbox') el.checked=data.value===true; else el.value=String(data.value);
     el.dispatchEvent(new Event('change'));
   };
@@ -163,7 +184,7 @@ export function mountAudioSettings(container, getVoice, onStatus) {
     if (saving) return;
     saving = true;
     let message;
-    micTest.cancel();
+    cancelTests();
     micGain.disabled = volume.disabled = gain.disabled = true;
     microphone.disabled = speakers.disabled = noise.disabled = refresh.disabled = restore.disabled = true;
     try {
@@ -198,9 +219,9 @@ export function mountAudioSettings(container, getVoice, onStatus) {
     : 'La salida de audio se elige en los ajustes de sonido de tu sistema.';
   container.replaceChildren(field('Micrófono', microphone), inputLevel.element, field('Salida de audio', speakers),
     listenLevel.element, field('Reducir ruido de fondo', noise),
-    field('Ganancia automática del micrófono', gain), restore, actual, testArea, refresh, note, status);
+    field('Ganancia automática del micrófono', gain), restore, actual, testArea, help, refresh, note, status);
   media?.addEventListener?.('devicechange', render);
   window.addEventListener('squadlink:audio-state', syncProcessing);
   render();
-  return () => { ++reading; audioObserver?.disconnect(); host?.removeEventListener('message',audioCommand); micTest.dispose(); window.removeEventListener('squadlink:audio-state', syncProcessing); media?.removeEventListener?.('devicechange', render); };
+  return () => { ++reading; audioObserver?.disconnect(); host?.removeEventListener('message',audioCommand); micTest.dispose(); speakerTest.dispose(); window.removeEventListener('squadlink:audio-state', syncProcessing); media?.removeEventListener?.('devicechange', render); };
 }
