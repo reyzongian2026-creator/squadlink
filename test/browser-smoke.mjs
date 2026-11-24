@@ -178,7 +178,7 @@ async function progressionSmoke(player, observer, playForRank) {
     document.querySelector('#kit-options [aria-label="Gorra"]')?.getAttribute('aria-pressed') === 'true');
   assert.equal(await player.locator('#kit-nick').innerText(), 'Luz');
 
-  await player.locator('[data-rank="sequence"]').click();
+  await player.getByRole('combobox', {name:'Juego o desafío'}).selectOption('sequence');
   await player.getByText(/Más rondas seguidas/).waitFor();
   if (!playForRank) {
     assert.match(await player.locator('#kit-rank-scope').innerText(), /Comunidad/,
@@ -200,7 +200,7 @@ async function progressionSmoke(player, observer, playForRank) {
   await player.getByRole('button', { name: 'Cerrar minijuego' }).click();
   await player.waitForFunction(xp => document.querySelector('#kit-xp-label')?.textContent.includes(xp + ' XP totales'), profile.xp);
   await openChannel(observer, 'loadout');
-  await observer.locator('[data-rank="reflex"]').click();
+  await observer.getByRole('combobox', {name:'Juego o desafío'}).selectOption('reflex');
   await observer.locator('#kit-ranking li').filter({ has: observer.getByText('Luz', { exact: true }) })
     .getByText(profile.best.reflex + ' ms', { exact: true }).waitFor();
 }
@@ -277,6 +277,8 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     await a.locator('#submit-entry').click();
     await a.locator('#room-code').waitFor({ state: 'visible' });
     const code = await a.locator('#room-code').innerText();
+    // Un perfil nuevo empieza en Mi personaje. El acceso por código está en el lobby.
+    await openChannel(b, 'main');
     await b.getByRole('button', { name: 'Unirme con código' }).click();
     await b.getByLabel('Tu apodo').fill('Ana');
     await b.getByLabel('Código de sala').fill(code);
@@ -310,6 +312,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     }
     const initial = await Promise.all([inbound(a), inbound(b)]);
     await musicSmoke(a,b);
+    await a.locator('.connection-details > summary').click();
     await a.getByRole('button', { name: 'Medir conexión de voz' }).click();
     await a.locator('#voice-measurements').getByText(/Ana.*(Directa|Por retransmisor)/).waitFor();
     await openChannel(a, 'arcade');
