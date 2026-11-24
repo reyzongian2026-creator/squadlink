@@ -4,9 +4,9 @@
 
 Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte un código y conversa mientras juegan. En la espera de una partida pueden abrir Reflejos o Memoria sin salir de la sala.
 
-**[Abrir Squadlink en la web](https://squadlink-lobby.onrender.com/)** · [Descargar para Windows x64](https://github.com/reyzongian2026-creator/squadlink/releases/download/moderno-v0.5.0-preview.3/Squadlink-Moderno-Setup-x64.exe) · [Descargar para Mac con Apple Silicon](https://github.com/reyzongian2026-creator/squadlink/releases/download/moderno-v0.5.0-preview.3/Squadlink-Moderno-macOS-arm64.zip)
+**[Abrir Squadlink en la web](https://squadlink-lobby.onrender.com/)** · [Descargar para Windows x64](https://github.com/reyzongian2026-creator/squadlink/releases/download/moderno-v0.5.0-preview.4/Squadlink-Moderno-Setup-x64.exe) · [Descargar para Mac con Apple Silicon](https://github.com/reyzongian2026-creator/squadlink/releases/download/moderno-v0.5.0-preview.4/Squadlink-Moderno-macOS-arm64.zip)
 
-Squadlink Moderno 0.5.0-preview.3 abre el lobby, los amigos, el arcade y los ajustes en la misma ventana. En Windows, ejecuta el instalador. En Mac, extrae el ZIP y mueve la app a Aplicaciones. La versión de Mac lleva firma local y carece de notarización de Apple. [Ver la versión y sus sumas SHA-256](https://github.com/reyzongian2026-creator/squadlink/releases/tag/moderno-v0.5.0-preview.3)
+Squadlink Moderno 0.5.0-preview.4 abre el lobby, los amigos, el arcade y los ajustes en la misma ventana. En Windows, ejecuta el instalador. En Mac, extrae el ZIP y mueve la app a Aplicaciones. La versión de Mac lleva firma local y carece de notarización de Apple. [Ver la versión y sus sumas SHA-256](https://github.com/reyzongian2026-creator/squadlink/releases/tag/moderno-v0.5.0-preview.4)
 
 ![Inicio de Squadlink Moderno en Windows, con salas y accesos directos](docs/media/inicio-moderno.png)
 
@@ -21,7 +21,7 @@ El instalador es público y se puede descargar sin iniciar sesión en GitHub. Tu
 ## La primera partida
 
 1. Abre Squadlink y elige tu apodo. El dispositivo lo recuerda para la próxima sesión.
-2. Pulsa **Crear sala**, escribe un nombre y añade una clave si la quieres privada. Puedes indicar juego, nivel y descripción. Activa **Mostrar sala en el directorio** si quieres que otros la encuentren.
+2. Pulsa **Crear sala** y escribe un nombre. **Mostrar en Salas públicas** está activado al crearla. Desmárcalo si prefieres compartirla solo por código o invitación. Puedes exigir una clave incluso en una sala publicada y añadir juego, nivel y descripción.
 3. Comparte el **código de sala** de seis caracteres. Tu amigo abre **Unirme con código** en el mismo lobby e introduce el código y la clave, si la configuraste.
 4. Cada jugador pulsa **Activar micrófono** y concede el permiso. En los ajustes de voz puede elegir micrófono y salida, activar reducción de ruido y consultar el diagnóstico cuando el dispositivo lo admite.
 
