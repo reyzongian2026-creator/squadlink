@@ -103,3 +103,11 @@ Se retuvieron solicitudes HTTP y permisos de audio para comprobar qué sucede cu
 Se repitió 25 veces la combinación de pruebas de concurrencia de salas y voz en cada rama. Se usa un reloj fijo para verificar la reentrada al mismo código aun cuando las dos entradas comparten marca de tiempo. La prueba de radio usa una respuesta HTTP retenida y un reproductor de Chromium. La calidad acústica de micrófonos físicos requiere una llamada con esos dispositivos.
 
 [Pruebas de web y llamada en el lobby publicado](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45354371065) · [Pruebas de escritorio y voz](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45354370838) · [Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45354370832) · [macOS Apple Silicon](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45354370814)
+
+## Actualización desde la aplicación en 0.5.0-preview.20
+
+La prueba abre Ajustes en la aplicación compilada, descarga una actualización de prueba y altera el archivo antes de instalarlo. La aplicación rechaza el archivo, permanece abierta y permite repetir la descarga. El controlador también comprueba la entrada a una sala mientras prepara una actualización.
+
+En Windows se comprueba que el instalador silencioso espere la salida del proceso original, vuelva a abrir el escritorio en la ruta instalada y conserve el perfil y los cartuchos de prueba. En macOS se actualiza una copia con un perfil aislado, se comprueba la firma y se verifica la recuperación de la edición previa al simular un fallo de arranque.
+
+[Prueba de Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45357922888) · [Prueba de Mac](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45357922767)

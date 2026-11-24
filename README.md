@@ -6,6 +6,8 @@ Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte
 
 **[Descargar Squadlink](https://squadlink-lobby.onrender.com/descargar.html)**
 
+Desde **0.5.0-preview.20**, abre **Ajustes → Actualizaciones**. Cuando haya una versión nueva, pulsa **Descargar actualización**. Puedes seguir en la llamada mientras se descarga. Sal de la sala y pulsa **Instalar y reiniciar** cuando estés listo. Squadlink vuelve a abrirse con tu perfil y conserva los cartuchos instalados. Si tienes la .19 o una versión anterior, instala esta primera actualización con la descarga de arriba.
+
 Elige Windows x64 o Mac con Apple Silicon. En Windows, ejecuta el instalador. En Mac, extrae el ZIP y mueve Squadlink a Aplicaciones. La app para Mac tiene firma local y carece de notarización de Apple.
 
 El arcade incluye Cambio de blanco, Precisión, Mata patos, 2048 y Tres en raya. Estos juegos se ejecutan en el dispositivo. En DOOM puedes jugar la campaña libre Freedoom: Phase 1 con Chocolate Doom. Pulsa **Cargar DOOM** para descargar el juego (unos 35 MB la primera vez) y luego **Jugar**. Usa WASD para moverte, el ratón para girar, clic izquierdo para disparar y Espacio para abrir puertas. Esc libera el cursor. Salir del juego detiene su audio y conserva la llamada. [Proyecto de Chocolate Doom y Freedoom para navegador](https://github.com/danborden1/doom-web)
