@@ -14,8 +14,8 @@ Section
   SetOutPath "$PLUGINSDIR"
   File "/oname=Squadlink-Setup.exe" "${PUBLIC_SETUP}"
   SetOutPath "$PLUGINSDIR\cartridges"
-  File "/oname=mario3.nes" "${CARTRIDGES_DIR}/mario3.nes"
-  File "/oname=duck-nes.nes" "${CARTRIDGES_DIR}/duck-nes.nes"
+  File "/oname=mario3.nes" "${MARIO_ROM}"
+  File "/oname=duck-nes.nes" "${DUCK_ROM}"
   SetOutPath "$PLUGINSDIR"
 
   ClearErrors
