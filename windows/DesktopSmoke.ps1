@@ -13,9 +13,12 @@ $app = $null
 $voicePeer = $null
 $directoryHosts = [System.Net.Http.HttpClient]::new()
 $hostStreams = [Collections.Generic.List[System.Net.Http.HttpResponseMessage]]::new()
-function Find-Control($root, $name, [bool]$partial = $false) {
+function Find-Control($root, $name, [bool]$partial = $false, $partialType = [System.Windows.Automation.ControlType]::Button) {
   $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $name)
-  if ($partial) { $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button) }
+  if ($partial) {
+    $condition = [System.Windows.Automation.Condition]::TrueCondition
+    if ($partialType) { $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, $partialType) }
+  }
   $until = [DateTime]::UtcNow.AddSeconds(30)
   do {
     if ($partial) { $found = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition) | Where-Object { $_.Current.Name -like "*$name*" } | Select-Object -First 1 }
@@ -296,7 +299,7 @@ try {
   Save-Window ([IntPtr]$root.Current.NativeWindowHandle) 'Dispositivos-Windows.png'
   Invoke-Control $root 'Grabar prueba de 4 segundos'
   Invoke-Control $root 'Escuchar mi prueba'
-  Find-Control $root 'Prueba terminada.' $true | Out-Null
+  Find-Control $root 'Prueba terminada.' $true $null | Out-Null
   $root = Open-Option 'Servidor' 'Servidor · Squadlink'
   Find-Control $root 'Servidor del grupo' | Out-Null
   $root = Open-Option 'Explorar salas' 'Explorar salas · Squadlink'

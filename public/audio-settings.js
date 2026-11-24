@@ -189,7 +189,9 @@ export function mountAudioSettings(container, getVoice, onStatus) {
     if (saving) return;
     saving = true;
     let message;
-    cancelTests();
+    const playbackOnly = Object.keys(patch).every(key => key === 'listenVolume' || key === 'outputId');
+    if (playbackOnly) { micTest.cancelActive(); speakerTest.cancel(); }
+    else cancelTests();
     micGain.disabled = volume.disabled = gain.disabled = true;
     microphone.disabled = speakers.disabled = noise.disabled = refresh.disabled = restore.disabled = true;
     try {

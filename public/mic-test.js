@@ -103,6 +103,10 @@ export function mountMicTest(container, constraints, preferences) {
   button.onclick = async () => {
     if (active) { cancel(); return; }
     if (!supported) return;
+    if (url && preferences().listenVolume === 0) {
+      status.textContent = 'Sube el volumen de las voces para escuchar la muestra.';
+      return;
+    }
     active = true;
     const id = ++version;
     if (url) {
