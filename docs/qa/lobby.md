@@ -46,3 +46,16 @@ Se midió el audio recibido después de la codificación y decodificación WebRT
 | [macOS Apple Silicon](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45332894322) | 23,99 a 24,10 dB | −2,30 dBFS |
 
 El tono cubrió el 100 % de las ventanas medidas en cada sentido. Ninguna muestra alcanzó el umbral de saturación de la prueba (magnitud PCM ≥ 0,99). Las mediciones corresponden a señales de referencia. El ruido acústico del cuarto, la interfaz de audio y los altavoces de los jugadores requieren una escucha en sus equipos.
+
+## Voz, radio y Arcade en 0.5.0-preview.15
+
+Dos participantes enviaron audio simultáneamente. Se midió el PCM del reproductor de voz del oyente y se controlaron por separado las pistas WebRTC entrante y saliente. Los resultados se obtuvieron con señales de prueba y con las aplicaciones empaquetadas.
+
+| Sistema | Escucha de 100 % a 200 % | Micrófono a +6 / +12 dB | Pico con micrófono a +18 dB |
+| --- | --- | --- | --- |
+| [Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45343833285) | +6,08 dB | +5,98 / +11,95 dB | −2,34 dBFS |
+| [Mac con Apple Silicon](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45343833275) | +6,02 dB | +6,04 / +12,05 dB | −2,42 dBFS |
+
+En ambos sistemas, la ganancia de escucha produjo un cambio medido de 0,00 dB en el audio enviado al otro participante. La prueba de señal fuerte con el micrófono a +18 dB registró cero muestras saturadas. Se conservó la misma pista del micrófono al cambiar los niveles.
+
+La emisora de prueba y la energía de voz en ambos sentidos siguieron avanzando al minimizar, restaurar y volver al lobby. Un jugador pudo silenciar y reanudar la radio mientras el otro siguió escuchando. En Arcade se abrieron los dos espacios de cartuchos con ROM de diagnóstico instaladas y el selector de archivos oculto. El instalador de Windows también comprobó la copia de ambos archivos por su hash.

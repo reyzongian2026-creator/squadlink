@@ -10,9 +10,9 @@ Elige Windows x64 o Mac con Apple Silicon. En Windows, ejecuta el instalador. En
 
 El arcade incluye Cambio de blanco, Precisión, Mata patos, 2048 y Tres en raya. Estos juegos se ejecutan en el dispositivo. En DOOM puedes jugar la campaña libre Freedoom: Phase 1 con Chocolate Doom. Pulsa **Cargar DOOM** para descargar el juego (unos 35 MB la primera vez) y luego **Jugar**. Usa WASD para moverte, el ratón para girar, clic izquierdo para disparar y Espacio para abrir puertas. Esc libera el cursor. Salir del juego detiene su audio y conserva la llamada. [Proyecto de Chocolate Doom y Freedoom para navegador](https://github.com/danborden1/doom-web)
 
-En **Arcade**, selecciona tu cartucho NES. En Mario, usa las flechas para moverte, Espacio o Z para saltar y X para correr. En Duck Hunt, pulsa Enter para empezar, apunta con el ratón y dispara con clic. Pulsa P para pausar.
+En **Arcade**, la copia personal abre los cartuchos instalados de Mario y Mata patos con **Enter**. Si el juego no tiene un cartucho instalado, aparece el selector de archivos .nes. En Mario, usa las flechas para moverte, Espacio o Z para saltar y X para correr. En Duck Hunt, pulsa Enter para empezar, apunta con el ratón y dispara con clic. Pulsa P para pausar.
 
-En **Mi sala → Radio y música → Añadir música** puedes compartir una emisora por género o un archivo de audio de hasta 20 MiB. Cada jugador controla su volumen. La guía de escritorio explica cómo guardar el pase de jugador, cambiar el rostro y escuchar la radio. [Personaje y radio](docs/personaje-y-radio-mac.md)
+En **Mi sala → Radio y música → Añadir música** puedes compartir una emisora por género o un archivo de audio de hasta 20 MiB. Mientras suena la música, **Silenciar solo para mí** apaga la reproducción en tu equipo. **Escuchar aquí** la reanuda. La sala y los demás oyentes siguen con la misma emisora. La música y la llamada continúan al minimizar la ventana de escritorio. La guía de escritorio explica cómo guardar el pase de jugador, cambiar el rostro y escuchar la radio. [Personaje y radio](docs/personaje-y-radio-mac.md)
 
 ## La primera partida
 
@@ -50,6 +50,7 @@ Para uso permanente quedan por definir el alojamiento continuo del relay y la co
 | Síntoma | Qué revisar |
 | --- | --- |
 | El código de sala no funciona | Comprueba que ambos estén en el mismo servidor, que quede un cupo y que el anfitrión siga en la sala o haya otro miembro conectado. Tras un reinicio hay que crear una sala nueva. |
+| Todos tienen el volumen al máximo y la voz llega baja | En **Ajustes → Dispositivos de audio**, sube **Volumen de las voces que escucho** a 150 % y ajusta hasta 200 % según necesites. Si tus compañeros te oyen bajo, sube **Ganancia de mi micrófono** desde 0 dB a +6 dB y comprueba el resultado en la llamada. |
 | Se oye un siseo entre frases o las voces llegan muy fuertes | Ambos jugadores pueden abrir **Ajustes → Dispositivos de audio → Restablecer volumen y filtros de voz**. Esto deja la reducción de ruido activa, la ganancia automática desactivada y el volumen de escucha al 70 %. Cada uno conserva el micrófono y la salida elegidos. |
 | Entran a la sala, pero no se oyen | Comprueben el permiso del micrófono, los dispositivos elegidos y el diagnóstico de conexión. Si en redes separadas falla, revisen la disponibilidad del relay. |
 
