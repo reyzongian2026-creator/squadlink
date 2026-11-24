@@ -57,6 +57,7 @@ test('amplifica en el mismo elemento y limita los picos sin duplicar la pista ni
   assert.equal(contexts.length,0);
   room.setVolume('B',0.5);
   await room.configureAudio({listenVolume:2});
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(contexts.length,1);
   const [ctx]=contexts;
   const [source]=ctx.sources, [gain]=ctx.gains, [limiter]=ctx.limiters, [out]=ctx.destinations;
@@ -68,7 +69,9 @@ test('amplifica en el mismo elemento y limita los picos sin duplicar la pista ni
   assert.equal(a.audio.volume,1);
   assert.equal(b.audio.srcObject,b.remoteStream);
   assert.equal(b.audio.volume,1);
-  assert.equal(audios.length,2);
+  const mutedDecoder = audios.find(audio => audio.muted);
+  assert.deepEqual(mutedDecoder.played,[direct]);
+  assert.equal(audios.filter(audio => !audio.muted).length,2);
   function transfer(input) {
     const sample=input*gain.gain.value;
     return limiter.curve[Math.round((sample+1)/2*(limiter.curve.length-1))];
@@ -85,6 +88,7 @@ test('amplifica en el mismo elemento y limita los picos sin duplicar la pista ni
   room.setVolume('A',0); assert.equal(a.audio.volume,0);
   assert.equal(a.audio.srcObject,direct);
   assert.ok(out.stream.getTracks()[0].stopped);
+  assert.equal(mutedDecoder.srcObject,null);
   assert.equal(input.stopped,false);
   assert.equal(ctx.state,'running');
   await room.configureAudio({listenVolume:0.7});

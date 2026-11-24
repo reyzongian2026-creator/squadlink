@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { duckNesBrowser } from './duck-nes-browser.mjs';
 import {musicSmoke} from './support/music-browser.mjs';
+import voiceQuality from './support/voice-quality.cjs';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { createServer } from '../server.mjs';
@@ -270,19 +271,20 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     const origin = sharedOrigin || 'http://127.0.0.1:' + server.address().port;
     browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
     const errors = [];
-    async function client() {
+    async function client(frequency = 500) {
       const ctx = await browser.newContext({ permissions: ['microphone'] });
+      await ctx.addInitScript({content:voiceQuality.fixtureSetup(frequency)});
       await ctx.addInitScript(() => {
         window.qaPeers = [];
+        window.testPeers = window.qaPeers;
         window.qaTracks = [];
         const Original = window.RTCPeerConnection;
         window.RTCPeerConnection = class extends Original {
           constructor(...args) { super(...args); window.qaPeers.push(this); }
         };
         const media = navigator.mediaDevices;
-        const capture = media.getUserMedia.bind(media);
-        media.getUserMedia = async options => {
-          const stream = await capture(options);
+        media.getUserMedia = async () => {
+          const stream = await window.qaMicrophone();
           window.qaTracks.push(...stream.getTracks());
           return stream;
         };
@@ -293,7 +295,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
       return page;
     }
     const a = await client();
-    const b = await client();
+    const b = await client(900);
     const entry = a.locator('footer').getByRole('link', { name: 'Descargar Squadlink', exact: true });
     assert.equal(await entry.count(), 1);
     assert.equal(await entry.getAttribute('href'), '/descargar.html');
@@ -366,6 +368,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     }
     const initial = await Promise.all([inbound(a), inbound(b)]);
     await boostDuringCall(a);
+    await voiceQuality.testListenBoost(a,b);
     await musicSmoke(a,b);
     await a.getByRole('button', { name: 'Medir conexión de voz' }).click();
     await a.locator('#voice-measurements').getByText(/Ana.*(Directa|Por retransmisor)/).waitFor();
