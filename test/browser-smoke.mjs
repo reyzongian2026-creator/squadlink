@@ -275,6 +275,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
       assert.ok(await a.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'desborde horizontal a ' + width);
     }
     const eagerResources = await a.evaluate(() => performance.getEntriesByType('resource').map(e => new URL(e.name).pathname));
+    assert.ok(!eagerResources.includes('/arcade-practice.js') && !eagerResources.includes('/arcade-practice.css'));
     assert.ok(!eagerResources.includes('/arcade.js'), 'el arcade solo se descarga cuando se abre');
     await a.getByRole('button', { name: 'Crear sala', exact: true }).first().click();
     await a.getByLabel('Tu apodo').fill('Gian');
@@ -320,6 +321,42 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     await a.getByRole('button', { name: 'Medir conexión de voz' }).click();
     await a.locator('#voice-measurements').getByText(/Ana.*(Directa|Por retransmisor)/).waitFor();
     await openChannel(a, 'arcade');
+    for (const [game, goal] of [['flick',12],['precision',16]]) {
+      await a.locator('[data-game="'+game+'"]').click();
+      await a.getByRole('button',{name:'Empezar',exact:true}).click();
+      for(let i=0;i<goal;i++) await a.getByRole('button',{name:'Blanco',exact:true}).click();
+      await a.locator('#game-mount').getByText(/Récord local/).waitFor();
+      await a.getByRole('button',{name:'Cerrar minijuego'}).click();
+    }
+    await a.locator('[data-game="ducks"]').click();
+    await a.getByRole('button',{name:'Empezar',exact:true}).click();
+    for(let i=1;i<=10;i++) await a.getByRole('button',{name:'Pato '+i,exact:true}).press('Enter');
+    await a.getByText(/10 de 10 patos/).waitFor();
+    await a.getByRole('button',{name:'Cerrar minijuego'}).click();
+    let doomRequests=0;
+    await a.route('https://danborden1.github.io/doom-web/', route => {
+      doomRequests++;
+      return route.fulfill({contentType:'text/html',body:'<title>Jugador de prueba</title>'});
+    });
+    await a.locator('[data-game="doom"]').click();
+    assert.equal(doomRequests,0);
+    await a.getByRole('button',{name:'Cargar DOOM'}).click();
+    await a.frameLocator('.doom-player').locator('title').waitFor({state:'attached'});
+    assert.equal(doomRequests,1);
+    await a.getByRole('button',{name:'Cerrar minijuego'}).click();
+    assert.equal(await a.locator('.doom-player').count(),0);
+    await a.locator('[data-game="three"]').click();
+    await a.locator('.three-cell').first().click();
+    assert.equal(await a.locator('.three-cell:disabled').count(),2);
+    await a.getByRole('button',{name:'Cerrar minijuego'}).click();
+    await a.locator('[data-game="merge"]').click();
+    const grid=a.locator('.merge-board');
+    await grid.waitFor();
+    assert.equal(await grid.locator('.merge-tile:not([data-level="0"])').count(),2);
+    for(const key of ['ArrowUp','ArrowLeft','ArrowDown','ArrowRight']) await grid.press(key);
+    await a.getByRole('button',{name:'Nueva partida'}).click();
+    assert.equal(await grid.locator('.merge-tile:not([data-level="0"])').count(),2);
+    await a.getByRole('button',{name:'Cerrar minijuego'}).click();
     await a.locator('[data-game="reflex"]').click();
     await a.locator('#game-dialog[open]').waitFor();
     const activeGame = a.locator('#game-mount button').first();
