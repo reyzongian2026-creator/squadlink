@@ -52,7 +52,18 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  assert.equal((await home.evaluate(()=>window.squad.state())).server,'http://127.0.0.1:4179');
  await home.getByText('Todavía no hay salas públicas.').waitFor();
  await home.screenshot({path:path.join(capture,'Inicio-Moderno.png')});
- async function memory(label){const values=await app.evaluate(({app})=>app.getAppMetrics().map(m=>m.memory.workingSetSize));console.log('RAM '+label+' MiB: '+(values.reduce((a,b)=>a+b,0)/1024).toFixed(1));}
+ async function memory(label){
+  // Electron reports working-set KiB per process. Keep timing and sample size
+  // identical to the .22 benchmark, including all native helper processes.
+  const samples=[];
+  for(let i=0;i<5;i++){
+   const values=await app.evaluate(({app})=>app.getAppMetrics().map(m=>m.memory.workingSetSize));
+   samples.push(values.reduce((a,b)=>a+b,0)/1024);
+   if(i<4)await delay(180);
+  }
+  const sorted=[...samples].sort((a,b)=>a-b);
+  console.log('RAM '+label+' MiB: '+samples[0].toFixed(1)+'; mínima '+sorted[0].toFixed(1)+'; mediana '+sorted[2].toFixed(1));
+ }
  await memory('inicio');console.log('Inicio React correcto');
  // Only GitHub requests are intercepted, in the isolated packaged app's main process.
  const asset=process.platform==='darwin'?'Squadlink-Moderno-macOS-arm64.zip':'Squadlink-Moderno-Setup-x64.exe';
@@ -146,6 +157,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  async function audio(previous){let values;for(let i=0;i<100;i++){values=await Promise.all([sample(space),sample(peer)]);if(values.every((v,j)=>v>previous[j]))return values;await delay(250);}throw Error('Falta voz bidireccional '+JSON.stringify(values));}
  const first=await audio([0,0]);await memory('voz');
  await openCurrentRoom();
+ await memory('voz con sala visible');
  await testVoiceQuality(space,peer);
  const {musicSmoke,assertRadioShortcut}=await import('../test/support/music-browser.mjs');
  async function radioAndVoice() {
@@ -209,6 +221,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
    await waitMinimized(true);
    await requireProgress(await radioAndVoice(),'Radio y voz con la ventana minimizada');
+   await memory('voz y radio con sala minimizada');
    const registered=await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Alt+Shift+R'));
    if(registered){
     const windows=process.platform==='win32';
@@ -229,6 +242,17 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
   await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   await requireProgress(await radioAndVoice(),'Radio y voz en el lobby');
+  await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
+  try{
+   await waitMinimized(true);
+   await requireProgress(await radioAndVoice(),'Radio y voz con el lobby minimizado');
+   await memory('voz y radio con lobby minimizado');
+  }finally{
+   await app.evaluate(({BaseWindow})=>{const win=BaseWindow.getAllWindows()[0];win.restore();win.show();win.focus();});
+   await waitMinimized(false);
+  }
+  home=await surface('home');
+  await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   await assertRadioShortcut(space,peer,()=>home.keyboard.press('Alt+Shift+KeyR'),'teclado Chromium en el lobby de escritorio');
   const lobbyRadio=()=>home.getByRole('button',{name:/^(Silenciar mi radio|Reanudar mi radio)$/});
   let stop=true;
