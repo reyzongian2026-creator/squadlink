@@ -89,6 +89,22 @@ export async function domSmoke(Window) {
     el('kit-save').click();
     await until(() => el('kit-status').textContent.includes('Apariencia guardada'));
     assert.equal((await player.hit('progress/profile', {})).data.profile.avatar.headgear, 2);
+    await player.hit('progress/record',{game:'ducks',value:5});
+    Object.defineProperty(win.document,'hidden',{configurable:true,value:true});
+    try {
+      el('kit-rank-game').value = 'ducks';
+      el('kit-rank-game').dispatchEvent(new win.Event('change'));
+      await until(() => el('kit-ranking').querySelector('[data-pending-portrait]'));
+      assert.equal(el('kit-ranking').querySelector('svg'),null);
+    } finally {
+      delete win.document.hidden;
+      win.document.dispatchEvent(new win.Event('visibilitychange'));
+    }
+    const rankPortrait = el('kit-ranking').querySelector('.player-portrait svg');
+    assert.ok(rankPortrait);
+    el('kit-rank-refresh').click();
+    await until(() => el('kit-ranking').firstElementChild);
+    assert.equal(el('kit-ranking').querySelector('.player-portrait svg'),rankPortrait);
     el('kit-rank-game').value = 'sequence';
     el('kit-rank-game').dispatchEvent(new win.Event('change'));
     await until(() => el('kit-rank-scope').textContent.includes('Más rondas seguidas'));

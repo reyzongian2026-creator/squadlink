@@ -63,6 +63,27 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await onboarding.evaluate(audioSetup);
  await onboarding.getByRole('heading',{name:'Crea tu personaje',exact:true}).waitFor();
  assert.deepEqual((await windowState()).views.map(v=>v.host),['app'],'Crear el personaje no debe cargar un lobby oculto');
+ // Check the local protocol and decoder in the installed app, with a clean profile.
+ for (const [label,species] of [['Robot',3],['Humano',0]]) {
+  await onboarding.getByRole('button',{name:label,exact:true}).click();
+  const imagePath='/avatar-'+species+'-2.webp';
+  await onboarding.locator('#kit-voxel image[href="'+imagePath+'"]').first().waitFor({state:'attached'});
+  await onboarding.evaluate(async species=>{
+   const suffix='-'+species+'-2.webp';
+   const decode=async name=>{
+    const art=new Image();
+    art.src='/'+name+suffix;
+    await art.decode();
+    return [art.naturalWidth,art.naturalHeight].join('x');
+   };
+   for(const [model,skin,coat] of [['avatar','skin','coat'],['face','face-skin','face-coat']]){
+    const [size,skinSize,coatSize]=await Promise.all([model,skin,coat].map(decode));
+    if(size!==skinSize || size!==coatSize)throw Error('Las máscaras no coinciden con '+model+suffix);
+   }
+  },species);
+ }
+ console.log('Personajes y miniaturas 3D decodificados con sus máscaras en el escritorio instalado');
+
  await onboarding.getByRole('button',{name:'Elegir apodo y guardar',exact:true}).click();
  await onboarding.getByLabel('Tu apodo').fill('Prueba Electron');
  await onboarding.locator('#submit-entry').click();

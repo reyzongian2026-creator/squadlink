@@ -1,3 +1,4 @@
+import {portraitBadge, updatePortrait} from './portrait-badge.js';
 import {mountPlayerPass} from "./player-pass.js";
 import { readMemberVolumes, saveMemberVolume } from "./member-volumes.js";
 import { bindVoiceDiagnostics } from "./connection.js";
@@ -410,7 +411,8 @@ function createMemberRow(id, isSelf) {
   const nick = document.createElement("strong");
   const info = document.createElement("small");
   const activity = document.createElement("small");
-  li.append(nick, info);
+  const badge = portraitBadge();
+  li.append(badge, nick, info);
   let slider;
   if (!isSelf) {
     slider = document.createElement("input");
@@ -425,7 +427,7 @@ function createMemberRow(id, isSelf) {
     slider.onchange = () => saveMemberVolume(id, Number(slider.value));
     li.append(slider);
   }
-  return {li, nick, info, activity, slider, isSelf};
+  return {li, badge, nick, info, activity, slider, isSelf};
 }
 function renderMembers() {
   const list = $("members");
@@ -446,10 +448,10 @@ function renderMembers() {
     }
     const previous = row.member;
     const {li, nick, info, activity, slider} = row;
+    if (!document.hidden) updatePortrait(row.badge, member.appearance, member.nick);
     if (previous?.nick !== member.nick) {
       nick.textContent = member.nick + (isSelf ? " (tú)" : "");
       if (slider) slider.setAttribute("aria-label", "Volumen de " + member.nick);
-      if (desktop) li.dataset.initials = member.nick.trim().split(/\s+/).slice(0,2).map(word=>[...word][0] || '').join('').toLocaleUpperCase('es');
     }
     const state = peerStates.get(member.id);
     if (!previous || previous.muted !== member.muted || row.state !== state) {
@@ -907,6 +909,7 @@ new window.MutationObserver(() => {
 }).observe(gameDialog, {attributes:true, attributeFilter:['open']});
 window.addEventListener('pagehide', closeGame);
 document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && room) renderMembers();
   if (document.hidden && $("game-mount").querySelector('.doom-player')) closeGame();
 });
 function setupWebChannels() {

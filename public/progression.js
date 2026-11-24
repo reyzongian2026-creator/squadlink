@@ -1,3 +1,4 @@
+import {portraitBadge, updatePortrait} from './portrait-badge.js';
 import {arcadeBoards, validRecord, improvesRecord, formatRecord} from './arcade-boards.js';
 import {avatarOptions, defaultAvatar, evolutions, MAX_LEVEL, normalizeAvatar, progressForXp} from './character-model.js';
 import {voxelAvatar} from './character-art.js';
@@ -133,12 +134,13 @@ export function mountLoadout({api, getSelf, tell}) {
     }
     render();
   }
+  let rankFaces = new Map();
   async function leaderboard() {
     const version = ++rankVersion;
     const game = selectedGame;
     $('kit-ranking').replaceChildren();
     $('kit-rank-scope').textContent = '';
-    if (!profile) { $('kit-rank-status').textContent = 'Elige un apodo para ver las mejores marcas.'; return; }
+    if (!profile) { rankFaces.clear(); $('kit-rank-status').textContent = 'Elige un apodo para ver las mejores marcas.'; return; }
     $('kit-rank-status').textContent = 'Cargando marcas…';
     try {
       const data = await api('progress/ranking', {game});
@@ -146,11 +148,19 @@ export function mountLoadout({api, getSelf, tell}) {
       const scope = {local: 'Este servidor', session: 'Esta sesión del servidor', global: 'Comunidad'};
       $('kit-rank-scope').textContent = (scope[data.scope] || 'Comunidad') + ' · ' +
         arcadeBoards[game].rule;
+      const previousFaces = rankFaces;
+      rankFaces = new Map();
       data.players.forEach((p, i) => {
         const row = document.createElement('li');
         for (const [className, value] of [
           ['place', String(i + 1).padStart(2,'0')], ['name', p.nick], ['mark', formatRecord(game, p.best[game])]
         ]) {
+          if (className === 'name') {
+            const badge = previousFaces.get(p.id) ?? portraitBadge();
+            updatePortrait(badge,p.characterCreated ? p : null,p.nick);
+            rankFaces.set(p.id,badge);
+            row.append(badge);
+          }
           const span = document.createElement('span'); span.className = className; span.textContent = value; row.append(span);
         }
         $('kit-ranking').append(row);
