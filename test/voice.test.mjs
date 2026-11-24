@@ -273,3 +273,75 @@ test('las preferencias nuevas y parciales usan los valores recomendados y las gu
   saveAudioSettings({inputId:'mic',listenVolume:0.35});
   assert.deepEqual(readAudioSettings(),{...defaults,inputId:'mic',listenVolume:0.35});
 });
+
+test('al cambiar de entrada durante el permiso inicial, activar refleja el micrófono vigente', async t => {
+  const first = Promise.withResolvers();
+  const late = fakeTrack(), selected = fakeTrack();
+  const requests = [];
+  installMedia(t, async ({audio}) => {
+    requests.push(audio.deviceId?.exact || 'default');
+    return audio.deviceId ? fakeStream(selected) : first.promise;
+  });
+  const room = createRoom();
+  t.after(() => room.close());
+  const activating = room.setMicrophone(true);
+  await room.configureAudio({inputId:'auriculares'});
+  assert.equal(await activating, true, 'la UI debe anunciar activo cuando la sala transmite');
+  assert.equal(room.outgoingTrack(), selected);
+  first.resolve(fakeStream(late));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(late.readyState, 'ended');
+  assert.deepEqual(requests, ['default','auriculares']);
+});
+
+test('un permiso rechazado después de silenciar o cambiar de sala no altera la nueva activación', async t => {
+  const pending = Promise.withResolvers();
+  const selected = fakeTrack();
+  let calls = 0;
+  installMedia(t, () => ++calls === 1 ? pending.promise : Promise.resolve(fakeStream(selected)));
+  const previous = createRoom();
+  const activating = previous.setMicrophone(true);
+  const duplicate = previous.setMicrophone(true);
+  assert.equal(calls,1,'una activación repetida comparte la misma petición');
+  await previous.setMicrophone(false);
+  assert.deepEqual(await Promise.all([activating,duplicate]),[false,false]);
+  previous.close();
+  const current = createRoom();
+  t.after(() => current.close());
+  assert.equal(await current.setMicrophone(true), true);
+  pending.reject(Object.assign(new Error('permiso anterior'), {name:'NotAllowedError'}));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(current.outgoingTrack(), selected);
+  assert.equal(selected.readyState, 'live');
+  assert.equal(previous.stream, null);
+});
+
+test('una selección de entrada tardía no sobrescribe la entrada más reciente ni el volumen', async t => {
+  const storage = new Map();
+  globalThis.window = {localStorage:{getItem:key => storage.get(key),setItem:(key,value) => storage.set(key,value)}};
+  t.after(() => delete globalThis.window);
+  const slow = Promise.withResolvers();
+  const chosen = Promise.withResolvers();
+  const old = fakeTrack(), late = fakeTrack(), current = fakeTrack();
+  installMedia(t, ({audio}) => {
+    if (audio.deviceId?.exact === 'lenta') return slow.promise;
+    if (audio.deviceId?.exact === 'elegida') return chosen.promise;
+    return Promise.resolve(fakeStream(old));
+  });
+  const room = createRoom();
+  t.after(() => room.close());
+  await room.setMicrophone(true);
+  const olderChange = room.configureAudio({inputId:'lenta'});
+  const newerChange = room.configureAudio({inputId:'elegida'});
+  await room.configureAudio({listenVolume:0.4});
+  chosen.resolve(fakeStream(current));
+  await newerChange;
+  slow.resolve(fakeStream(late));
+  await olderChange;
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(room.outgoingTrack(),current);
+  assert.equal(late.readyState,'ended');
+  assert.equal(room.settings.inputId,'elegida');
+  assert.equal(room.settings.listenVolume,0.4);
+  assert.equal(readAudioSettings().inputId,'elegida');
+});

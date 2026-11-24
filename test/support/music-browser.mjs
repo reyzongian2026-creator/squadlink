@@ -1,3 +1,4 @@
+import {radioPendingBrowser} from '../radio-pending-browser.mjs';
 import assert from 'node:assert/strict';
 import {radioStations} from '../../public/radio-stations.js';
 
@@ -14,6 +15,7 @@ function sampleWav() {
   return bytes;
 }
 export async function musicSmoke(host,guest) {
+  await radioPendingBrowser(guest);
   const panel=page=>page.locator('#room-music');
   await panel(host).getByText('Añadir música',{exact:true}).click();
   await panel(host).locator('.source-options').getByText('Archivo de audio',{exact:true}).click();

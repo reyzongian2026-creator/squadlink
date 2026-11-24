@@ -254,7 +254,7 @@ export function createMusic({mount, api, notify}) {
     audio.volume = Number(volume.value) / 100;
     const src = live ? station.url : "/api/music/file?" + new URLSearchParams({room: code, id: item.id});
     let reconnect = false, stallTimer, retryTimer;
-    let hasPlayed = false, recoveryUsed = false;
+    let hasPlayed = false, recoveryUsed = false, playAttempt = 0;
     function awaitRadio() {
       if (!live || !active() || stallTimer || retryTimer) return;
       feedback("Conectando con la emisora…");
@@ -299,15 +299,17 @@ export function createMusic({mount, api, notify}) {
     }
     async function play() {
       if (!active()) return;
+      const attempt = ++playAttempt;
       if (live) awaitRadio();
       else syncFile();
       try {
         await audio.play();
-        playing();
+        if (attempt === playAttempt) playing();
       } catch (error) {
-        if (!active() || error.name === "AbortError") return;
+        if (!active() || attempt !== playAttempt || error.name === "AbortError") return;
         if (error.name !== "NotAllowedError") { unavailable(); return; }
         clearTimeout(stallTimer);
+        stallTimer = undefined;
         reconnect = false;
         retry.textContent = "Reproducir";
         retry.hidden = false;

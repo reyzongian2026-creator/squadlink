@@ -192,6 +192,9 @@ async function api(path, data, signal) {
     );
   return body;
 }
+function currentVisit() {
+  return { room:room.code, visitId:room.members.find(member => member.id === self.id)?.visitId };
+}
 function directoryFields() {
   return {
     published: $("directory-publish").checked,
@@ -201,7 +204,9 @@ function directoryFields() {
     gameCode: $("directory-game-code").value.trim(),
   };
 }
+let entryRevision = 0;
 function openEntry(next, preset = {}) {
+  entryRevision++;
   mode = next;
   const edit = next === "edit",
     create = next === "create",
@@ -262,18 +267,39 @@ $("entry-form").onsubmit = async (event) => {
   if ($("submit-entry").disabled) return;
   $("submit-entry").disabled = true;
   $("entry-error").textContent = "";
+  const revision = entryRevision;
+  const ownsDialog = () => revision === entryRevision && $("entry").open;
   try {
     if (mode === "edit") {
-      const { room: updated } = await api("directory", directoryFields());
-      updateRoom(updated);
-      $("entry").close();
+      const before = room;
+      const attempt = generation;
+      const { room: updated } = await api("directory", { ...directoryFields(), ...currentVisit() });
+      if (generation !== attempt) return;
+      // The event stream may already have delivered a more recent snapshot.
+      if (room === before) updateRoom(updated);
+      if (ownsDialog()) $("entry").close();
       directory.reload();
       return;
     }
     await identityReady;
+    if (!ownsDialog()) return;
+    if (self && (mode === "create" || mode === "join")) {
+      let current;
+      try { current = await api("session"); }
+      catch (error) { if (error.status !== 401) throw error; }
+      if (!ownsDialog()) return;
+      if (current && self.id !== current.self.id) applySession(current);
+      if (current?.room) {
+        $("entry").close();
+        if (room?.code !== current.room.code) await enterRoom(current.room, true);
+        location.hash = "main";
+        return;
+      }
+    }
     const nick = $("nickname").value.trim() || self?.nick;
     if (!self || self.nick !== nick) {
       applySession(await api("session", { nick }));
+      if (!ownsDialog()) return;
     }
     if (mode === "profile") {
       $("entry").close();
@@ -294,14 +320,15 @@ $("entry-form").onsubmit = async (event) => {
       result = await api(endpoint, payload);
     } catch (error) {
       if (error.status !== 401) throw error;
+      if (!ownsDialog()) return;
       applySession(await api("session", { nick }));
+      if (!ownsDialog()) return;
       result = await api(endpoint, payload);
     }
-    $("entry").close();
+    if (ownsDialog()) $("entry").close();
     await enterRoom(result.room);
   } catch (error) {
-    if ($("entry").open) $("entry-error").textContent = error.message;
-    else tell(error.message);
+    if (ownsDialog()) $("entry-error").textContent = error.message;
   } finally {
     $("submit-entry").disabled = false;
   }
@@ -553,7 +580,7 @@ async function enterRoom(snapshot, restoring = false) {
   if (
     snapshot.members.find((member) => member.id === self.id)?.muted === false
   ) {
-    await api("member", { muted: true }).catch(() => {});
+    await api("member", { ...currentVisit(), muted: true }).catch(() => {});
   }
   await initialVoice;
 }
@@ -568,6 +595,7 @@ function closeRoomMedia() {
   $('room-music').replaceChildren();
 }
 function resetRoom() {
+  if (mode === "edit" && $("entry").open) $("entry").close();
   closeRoomMedia();
   leavingRoom = false;
   $("leave").disabled = false;
@@ -593,21 +621,54 @@ function resetRoom() {
   $("leave").textContent = "Salir de la sala";
   setConnection("Sin sala", false);
 }
-async function updateMicrophone(enabled) {
+const microphoneChanges = new WeakMap();
+function showMicrophone(enabled) {
   microphone = enabled;
   $("mic").textContent = enabled ? "Silenciar micrófono" : "Activar micrófono";
   $("mic").setAttribute("aria-pressed", String(enabled));
-  await api("member", { muted: !enabled });
+}
+function updateMicrophone(enabled) {
+  const current = voice;
+  const visit = currentVisit();
+  const publish = muted => api("member", {...visit, muted}, AbortSignal.timeout(8000));
+  showMicrophone(enabled);
+  // Serialize presence for this visit. A disconnected device can also send a mute.
+  const pending = microphoneChanges.get(current) || Promise.resolve();
+  const change = pending.catch(() => {}).then(async () => {
+    if (voice !== current) return;
+    try {
+      await publish(!enabled);
+    } catch {
+      if (voice !== current) return;
+      if (enabled) {
+        const stopping = current.setMicrophone(false);
+        showMicrophone(false);
+        await stopping.catch(() => {});
+      }
+      if (voice !== current) return;
+      // The server may have received the first POST even if its response was lost.
+      try { await publish(true); }
+      catch { throw Error("Micrófono apagado en este equipo. La sala aún no pudo confirmar el silencio."); }
+      if (enabled) throw Error("La sala no pudo confirmar la activación. El micrófono se apagó.");
+    }
+  });
+  microphoneChanges.set(current, change);
+  return change;
 }
 $("mic").onclick = async () => {
   const current = voice;
-  if (!current) return;
+  if (!current || $("mic").disabled) return;
   $("mic").disabled = true;
+  $("voice-status").textContent = "";
   try {
-    const enabled = await current.setMicrophone(!microphone);
-    if (voice !== current) return;
-    $("voice-status").textContent = "";
-    await updateMicrophone(enabled);
+    if (microphone) {
+      // Stop hardware immediately, even when there is no network or sender detachment fails.
+      try { await current.setMicrophone(false); }
+      finally { if (voice === current) await updateMicrophone(false); }
+    } else {
+      const enabled = await current.setMicrophone(true);
+      if (voice === current && enabled) await updateMicrophone(true);
+    }
   } catch (error) {
     if (voice === current) $("voice-status").textContent = error.message;
   } finally {
@@ -633,7 +694,7 @@ $("leave").onclick = async () => {
   $("voice-status").textContent = "Audio cerrado. Confirmando salida…";
   setConnection("Saliendo", false);
   try {
-    await api("leave", {}, AbortSignal.timeout(8000));
+    await api("leave", currentVisit(), AbortSignal.timeout(8000));
   } catch (error) {
     if (attempt !== generation) return;
     if (error.status === 401) {

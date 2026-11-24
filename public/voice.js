@@ -167,6 +167,23 @@ export class VoiceRoom {
     return (this.filters.get(stream)?.stream ?? stream)?.getAudioTracks()[0] ?? null;
   }
 
+  startCapture(settings, request) {
+    // A device dialog can outlive the request. Activation follows the current input
+    // even while the operating system still has the previous permission prompt open.
+    const previous = this.pendingCapture;
+    let finish;
+    const result = new Promise((resolve, reject) => {
+      finish = resolve;
+      this.openMicrophone(settings, request).then(resolve, reject);
+    });
+    const capture = {result, finish};
+    this.pendingCapture = capture;
+    previous?.finish(result);
+    return result.finally(() => {
+      if (this.pendingCapture === capture) this.pendingCapture = null;
+    });
+  }
+
   async openMicrophone(settings, request) {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Para activar el micrófono, abre la app mediante HTTPS o localhost.');
     const audio = microphoneConstraints(settings);
@@ -238,6 +255,8 @@ export class VoiceRoom {
   }
 
   stopCaptures() {
+    this.pendingCapture?.finish(false);
+    this.pendingCapture = null;
     // During a device switch, peers can temporarily be using different inputs.
     for (const stream of this.captures) this.releaseCapture(stream);
     this.stream = null;
@@ -246,10 +265,11 @@ export class VoiceRoom {
   async setMicrophone(enabled) {
     if (this.closed) return false;
     this.wantsMicrophone = enabled;
+    if (enabled && this.pendingCapture) return this.pendingCapture.result;
     if (enabled && this.stream?.active) return true;
     const request = ++this.captureRequest;
     if (enabled) {
-      try { return await this.openMicrophone(this.settings, request); }
+      try { return await this.startCapture(this.settings, request); }
       catch (err) {
         if (request === this.captureRequest) this.wantsMicrophone = !!this.stream;
         throw err;
@@ -295,15 +315,17 @@ export class VoiceRoom {
       const request = ++this.captureRequest;
       try {
         const liveTrack = this.stream?.getAudioTracks()[0];
-        if (!deviceChanged && liveTrack?.readyState === 'live' && liveTrack.applyConstraints) {
+        if (!deviceChanged && !this.pendingCapture && liveTrack?.readyState === 'live' && liveTrack.applyConstraints) {
           await liveTrack.applyConstraints(microphoneConstraints(next));
-          this.filters.get(this.stream)?.setNoise(next.noiseSuppression);
+          if (request === this.captureRequest) this.filters.get(this.stream)?.setNoise(next.noiseSuppression);
         } else {
-          await this.openMicrophone(next, request);
+          await this.startCapture(next, request);
         }
+        if (request !== this.captureRequest) return;
       }
       catch (err) {
-        if (request === this.captureRequest) this.wantsMicrophone = !!this.stream;
+        if (request !== this.captureRequest) return;
+        this.wantsMicrophone = !!this.stream;
         throw err;
       }
     }
@@ -311,11 +333,11 @@ export class VoiceRoom {
       if (next.micGainDb !== previous.micGainDb) {
         for (const capture of this.filters.values()) capture.setMicGainDb(next.micGainDb);
       }
-      this.settings = next;
+      this.settings = { ...this.settings, ...patch };
       if (next.listenVolume !== previous.listenVolume) {
         for (const [id, peer] of this.peers) this.playback.setLevel(peer, next.listenVolume * (this.memberGain.get(id) ?? 1));
       }
-      saveAudioSettings(next);
+      saveAudioSettings(this.settings);
     }
   }
 
@@ -349,6 +371,7 @@ export class VoiceRoom {
 
   close() {
     this.closed = true;
+    this.wantsMicrophone = false;
     this.captureRequest++;
     for (const id of this.peers.keys()) this.removePeer(id);
     this.stopCaptures();

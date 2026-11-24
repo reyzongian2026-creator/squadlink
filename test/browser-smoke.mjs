@@ -1,6 +1,7 @@
 // Requires Playwright on the test machine only. A single process owns this isolated server.
 import assert from 'node:assert/strict';
 import { duckNesBrowser } from './duck-nes-browser.mjs';
+import {microphonePresenceSmoke} from './support/microphone-presence-browser.mjs';
 import {musicSmoke,leaveFailureSmoke} from './support/music-browser.mjs';
 import voiceQuality from './support/voice-quality.cjs';
 import { once } from 'node:events';
@@ -212,7 +213,7 @@ async function boostDuringCall(page) {
   const mic = panel.getByRole('slider', {name:'Ganancia de mi micrófono',exact:true});
   const listen = panel.getByRole('slider', {name:'Volumen de las voces que escucho',exact:true});
   await mic.and(panel.locator('[aria-valuetext="0 dB"]')).waitFor();
-  const initial = await page.evaluate(() => window.qaTracks.map(t => t.id));
+  const initial = await page.evaluate(() => window.qaTracks.filter(t => t.readyState === 'live').map(t => t.id));
   assert.ok(initial.length > 0);
   await mic.evaluate(el => { el.value='7'; el.dispatchEvent(new Event('input',{bubbles:true})); });
   assert.equal(await mic.getAttribute('aria-valuetext'), '+7 dB');
@@ -373,6 +374,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
       'el reintento conserva el canal de eventos, conecta al miembro actual y mantiene el micro apagado');
     assert.equal(iceRequests, 2);
     await a.unroute('**/api/ice');
+    await microphonePresenceSmoke(a);
     for (const page of [a,b]) await page.getByRole('button', { name: 'Activar micrófono' }).click();
     async function inbound(page, minBytes = 0) {
       const deadline = Date.now() + 30000;
