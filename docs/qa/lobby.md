@@ -111,3 +111,11 @@ La prueba abre Ajustes en la aplicación compilada, descarga una actualización 
 En Windows se comprueba que el instalador silencioso espere la salida del proceso original, vuelva a abrir el escritorio en la ruta instalada y conserve el perfil y los cartuchos de prueba. En macOS se actualiza una copia con un perfil aislado, se comprueba la firma y se verifica la recuperación de la edición previa al simular un fallo de arranque.
 
 [Prueba de Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45357922888) · [Prueba de Mac](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45357922767)
+
+## Descargas guardadas en 0.5.0-preview.21
+
+La aplicación restaura una descarga completa en el mismo perfil, comprueba su contenido y la ofrece para instalar incluso si GitHub está temporalmente inaccesible. Cuando el usuario consulta nuevas versiones y aparece una posterior, Squadlink ofrece la más reciente. La cancelación de una transferencia parcial permite reintentar.
+
+[Validación en Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45360114357) · [Validación en macOS](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45360114172)
+
+La integración de voz en Chromium agotó dos veces el tiempo de espera del mensaje de micrófono silenciado. La repetición con trazas, con el mismo código de la aplicación y las mismas comprobaciones de pistas y presencia, pasó. [Ejecución con trazas](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45361087004)
