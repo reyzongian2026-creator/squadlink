@@ -1,6 +1,6 @@
-# Personaje y radio en Mac
+# Personaje y radio en Squadlink
 
-Guía de la compilación de prueba local **0.5.0-preview.13** para Mac con Apple Silicon. Puedes comprobar tu versión en **Ajustes → Actualizaciones**.
+Guía de **0.5.0-preview.13** para Windows x64 y Mac con Apple Silicon. Puedes comprobar tu versión en **Ajustes → Actualizaciones**.
 
 ## Elegir el rostro y guardar la apariencia
 

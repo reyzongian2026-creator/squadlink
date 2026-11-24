@@ -10,9 +10,9 @@ Elige Windows x64 o Mac con Apple Silicon. En Windows, ejecuta el instalador. En
 
 El arcade incluye Cambio de blanco, Precisión, Mata patos, 2048 y Tres en raya. Estos juegos se ejecutan en el dispositivo. En DOOM puedes jugar la campaña libre Freedoom: Phase 1 con Chocolate Doom. Pulsa **Cargar DOOM** para descargar el juego (unos 35 MB la primera vez) y luego **Jugar**. Usa WASD para moverte, el ratón para girar, clic izquierdo para disparar y Espacio para abrir puertas. Esc libera el cursor. Salir del juego detiene su audio y conserva la llamada. [Proyecto de Chocolate Doom y Freedoom para navegador](https://github.com/danborden1/doom-web)
 
-En **Arcade → Duck Hunt · NES** selecciona tu cartucho `.nes` y pulsa **Jugar**. Usa **Select** y **Start** para entrar a una partida y dispara con clic o toque. El archivo se procesa en tu dispositivo.
+En **Arcade**, selecciona tu cartucho NES. En Mario, usa las flechas para moverte, Espacio o Z para saltar y X para correr. En Duck Hunt, pulsa Enter para empezar, apunta con el ratón y dispara con clic. Pulsa P para pausar.
 
-En los clientes con el selector de YouTube, abre **Mi sala → Música de sala → Añadir música** y elige un archivo de audio (hasta 20 MiB) o pega el enlace de un video de YouTube. **DJ Squadlink** muestra qué suena y conserva el orden de la cola. Cada integrante pulsa **Escuchar** y ajusta su volumen. Los archivos se comparten dentro de la sala y el servidor los elimina al salir de la cola o al cerrarse la sala. Los videos requieren que YouTube permita su reproducción insertada y que el reproductor esté visible.
+En **Mi sala → Radio y música → Añadir música** puedes compartir una emisora por género o un archivo de audio de hasta 20 MiB. Cada jugador controla su volumen. La guía de escritorio explica cómo guardar el pase de jugador, cambiar el rostro y escuchar la radio. [Personaje y radio](docs/personaje-y-radio-mac.md)
 
 ## La primera partida
 
