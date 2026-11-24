@@ -298,6 +298,9 @@ const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=u
 const csp="default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data:;connect-src 'self';media-src 'self' blob: https:;object-src 'none';frame-src 'self';base-uri 'none';form-action 'self'";
 async function start(){
  try{const saved=JSON.parse(fs.readFileSync(prefsFile(),'utf8'));prefs={server:parseServer(saved.server),low:saved.low!==false,hasPlayer:saved.hasPlayer===true};}catch{}
+ // Electron 45 initializes the default session on the first streamed response.
+ // Warm it before creating a view so Chromium can discard its spare renderer at startup.
+ void session.defaultSession;
  const ses=session.fromPartition(options.partition);
  ses.protocol.handle('squad',async req=>{
   const {hostname,pathname}=new URL(req.url);if(!['home','app'].includes(hostname))return new Response(null,{status:404});
