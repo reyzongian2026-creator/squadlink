@@ -84,6 +84,38 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  }
  console.log('Personajes y miniaturas 3D decodificados con sus máscaras en el escritorio instalado');
 
+ // The full body and close-up use different bitmap layers. Check the images actually selected by the UI.
+ const clickOption=name=>onboarding.getByRole('button',{name,exact:true}).click();
+ const editor=onboarding.locator('#kit-voxel');
+ const closeup=onboarding.getByRole('button',{name:'Acercar rostro',exact:true});
+ async function checkAppearance(layer,hiddenLayers,underBrim=false){
+  for(const prefix of ['', 'face-']){
+   if(prefix)await closeup.click();
+   const expected='/'+prefix+layer+'-0-2.webp';
+   await editor.locator('image[href="'+expected+'"]').first().waitFor({state:'attached'});
+   await editor.evaluate(async (root,{hidden,hair,underBrim})=>{
+    const paths=new Set(Array.from(root.querySelectorAll('image'),image=>image.getAttribute('href')));
+    if(paths.has(hidden))throw Error('Se superponen dos bases en la vista previa.');
+    if(underBrim && !root.querySelector('g[clip-path] image[href="'+hair+'"]'))throw Error('El cabello debe quedar debajo de la visera.');
+    await Promise.all(Array.from(paths,async path=>{
+     const image=new Image();
+     image.src=path;
+     await image.decode();
+     if(!image.naturalWidth || !image.naturalHeight)throw Error('Recurso vacío: '+path);
+    }));
+   },{hidden:'/'+hiddenLayers[prefix ? 1 : 0]+'-0-2.webp',hair:'/'+prefix+'hair-0-2.webp',underBrim});
+  }
+  await closeup.click();
+ }
+ await clickOption('Azul');
+ await checkAppearance('hair',['bald','face-bald']);
+ await clickOption('Gorra');
+ await checkAppearance('bald',['avatar','face'],true);
+ await clickOption('Al natural');
+ await clickOption('Sin cabello');
+ await checkAppearance('bald',['hair','face-hair']);
+ console.log('Color de cabello, gorra y cabeza sin cabello comprobados en el editor y el retrato instalados.');
+
  await onboarding.getByRole('button',{name:'Elegir apodo y guardar',exact:true}).click();
  await onboarding.getByLabel('Tu apodo').fill('Prueba Electron');
  await onboarding.locator('#submit-entry').click();

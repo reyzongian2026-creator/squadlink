@@ -1,13 +1,15 @@
 import {portraitBadge, updatePortrait} from './portrait-badge.js';
 import {arcadeBoards, validRecord, improvesRecord, formatRecord} from './arcade-boards.js';
 import {avatarOptions, defaultAvatar, evolutions, MAX_LEVEL, normalizeAvatar, progressForXp} from './character-model.js';
-import {voxelAvatar} from './character-art.js';
+import {voxelAvatar, portraitAvatar} from './character-art.js';
 export {voxelAvatar};
 
 const colors = {
   skin: ["#f9ceaf", "#e5b588", "#cb956e", "#b97954", "#935e43", "#694432"],
+  hairColor: [null, "#25212b", "#86583c", "#dfb875", "#be5143", "#5689c9", "#9674c6", "#e0e0e9"],
   outfit: ["#c4fa69", "#7ee0ee", "#b192fd", "#ff8e70", "#658df8", "#efc162"],
 };
+const reviewAppearance = 'El perfil cambió desde tu último guardado. Revisa la apariencia y pulsa Guardar si quieres aplicar tus cambios.';
 const receiptKey = "squadlink.progress.receipt.v1";
 const localAppearanceKey = owner => "squadlink.character.pending." + owner;
 const $ = id => document.getElementById(id);
@@ -16,7 +18,12 @@ function pendingAppearance(owner) {
   if (!owner) return null;
   try {
     const value = JSON.parse(localStorage.getItem(localAppearanceKey(owner)));
-    return value ? normalizeAvatar(value) : null;
+    if (!value || typeof value !== 'object') return null;
+    // Older clients stored a bare avatar when their server predated character creation.
+    const avatar = normalizeAvatar(value.avatar ?? value);
+    const fields = Object.keys(defaultAvatar).filter(key =>
+      value.avatar ? Array.isArray(value.fields) && value.fields.includes(key) : Object.hasOwn(value,key));
+    return {avatar, fields, revision:value.revision};
   } catch { return null; }
 }
 
@@ -31,7 +38,7 @@ export function mountLoadout({api, getSelf, tell}) {
     <div class="kit-heading"><h2 id="kit-heading">Mi personaje</h2></div>
     <div class="kit-panels"><article class="kit-editor">
       <div class="kit-portrait">
-        <div class="kit-stage"><div id="kit-voxel" role="img" aria-label="Vista previa de tu personaje"></div></div>
+        <div class="kit-stage"><button type="button" id="kit-closeup" aria-pressed="false" aria-controls="kit-voxel">Acercar rostro</button><div id="kit-voxel" role="img" aria-label="Vista previa de tu personaje"></div></div>
         <div class="kit-card-info"><span id="kit-level">Nivel 1 / 50</span><h3 id="kit-nick">Invitado</h3>
           <p id="kit-evolution"></p>
           <div class="kit-xp"><progress id="kit-xp" max="100" value="0" aria-label="Progreso al siguiente nivel"></progress><span id="kit-xp-label"></span></div>
@@ -48,12 +55,20 @@ export function mountLoadout({api, getSelf, tell}) {
         '<option value="' + id + '">' + board.name + '</option>').join('')}</select></label>
       <p id="kit-rank-scope"></p><ol id="kit-ranking"></ol><p id="kit-rank-status" role="status"></p><p id="kit-sync" role="status"></p></article></div>`;
   const groups = {
-    gender: 'Identidad del personaje', species: 'Especie', build: 'Silueta', facialHair: 'Vello facial',
+    gender: 'Identidad del personaje', species: 'Especie', build: 'Silueta', hairStyle: 'Cabello', hairColor: 'Color de cabello', facialHair: 'Vello facial',
     skin: 'Tono base', outfit: 'Chaqueta', headgear: 'Accesorio',
   };
-  let profile, draft = {...defaultAvatar}, dirty = false, saving = false, saveAfterLogin = false;
+  let profile, draftBase, draft = {...defaultAvatar}, dirty = false, saving = false, saveAfterLogin = false;
   let selectedGame = 'reflex', rankVersion = 0, profileVersion = 0, lastArt = '';
+  let closeup = false;
+  $('kit-closeup').onclick = () => {
+    closeup = !closeup;
+    $('kit-closeup').setAttribute('aria-pressed', String(closeup));
+    $('kit-voxel').classList.toggle('kit-closeup', closeup);
+    render();
+  };
   const selectors = {};
+  const hairGroups = {};
   const stageList = evolutions.map(stage => {
     const item = document.createElement('li');
     const value = document.createElement('span');
@@ -65,6 +80,7 @@ export function mountLoadout({api, getSelf, tell}) {
   });
   for (const [key, caption] of Object.entries(groups)) {
     const group = document.createElement('fieldset');
+    if (key === 'hairStyle' || key === 'hairColor') hairGroups[key] = group;
     const title = document.createElement('legend');
     title.textContent = caption;
     group.append(title);
@@ -109,12 +125,15 @@ export function mountLoadout({api, getSelf, tell}) {
     $('kit-save').textContent = guest ? 'Elegir apodo y guardar' : saving ? 'Guardando…' : creating ? 'Crear personaje' : 'Guardar apariencia';
     $('kit-save').disabled = saving || (!guest && (!profile || (!dirty && !creating)));
     $('kit-rank-refresh').textContent = guest ? 'Elegir apodo' : 'Actualizar';
-    const artKey = JSON.stringify([draft, level]);
+    const artKey = JSON.stringify([draft, level, closeup]);
     if (artKey !== lastArt) {
-      $('kit-voxel').innerHTML = voxelAvatar(draft, level);
+      $('kit-voxel').innerHTML = (closeup ? portraitAvatar : voxelAvatar)(draft, level);
       $('kit-voxel').setAttribute('aria-label', avatarOptions.species[draft.species] + ' · ' + avatarOptions.gender[draft.gender] + ' · ' + evolution.name + ' · Nivel ' + level);
       lastArt = artKey;
     }
+    const hasHair = draft.species === 0 || draft.species === 1;
+    hairGroups.hairStyle.hidden = !hasHair;
+    hairGroups.hairColor.hidden = !hasHair || draft.hairStyle === 1;
     for (const [key, buttons] of Object.entries(selectors)) {
       buttons.forEach((btn, i) => btn.setAttribute('aria-pressed', String(i === draft[key])));
     }
@@ -125,7 +144,12 @@ export function mountLoadout({api, getSelf, tell}) {
     const changedOwner = profile && profile.id !== data.profile.id;
     profile = data.profile;
     if (changedOwner) { dirty = false; saveAfterLogin = false; }
-    if (!dirty) draft = pendingAppearance(profile.id) || normalizeAvatar(profile.avatar);
+    if (!dirty) {
+      draftBase = profile;
+      draft = normalizeAvatar(profile.avatar);
+      const local = pendingAppearance(profile.id);
+      if (local) for (const key of local.fields) draft[key] = local.avatar[key];
+    }
     if (data.receipt) {
       try {
         localStorage.setItem(receiptKey, data.receipt);
@@ -192,43 +216,72 @@ export function mountLoadout({api, getSelf, tell}) {
       if (saveAfterLogin && !finishCreation) dirty = false;
       saveAfterLogin = false;
       apply(data);
-      const oldServer = typeof profile.characterCreated !== 'boolean';
-      if (!dirty) $('kit-status').textContent = local && oldServer ? 'Apariencia guardada en este dispositivo. Pendiente de sincronizar con la sala.' : '';
-      if (finishCreation || (local && !oldServer && !profile.characterCreated && !dirty)) await saveAppearance();
-      else if (local && profile.characterCreated && !dirty) {
-        try { localStorage.removeItem(localAppearanceKey(profile.id)); } catch {}
-        draft = normalizeAvatar(profile.avatar); render();
+      if (!dirty) $('kit-status').textContent = '';
+      if (finishCreation) await saveAppearance();
+      else if (local && !dirty) {
+        const supported = typeof profile.characterCreated === 'boolean' && local.fields.every(key => Object.hasOwn(profile.avatar,key));
+        const matches = local.fields.every(key => local.avatar[key] === profile.avatar[key]);
+        if (!supported) {
+          $('kit-status').textContent = 'Apariencia guardada en este dispositivo. Pendiente de sincronizar con la sala.';
+        } else if (matches && profile.characterCreated) {
+          localStorage.removeItem(localAppearanceKey(profile.id));
+          draft = normalizeAvatar(profile.avatar); render();
+        } else if (local.revision === profile.revision || (local.revision === undefined && !profile.characterCreated)) {
+          await saveAppearance(profile.revision);
+        } else {
+          dirty = true; render();
+          $('kit-status').textContent = reviewAppearance;
+        }
       }
       if (Object.keys(pending(profile.id)).length) schedule(0);
       await leaderboard();
     } catch (error) { if (version === profileVersion) $('kit-status').textContent = error.message; }
   }
-  async function saveAppearance() {
+  async function saveAppearance(expectedRevision) {
     if (!profile || saving) return;
     const owner = profile.id;
+    const before = normalizeAvatar(draftBase?.avatar ?? profile.avatar);
+    const previousPending = pendingAppearance(owner);
     const saved = {...draft};
     saving = true; render();
     try {
-      const data = await api('progress/avatar', saved);
+      const data = await api('progress/avatar', expectedRevision === undefined ? saved : {...saved,expectedRevision});
       if (profile?.id !== owner || data.profile?.id !== owner) return;
       dirty = Object.keys(saved).some(key => saved[key] !== draft[key]);
-      const complete = data.profile.characterCreated === true &&
-        Object.keys(saved).every(key => saved[key] === data.profile.avatar?.[key]);
+      const accepted = data.profile.avatar ?? {};
+      const fields = Object.keys(saved).filter(key => Object.hasOwn(accepted,key)
+        ? saved[key] !== accepted[key]
+        : saved[key] !== before[key] || previousPending?.fields.includes(key));
+      const complete = data.profile.characterCreated === true && !fields.length;
       if (complete) {
         try { localStorage.removeItem(localAppearanceKey(owner)); } catch {}
       } else {
-        localStorage.setItem(localAppearanceKey(owner), JSON.stringify(saved));
+        localStorage.setItem(localAppearanceKey(owner), JSON.stringify({avatar:saved,fields,revision:data.profile.revision}));
       }
       apply(data);
       if (dirty) $('kit-status').textContent = 'Cambios sin guardar.';
       else $('kit-status').textContent = complete ? 'Apariencia guardada.' :
         'Apariencia guardada en este dispositivo. Pendiente de sincronizar con la sala.';
     } catch (error) {
-      if (profile?.id === owner) $('kit-status').textContent = error.message;
+      if (profile?.id === owner) {
+        if (expectedRevision !== undefined && error.status === 409) {
+          const edits = Object.entries(draft).filter(([key,value]) => value !== before[key]);
+          dirty = false;
+          await refresh();
+          if (profile?.id !== owner) return;
+          for (const [key,value] of edits) draft[key] = value;
+          dirty = Object.keys(draft).some(key => draft[key] !== profile.avatar[key]);
+          if (dirty) $('kit-status').textContent = reviewAppearance;
+        } else $('kit-status').textContent = error.message;
+      }
     } finally { saving = false; render(); }
   }
   $('kit-save').onclick = () => {
-    if (getSelf()) { void saveAppearance(); return; }
+    if (getSelf()) {
+      const retry = profile && pendingAppearance(profile.id) && Object.hasOwn(profile.avatar,'hairColor');
+      void saveAppearance(retry ? draftBase?.revision : undefined);
+      return;
+    }
     dirty = true;
     saveAfterLogin = true;
     $('profile').click();

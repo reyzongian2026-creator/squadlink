@@ -190,11 +190,11 @@ test('el editor conserva combinaciones libres entre versiones y solo completa la
     assert.equal((await player.hit('progress/avatar',{...aspect,[key]:99})).status,400);
   assert.equal((await s.api(player,'avatar',original)).profile.characterCreated,false);
   const configured = (await s.api(player,'avatar',aspect)).profile;
-  assert.deepEqual(configured.avatar,aspect);
+  assert.deepEqual(configured.avatar,normalizeAvatar(aspect));
   assert.equal(configured.characterCreated,true);
   assert.equal((await s.api(player,'avatar',aspect)).profile.revision,configured.revision);
   const recolored = (await s.api(player,'avatar',{...original,skin:3})).profile;
-  assert.deepEqual(recolored.avatar,{...aspect,skin:3});
+  assert.deepEqual(recolored.avatar,normalizeAvatar({...aspect,skin:3}));
   assert.equal(recolored.characterCreated,true);
   const restored = await s.a(s.fixtureWith());
   assert.deepEqual((await s.api(restored,'profile')).profile,recolored);
@@ -206,7 +206,7 @@ test('la sala publica solo el aspecto guardado y lo recupera tras reiniciar sin 
   const room=(await a.hit('rooms',{name:'Equipo'})).data.room;
   const before=(await guest.hit('join',{code:room.code})).data.room;
   assert.ok(before.members.every(m=>!('appearance' in m)));
-  const {profile}=await s.api(a,'avatar',normalizeAvatar({species:3,gender:1,facialHair:2}));
+  const {profile}=await s.api(a,'avatar',normalizeAvatar({species:1,gender:1,facialHair:2,hairStyle:1,hairColor:7}));
   const expected={avatar:profile.avatar,level:profile.level};
   const [host,visitor]=(await guest.hit('session')).data.room.members;
   assert.deepEqual(host.appearance,expected);
@@ -225,4 +225,60 @@ test('la sala publica solo el aspecto guardado y lo recupera tras reiniciar sin 
     await new Promise(resolve=>setTimeout(resolve,10));
   }
   assert.deepEqual(member.appearance,expected);
+});
+
+test('el cabello se guarda con el avatar y se conserva al cambiar especie desde otra versión', async t => {
+  const s=await setup(t), a=await s.a();
+  const previousClient={skin:2,outfit:3,headgear:0,species:0,gender:1,build:1,facialHair:1};
+  const original=await s.api(a,'avatar',previousClient);
+  assert.equal(original.profile.characterCreated,true);
+  assert.deepEqual(original.profile.avatar,normalizeAvatar(previousClient));
+  for (const invalid of [{hairStyle:2},{hairStyle:false},{hairColor:-1},{hairColor:'0'},{hairColor:8}])
+    assert.equal((await a.hit('progress/avatar',{...previousClient,...invalid})).status,400);
+  await Promise.all([
+    s.api(a,'avatar',{skin:2,outfit:3,headgear:0,hairStyle:1,hairColor:7}),
+    s.api(a,'avatar',{...previousClient,species:3}),
+    s.api(a,'record',{game:'ducks',value:5}),
+  ]);
+  const robot=(await s.api(a,'profile')).profile;
+  assert.deepEqual(robot.avatar,{...previousClient,species:3,hairStyle:1,hairColor:7});
+  assert.equal(robot.best.ducks,5);
+  const restored=await s.a(s.fixtureWith());
+  const human=await s.api(restored,'avatar',previousClient);
+  assert.deepEqual(human.profile.avatar,{...previousClient,hairStyle:1,hairColor:7});
+  assert.equal((await s.api(restored,'avatar',human.profile.avatar)).profile.revision,human.profile.revision);
+  assert.deepEqual((await s.api(restored,'ranking',{game:'ducks'})).players[0].avatar,human.profile.avatar);
+});
+
+test('una ficha firmada anterior conserva identidad, progreso y los rasgos que solo conoce la aplicación nueva', async t => {
+  const s=await setup(t), player=await s.a();
+  const {profile}=await s.api(player,'profile');
+  const avatar={skin:3,outfit:5,headgear:2,species:1,gender:2,build:2,facialHair:3};
+  const legacyRow={id:profile.id,nick:profile.nick,xp:3600,revision:28,best:{reflex:240,sequence:7},awards:['primero'],avatar,characterCreated:true};
+  const saved=JSON.stringify({[profile.id]:legacyRow});
+  await writeFile(s.file,saved);
+  const legacy=await s.a(s.fixtureWith());
+  const backup=await s.api(legacy,'profile');
+  assert.deepEqual(backup.profile.avatar,{...avatar,hairStyle:0,hairColor:0});
+  assert.equal(backup.profile.revision,28);
+  assert.equal(await readFile(s.file,'utf8'),saved);
+  const newDevice=s.fixtureWith({file:'',env:{...s.env,RENDER:'true'}});
+  const same=await s.a(newDevice), other=await s.b(newDevice);
+  assert.equal((await other.hit('progress/profile',{receipt:backup.receipt})).status,403);
+  await s.api(same,'avatar',{...avatar,hairStyle:1,hairColor:6});
+  const recovered=(await s.api(same,'profile',{receipt:backup.receipt})).profile;
+  assert.deepEqual(recovered,{...backup.profile,avatar:{...avatar,hairStyle:1,hairColor:6}});
+  const latest=await s.api(same,'avatar',{...recovered.avatar,hairColor:5});
+  assert.deepEqual((await s.api(same,'profile',{receipt:backup.receipt})).profile,latest.profile);
+});
+
+test('la sincronización automática aplica cada cambio solo a la revisión que leyó', async t => {
+  const s=await setup(t), player=await s.a();
+  const initial=await s.api(player,'avatar',normalizeAvatar({hairColor:2}));
+  const body={...initial.profile.avatar,expectedRevision:initial.profile.revision};
+  const responses=await Promise.all([3,6].map(hairColor=>player.hit('progress/avatar',{...body,hairColor})));
+  assert.deepEqual(responses.map(r=>r.status).sort(),[200,409]);
+  const winner=responses.find(r=>r.status===200).data.profile;
+  assert.deepEqual((await s.api(player,'profile')).profile,winner);
+  assert.equal((await player.hit('progress/avatar',{...body,expectedRevision:'1'})).status,400);
 });
