@@ -41,6 +41,7 @@ export async function musicSmoke(host,guest) {
   );
   assert.deepEqual(offered, radioStations.filter(item => item.genre === station.genre).map(item => item.id));
   await panel(guest).locator('.station-options label').filter({hasText:station.name}).click();
+  await panel(guest).getByText('Esta emisora consume aproximadamente ' + Math.round(station.kbps * 0.45) + ' MB por hora.').waitFor();
   await panel(guest).getByRole('button',{name:'Añadir a la sala'}).click();
   await panel(host).getByText('En cola (1)',{exact:true}).waitFor();
   for (const page of [host,guest]) await panel(page).getByRole('button',{name:'Silenciar solo para mí'}).click();
