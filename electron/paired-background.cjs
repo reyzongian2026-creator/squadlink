@@ -1,7 +1,7 @@
 const {_electron,chromium}=require('playwright-core');
 const fs=require('node:fs'), path=require('node:path'), os=require('node:os'), https=require('node:https');
 const {spawn,execFileSync}=require('node:child_process');
-const {createHash,X509Certificate}=require('node:crypto');
+const {createHash,randomUUID,X509Certificate}=require('node:crypto');
 const assert=require('node:assert/strict');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const base='http://127.0.0.1:4179';
@@ -45,11 +45,32 @@ async function signal(page){
   return {rx,tx,energy,radio:el&&!el.paused?el.currentTime:0};
  });
 }
+// Alternating ad-hoc signed builds on a hosted Mac can trigger a GUI
+// authorization for the previous build's Safe Storage item in the same keychain.
+function runnerKeychain(dir){
+ assert.equal(process.env.GITHUB_ACTIONS,'true');
+ const security=(...args)=>execFileSync('/usr/bin/security',args,{encoding:'utf8'}).trim();
+ const paths=value=>[...value.matchAll(/"([^"]+)"/g)].map(match=>match[1]);
+ const original=paths(security('list-keychains','-d','user'));
+ const [oldDefault]=paths(security('default-keychain','-d','user'));
+ const location=path.join(dir,'isolated.keychain-db'), password=randomUUID();
+ security('create-keychain','-p',password,location);
+ security('set-keychain-settings','-lut','3600',location);
+ security('unlock-keychain','-p',password,location);
+ security('list-keychains','-d','user','-s',location);
+ security('default-keychain','-d','user','-s',location);
+ return ()=>{
+  security('default-keychain','-d','user','-s',oldDefault);
+  security('list-keychains','-d','user','-s',...original);
+  security('delete-keychain',location);
+ };
+}
 async function one(exe,version,run,radio,spki){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'squad-bench-'));
  fs.writeFileSync(path.join(dir,'desktop.json'),JSON.stringify({server:base,low:true}));
  let app,browser,phase='';
  const stage=label=>{phase=label;console.log('ETAPA',version,run,label,new Date().toISOString());};
+ const resetKeychain=runnerKeychain(dir);
  const guard=setTimeout(()=>{console.error('Límite de 110 s, último estado: '+phase);process.exit(2);},110000);
  try{
   stage('abrir Electron');
@@ -68,9 +89,9 @@ async function one(exe,version,run,radio,spki){
   }
   assert.equal(await app.evaluate(({app})=>app.getVersion()),'0.5.0-preview.'+version);
   stage('onboarding');let space=await surface('app');await space.evaluate(boot);
-  await space.getByRole('button',{name:'Elegir apodo y guardar',exact:true}).click();
-  await space.getByLabel('Tu apodo').fill('Pepe');await space.locator('#submit-entry').click();
-  await space.getByText('Apariencia guardada.',{exact:true}).waitFor();
+  stage('abrir elección de apodo');await space.getByRole('button',{name:'Elegir apodo y guardar',exact:true}).click();
+  stage('guardar apodo en el llavero utilizado por esa versión');await space.getByLabel('Tu apodo').fill('Pepe');await space.locator('#submit-entry').click();
+  stage('esperar confirmación del perfil');await space.getByText('Apariencia guardada.',{exact:true}).waitFor();
   stage('abrir lobby normal');const home=await nav(space,'Lobby de voz','home');
   stage('crear sala');space=await nav(home,'Crear sala','app');
   await space.locator('#name').fill('Medición '+run);await space.locator('#submit-entry').click();
@@ -147,9 +168,9 @@ async function one(exe,version,run,radio,spki){
    medianRam:median(arr.slice(15).map(x=>x.ram)),medianCpu:median(arr.slice(16).map(x=>x.cpu)),
    meanCpu:arr.slice(16).reduce((v,r,i)=>v+r.cpu*(r.t-arr[15+i].t),0)/elapsed,
    rxKbps:8*(b.rx-a.rx)/1000/elapsed,txKbps:8*(b.tx-a.tx)/1000/elapsed,radioKbps:8*(b.radioBytes-a.radioBytes)/1000/elapsed,commands,cdpInfo}));
- }finally{
+ }catch(error){console.error('Fallo en '+phase,error);throw error;}finally{
   stage('cerrar navegador');await browser?.close();
-  stage('cerrar Electron');await app?.close();clearTimeout(guard);
+  stage('cerrar Electron');await app?.close();resetKeychain();clearTimeout(guard);
  }
 }
 (async()=>{
