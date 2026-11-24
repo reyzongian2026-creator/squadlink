@@ -183,7 +183,8 @@ export class VoiceRoom {
     }
     this.captures.add(next);
     const old = this.stream;
-    const filter = prepareVoiceCapture(next, settings);
+    const micGainDb = this.settings.micGainDb;
+    const filter = prepareVoiceCapture(next, {...settings, micGainDb});
     this.filters.set(next, filter);
     const filtered = await filter.ready;
     if (this.closed || request !== this.captureRequest) {
@@ -191,8 +192,8 @@ export class VoiceRoom {
       return false;
     }
     this.stream = next;
-    if (!filtered && (globalThis.AudioWorkletNode || settings.micGainDb > 0)) {
-      this.onStatus(settings.micGainDb > 0 ? 'La ganancia manual del micrófono no está disponible en este dispositivo.' :
+    if (!filtered && (globalThis.AudioWorkletNode || this.settings.micGainDb > 0)) {
+      this.onStatus(this.settings.micGainDb > 0 ? 'La ganancia manual del micrófono no está disponible en este dispositivo.' :
         'Se usan los filtros de voz del dispositivo.');
     }
     const track = next.getAudioTracks()[0];

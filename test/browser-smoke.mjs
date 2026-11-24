@@ -210,7 +210,7 @@ async function boostDuringCall(page) {
   if (!await panel.evaluate(el => el.open)) await panel.locator('summary').click();
   const mic = panel.getByRole('slider', {name:'Ganancia de mi micrófono',exact:true});
   const listen = panel.getByRole('slider', {name:'Volumen de las voces que escucho',exact:true});
-  await mic.waitFor();
+  await mic.and(panel.locator('[aria-valuetext="0 dB"]')).waitFor();
   const initial = await page.evaluate(() => window.qaTracks.map(t => t.id));
   assert.ok(initial.length > 0);
   await mic.evaluate(el => { el.value='7'; el.dispatchEvent(new Event('input',{bubbles:true})); });
@@ -219,7 +219,7 @@ async function boostDuringCall(page) {
   await mic.press('End');
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('squadlink.audio.v1'))?.micGainDb === 18);
   assert.equal(await listen.inputValue(), '70');
-  await listen.press('End');
+  await listen.and(panel.locator(':enabled')).press('End');
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('squadlink.audio.v1'))?.listenVolume === 2);
   assert.equal(await listen.getAttribute('aria-valuetext'), '200 %');
   assert.equal(await mic.inputValue(), '18');

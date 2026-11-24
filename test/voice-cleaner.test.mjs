@@ -15,11 +15,11 @@ for (const rate of [44100, 48000]) {
     const input = new Float32Array(128), output = new Float32Array(128);
     let seed = 104729, cursor = 0;
     const random = () => ((seed = (Math.imul(1664525,seed) + 1013904223) >>> 0) / 2147483648 - 1);
-    function measure(sample, reduce = true) {
+    function measure(sample, reduce = true, micGainDb = 0) {
       let energy = 0, before = 0, peak = 0;
       for (let block=0; block<240; block++) {
         for (let i=0;i<input.length;i++) input[i] = sample(cursor++ / rate);
-        processor.process([[input]], [[output]], {reduceNoise:[Number(reduce)]});
+        processor.process([[input]], [[output]], {reduceNoise:[Number(reduce)], micGainDb:[micGainDb]});
         for (let i=0;i<input.length;i++) {
           peak = Math.max(peak, Math.abs(output[i]));
           if (block > 160) { energy += output[i] ** 2; before += input[i] ** 2; }
@@ -30,7 +30,13 @@ for (const rate of [44100, 48000]) {
     const voice = t => .023*Math.sin(2*Math.PI*220*t)+.012*Math.sin(2*Math.PI*440*t);
     assert.ok(measure(voice).ratio > .86);
     assert.ok(measure(()=>.023*random()).ratio < .12);
-    assert.ok(measure(voice).ratio > .86);
+    const neutral = measure(voice).ratio;
+    for (const gain of [6, 12]) {
+      const boosted = measure(voice, true, gain);
+      assert.ok(Math.abs(20 * Math.log10(boosted.ratio / neutral) - gain) < .25);
+    }
+    assert.ok(measure(t=>.99*Math.sin(2*Math.PI*540*t), true, 18).peak <= .751);
+    assert.ok(measure(()=>.023*random(), true, 18).ratio < .15);
     assert.ok(measure(t=>.99*Math.sin(2*Math.PI*540*t)).peak <= .751);
     assert.ok(measure(()=>.023*random(),false).ratio > .85);
   });
