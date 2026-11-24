@@ -51,11 +51,13 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  const code=await space.locator('#room-code').innerText();assert.match(code,/^[A-Z0-9]{6}$/);
  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();
  await checkWindow(false);
+ await home.getByRole('button',{name:/Escuadra Lima.*Tu sala/}).waitFor();
  await home.getByRole('button',{name:'Activar micrófono',exact:true}).click();
  await home.getByRole('button',{name:'Silenciar',exact:true}).waitFor();
  browser=await chromium.launch({channel:process.platform==='darwin'?'chrome':'msedge',headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
  const peer=await browser.newPage();peer.setDefaultTimeout(15000);await peer.addInitScript({content:fixture});await peer.goto('http://127.0.0.1:4179');
- await peer.locator('#join').click();await peer.locator('#nickname').fill('Amigo');await peer.locator('#code').fill(code);await peer.locator('#submit-entry').click();await peer.locator('#mic').click();
+ await peer.locator('#channel-list a[href="#directory"]').click();
+ await peer.locator('#directory-list [data-room-code="'+code+'"]').click();await peer.locator('#nickname').fill('Amigo');await peer.locator('#code').fill(code);await peer.locator('#submit-entry').click();await peer.locator('#mic').click();
  const sample=p=>p.evaluate(async()=>{for(const pc of window.testPeers){for(const stat of (await pc.getStats()).values()){if(stat.type==='inbound-rtp'&&stat.kind==='audio')return stat.totalAudioEnergy||0;}}return 0;});
  async function audio(previous){let values;for(let i=0;i<100;i++){values=await Promise.all([sample(space),sample(peer)]);if(values.every((v,j)=>v>previous[j]))return values;await delay(250);}throw Error('Falta voz bidireccional '+JSON.stringify(values));}
  const first=await audio([0,0]);await memory('voz');
@@ -64,6 +66,11 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   await space.getByRole('button',{name:label,exact:true}).click();
   await space.waitForFunction(key=>document.body.dataset.workspace===key,section);
   await checkWindow(true);
+  if(section==='friends'){
+   await space.getByRole('heading',{name:'Tus amigos'}).waitFor();
+   await space.screenshot({path:path.join(capture,'Amigos-Moderno.png')});
+   assert.ok(await space.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  }
  }
  await space.getByRole('button',{name:'Ajustes',exact:true}).click();
  await home.getByRole('heading',{name:'Ajustes',exact:true}).waitFor();

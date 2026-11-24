@@ -185,18 +185,18 @@
           Elige tu apodo para agregar amigos y ver quién está jugando.
         </p>
         <div id="social-content" hidden>
+          <section class="friend-roster" aria-labelledby="roster-title">
+            <h3 id="roster-title">Tus amigos</h3>
+            <div id="friends" class="friend-list"></div>
+            <div id="room-admission" class="requests" aria-live="polite"></div>
+          </section>
+          <section class="friend-inbox" aria-labelledby="requests-title" hidden>
+            <h3 id="requests-title">Solicitudes de amistad</h3>
+            <div id="friend-requests" class="requests"></div>
+          </section>
           <div class="social-grid">
-            <div class="social-contacts">
-              <div class="social-code">
-                <span>Mi código de amigo</span
-                ><button
-                  id="copy-friend"
-                  class="secondary small"
-                  aria-label="Copiar mi código de amigo"
-                >
-                  <strong id="friend-id"></strong><i data-icon="copy"></i>
-                </button>
-              </div>
+            <section class="social-contacts" aria-labelledby="add-friend-title">
+              <h3 id="add-friend-title">Agregar un amigo</h3>
               <form id="friend-form" class="inline-form">
                 <label for="friend-code">Código de tu amigo</label>
                 <div>
@@ -208,24 +208,34 @@
                     required
                     autocomplete="off"
                     autocapitalize="characters"
-                    placeholder="Código de 16 caracteres"
+                    placeholder="16 caracteres"
                   /><button id="friend-add" class="primary small">
                     Enviar solicitud
                   </button>
                 </div>
               </form>
-              <div id="friend-requests" class="requests"></div>
-            </div>
-            <div class="social-presence">
+              <div class="social-code">
+                <span>Mi código de amigo</span
+                ><button
+                  id="copy-friend"
+                  class="secondary small"
+                  aria-label="Copiar mi código de amigo"
+                >
+                  <strong id="friend-id"></strong><i data-icon="copy"></i>
+                </button>
+              </div>
+            </section>
+            <section class="social-presence" aria-labelledby="activity-title">
+              <h3 id="activity-title">Mi actividad</h3>
               <form id="activity-form" class="inline-form">
-                <label for="player-game">Mi actividad</label>
+                <label for="player-game">Juego actual</label>
                 <div>
                   <input
                     id="player-game"
                     aria-describedby="game-privacy"
                     maxlength="60"
                     list="game-options"
-                    placeholder="Juego actual"
+                    placeholder="Ej. VALORANT"
                     autocomplete="off"
                   /><datalist id="game-options">
                     <option value="VALORANT"></option>
@@ -251,10 +261,8 @@
                 Tus amigos y los participantes de tu sala pueden ver tu
                 actividad.
               </p>
-            </div>
+            </section>
           </div>
-          <div id="friends" class="friend-list"></div>
-          <div id="room-admission" class="requests" aria-live="polite"></div>
         </div>
         <p id="social-status" class="status" role="status"></p>
       </section>
@@ -343,6 +351,8 @@
           ><input id="name" maxlength="48" placeholder="Ej. Partida del viernes" />
         </div>
         <div id="directory-fields">
+          <label class="publish-option"><input id="directory-publish" type="checkbox" aria-describedby="visibility-help" />Mostrar en Salas públicas</label>
+          <p id="visibility-help" class="status">Si desmarcas esta opción, solo podrán entrar con el código o una invitación.</p>
           <div class="field-pair">
             <div>
               <label for="directory-game">Juego</label
@@ -385,9 +395,6 @@
             autocomplete="off"
             placeholder="Código que te da el juego"
           />
-          <label class="publish-option"
-            ><input id="directory-publish" type="checkbox" />Mostrar mi sala en el directorio público</label
-          >
         </div>
         <div id="code-field" hidden>
           <label for="code">Código de sala <span>(6 caracteres)</span></label

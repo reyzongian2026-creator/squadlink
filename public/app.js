@@ -254,7 +254,7 @@ function openEntry(next, preset = {}) {
   $("directory-level").value = fields.level || "";
   $("directory-description").value = fields.description || "";
   $("directory-game-code").value = fields.gameCode || "";
-  $("directory-publish").checked = Boolean(fields.published);
+  $("directory-publish").checked = (fields.published ?? create);
   $("code-field").hidden = !join;
   $("code").disabled = !join;
   $("code").required = join;
@@ -679,6 +679,7 @@ function setupWebChannels() {
       : enclosingPanel?.dataset.channelPanel.split(" ")[0] || (fragment.startsWith("kit-") ? "loadout" : "main");
     if (channel !== "main" && body.classList.contains("in-match")) $("compact").click();
     body.dataset.channel = channel;
+    if (channel === "directory") directory.reload();
     for (const panel of panels) {
       panel.classList.toggle("channel-inactive", !panel.dataset.channelPanel.split(" ").includes(channel));
     }

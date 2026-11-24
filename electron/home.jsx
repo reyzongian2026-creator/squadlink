@@ -21,10 +21,36 @@ function App(){
  const prefs=state?.hostSection==='preferences';
  useEffect(()=>{const off=api.listen(update);api.state().then(update).catch(e=>setError(e.message));return off},[]);
  const server=state?.server;
- useEffect(()=>{if(!server)return;setAddress(server);if(prefs)return;let alive=true;const controller=new AbortController();
+ useEffect(()=>{if(server)setAddress(server)},[server]);
+ const lobbyVisible=state?.hostSection==='home';
+ useEffect(()=>{
+  if(!server||!lobbyVisible)return;
+  const controller=new AbortController();
+  let loading=false;
   setRooms([]);setDirectoryStatus('Buscando salas…');
-  fetch('/api/directory',{signal:controller.signal}).then(r=>{if(!r.ok)throw Error();return r.json()}).then(data=>{if(alive){const list=(data.rooms||[]).slice(0,3);setRooms(list);setDirectoryStatus(list.length?'':'Todavía no hay salas públicas.')}}).catch(()=>{if(alive)setDirectoryStatus('Directorio sin conexión.');});
-  return()=>{alive=false;controller.abort()};},[server,prefs,state?.joined]);
+  async function refresh(){
+   if(loading||document.hidden)return;
+   loading=true;
+   try{
+    const response=await fetch('/api/directory',{signal:controller.signal,cache:'no-store'});
+    if(!response.ok)throw Error('Directorio sin conexión.');
+    const {rooms}=await response.json();
+    if(controller.signal.aborted)return;
+    setRooms(rooms.slice(0,3));
+    setDirectoryStatus(rooms.length?'':'Todavía no hay salas públicas.');
+   }catch{if(!controller.signal.aborted)setDirectoryStatus('No se pudo actualizar el directorio.');}
+   finally{loading=false;}
+  }
+  refresh();
+  const timer=window.setInterval(refresh,15000);
+  window.addEventListener('focus',refresh);
+  document.addEventListener('visibilitychange',refresh);
+  return ()=>{
+   controller.abort();clearInterval(timer);
+   window.removeEventListener('focus',refresh);
+   document.removeEventListener('visibilitychange',refresh);
+  };
+ },[server,lobbyVisible,state?.code]);
  async function run(work){setError('');try{return await work()}catch(e){setError(e.message.replace(/^Error invoking remote method.*?Error: /,''));}}
  function open(key,code){run(()=>api.open(code?{key,code}:key))}
  if(!state)return <main><p role="status">{error||'Abriendo Squadlink…'}</p></main>;
@@ -97,10 +123,10 @@ function App(){
          </div>
          {rooms.length ? <ul>{rooms.map(r=>{
            const full=r.count>=r.capacity;
-           return <li key={r.code}><button disabled={state.joined || full} onClick={()=>open('join',r.code)}>
+           return <li key={r.code}><button disabled={r.code!==state.code && (state.joined || full)} onClick={()=>r.code===state.code?open('lobby'):open('join',r.code)}>
              <span className="room-symbol"><Icon id="sound"/></span>
              <span className="room-label"><b>{r.name}</b><small>{[r.game,r.level].filter(Boolean).join(' · ')||'Sala de voz'}</small></span>
-             <em aria-label={r.count+' de '+r.capacity+' plazas ocupadas'}>{full?'Llena':r.count+'/'+r.capacity}</em>
+             <em aria-label={(r.code===state.code?'Tu sala · ':'')+r.count+' de '+r.capacity+' plazas ocupadas'}>{r.code===state.code?'Tu sala':full?'Llena':r.count+'/'+r.capacity}</em>
            </button></li>})}</ul> :
            <p className="empty" role="status"><Icon id="headset"/>{directoryStatus}</p>}
        </section>

@@ -23,7 +23,7 @@ protocol.registerSchemesAsPrivileged([{scheme:'squad',privileges:{standard:true,
 app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
 const options={contextIsolation:true,nodeIntegration:false,sandbox:true,preload:path.join(__dirname,'preload.cjs'),partition:'persist:squadlink-modern'};
 function reveal(w){if(w&&!w.isDestroyed()){if(w.isMinimized())w.restore();w.show();w.focus();}}
-function snapshot(){return {...state,...prefs,hostSection,version:app.getVersion(),updateUrl};}
+function snapshot(){return {...state,...prefs,hostSection:action?'workspace':hostSection,version:app.getVersion(),updateUrl};}
 function publish(){if(home&&!home.isDestroyed())home.webContents.send('snapshot',snapshot());}
 function guard(contents){
   contents.setWindowOpenHandler(()=>({action:'deny'}));
@@ -84,6 +84,7 @@ function open(key,code){
  if(!action)home.contentView.addChildView(view);
  visit++;
  action={key,code};
+ publish();
  contentBounds();
  view.webContents.focus();
  if(ready)dispatch(key,code);

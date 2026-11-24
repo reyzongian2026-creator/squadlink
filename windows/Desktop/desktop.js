@@ -47,6 +47,7 @@ function show(next) {
   if (!Object.hasOwn(pages, next)) return;
   section = next;
   document.body.dataset.workspace = next;
+  if (next === 'rooms') window.dispatchEvent(new Event('squad:directory-open'));
   for (const id of pageIds) {
     byId(id).classList.toggle('desktop-inactive', !pages[next].includes(id));
   }
