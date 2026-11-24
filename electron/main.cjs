@@ -1,12 +1,12 @@
-const {app,BaseWindow,BrowserWindow,WebContentsView,protocol,session,ipcMain,dialog,shell,Menu,globalShortcut,systemPreferences,safeStorage}=require('electron');
+const {app,BaseWindow,BrowserWindow,WebContentsView,protocol,session,ipcMain,dialog,Menu,globalShortcut,systemPreferences,safeStorage}=require('electron');
 const fs=require('node:fs'),path=require('node:path');
 const {relay,parseServer}=require('./gateway.cjs');
 const {detect}=require('./detection.cjs');
 const {createPlayerVault,writePrivateFile,checkPass}=require('./player-vault.cjs');
 const base='https://squadlink-lobby.onrender.com';
-const repo='reyzongian2026-creator/squadlink';
+const {findUpdate,downloadUpdate,verifyDownloaded}=require('./update-release.cjs');
+const {createUpdateController}=require('./update-controller.cjs');
 const mac=process.platform==='darwin';
-const downloadPage=base+'/descargar.html';
 const titles={create:'Crear sala',join:'Unirme con código',lobby:'Mi sala',rooms:'Explorar salas',friends:'Amigos',player:'Mi jugador',arcade:'Arcade',guide:'Guía de sala',ranking:'Clasificación',settings:'Dispositivos de audio'};
 const prefsFile=()=>path.join(app.getPath('userData'),'desktop.json');
 function savePrefs(value){
@@ -16,7 +16,7 @@ function savePrefs(value){
  fs.renameSync(file+'.tmp',file);
 }
 const blank=()=>({joined:false,name:'',nickname:'',code:'',mic:false,canMic:false,members:[]});
-let prefs={server:base,low:true},state=blank(),home,view,hostSection='home',action,ready=false,visit=0,closing=false,updateUrl='',microphone=false;
+let prefs={server:base,low:true},state=blank(),home,view,hostSection='home',action,ready=false,visit=0,closing=false,microphone=false;
 let hostView, radioState='empty';
 let detectTimer,scanning=false,generation=0,detected=null;
 const locked=app.requestSingleInstanceLock();
@@ -31,7 +31,7 @@ protocol.registerSchemesAsPrivileged([{scheme:'squad',privileges:{standard:true,
 app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
 const options={contextIsolation:true,nodeIntegration:false,sandbox:true,preload:path.join(__dirname,'preload.cjs'),partition:'persist:squadlink-modern'};
 function reveal(w){if(w&&!w.isDestroyed()){if(w.isMinimized())w.restore();w.show();w.focus();}}
-function snapshot(){return {...state,...prefs,radioState,hostSection:action?'workspace':hostSection,version:app.getVersion(),updateUrl};}
+function snapshot(){return {...state,...prefs,radioState,hostSection:action?'workspace':hostSection,version:app.getVersion(),update:updater.snapshot()};}
 function hostContents(){return mac ? hostView?.webContents : home?.webContents;}
 function publish(){
  const wc=hostContents();
@@ -190,7 +190,7 @@ ipcMain.handle('player-pass:export',async(event,raw)=>{
  await writePrivateFile(result.filePath,raw);
  return true;
 });
-ipcMain.handle('snapshot',e=>{hostPage(e);return snapshot();});
+ipcMain.handle('snapshot',e=>{hostPage(e);if(mac)require('./update-mac.cjs').confirmMacUpdateReady();return snapshot();});
 ipcMain.handle('open',(e,value)=>{hostPage(e);open(typeof value==='string'?value:value?.key,/^[A-Z0-9]{6}$/.test(value?.code)?value.code:undefined);});
 ipcMain.handle('call',(e,key)=>{
  hostPage(e);
@@ -206,54 +206,49 @@ ipcMain.handle('prefs',(e,data)=>{
  if(next.server!==prefs.server){disposeVoice();state=blank();microphone=false;}
  prefs=next;if(ready&&action)dispatch(action.key,action.code);publish();
 });
-function versionParts(version) {
- const match = /^(\d+)\.(\d+)\.(\d+)(?:-preview\.(\d+))?$/.exec(version);
- return match && [Number(match[1]), Number(match[2]), Number(match[3]), Number(match[4] ?? Infinity)];
+const updateCache=()=>path.join(app.getPath('userData'),'update-cache');
+let cacheReady;
+async function prepareUpdateCache(){
+ const root=updateCache();
+ await fs.promises.mkdir(root,{recursive:true,mode:0o700});
+ // Another Squadlink instance cannot use this cache while we hold the profile lock.
+ const entries=await fs.promises.readdir(root,{withFileTypes:true});
+ await Promise.all(entries.filter(entry=>entry.isDirectory() && entry.name.startsWith('squadlink-update-')).map(entry=>
+  fs.promises.rm(path.join(root,entry.name),{recursive:true,force:true}).catch(()=>{})));
+ return root;
 }
-function isNewer(candidate, current) {
- for (let i = 0; i < current.length; i++) {
-  if (candidate[i] !== current[i]) return candidate[i] > current[i];
- }
- return false;
-}
-async function latestDesktopVersion() {
- const files = ['Squadlink-Moderno-Setup-x64.exe', 'Squadlink-Moderno-macOS-arm64.zip'];
- const signal = AbortSignal.timeout(10000);
- let best;
- for (let page = 1; ; page++) {
-  const response = await fetch('https://api.github.com/repos/'+repo+'/releases?per_page=100&page='+page, {signal});
-  if (!response.ok) throw Error();
-  const releases = await response.json();
-  for (const release of releases) {
-   if (release.draft || !release.tag_name.startsWith('moderno-v')) continue;
-   const version = release.tag_name.slice('moderno-v'.length);
-   const parts = versionParts(version);
-   if (!parts || (best && !isNewer(parts, best.parts))) continue;
-   if (files.every(name => release.assets.some(a => a.name===name && a.state==='uploaded' && a.size>0))) {
-    best = {version, parts};
-   }
+const updater=createUpdateController({
+ find:()=>findUpdate({currentVersion:app.getVersion()}),
+ download:async(release,onProgress)=>{
+  cacheReady??=prepareUpdateCache().catch(error=>{cacheReady=undefined;throw error;});
+  const root=await cacheReady;
+  if(!root)throw Error('No se pudo abrir la carpeta de actualizaciones.');
+  return downloadUpdate(release,{tempDir:root,onProgress});
+ },
+ verify:verifyDownloaded,
+ prepare:async(release,filePath)=>{
+  if(!app.isPackaged)throw Error('La instalación interna está disponible en la aplicación de escritorio instalada.');
+  if(mac){
+   const {prepareMacUpdate}=require('./update-mac.cjs');
+   return prepareMacUpdate({zipPath:filePath,expectedVersion:release.version,appPath:path.resolve(process.execPath,'../../..'),userDataPath:app.getPath('userData')});
   }
-  if (releases.length < 100) return best;
- }
-}
-ipcMain.handle('updates',async e=>{
- hostPage(e);
- updateUrl='';
- publish();
- let latest;
- try { latest=await latestDesktopVersion(); }
- catch { return 'No se pudo consultar la versión publicada. Vuelve a intentarlo.'; }
- const current=versionParts(app.getVersion());
- if (!latest || !current) return 'No se pudo comparar la versión instalada con la publicada.';
- if (!isNewer(latest.parts,current)) return 'Tu aplicación está al día.';
- updateUrl=downloadPage;
- publish();
- return 'Disponible para descargar: '+latest.version+'.';
+  if(process.platform==='win32'){
+   const {installWindowsUpdate}=require('./update-windows.cjs');
+   return {launch:()=>installWindowsUpdate(filePath,{executablePath:process.execPath,parentPid:process.pid,userDataPath:app.getPath('userData')})};
+  }
+  throw Error('Este sistema aún no admite la actualización interna.');
+ },
+ inRoom:()=>state.joined,
+ quit:()=>app.quit(),
+ notify:publish
 });
-ipcMain.handle('download',async e=>{hostPage(e);if(updateUrl)await shell.openExternal(updateUrl);});
+for(const [channel,method] of [['updates','check'],['download','download'],['install-update','install']]){
+ ipcMain.handle(channel,e=>{hostPage(e);return updater[method]();});
+}
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.webp':'image/webp','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon'};
 const csp="default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data:;connect-src 'self';media-src 'self' blob: https:;object-src 'none';frame-src 'self';base-uri 'none';form-action 'self'";
 async function start(){
+ cacheReady=prepareUpdateCache().catch(()=>{cacheReady=undefined;});
  try{const saved=JSON.parse(fs.readFileSync(prefsFile(),'utf8'));prefs={server:parseServer(saved.server),low:saved.low!==false,hasPlayer:saved.hasPlayer===true};}catch{}
  const ses=session.fromPartition(options.partition);
  ses.protocol.handle('squad',async req=>{

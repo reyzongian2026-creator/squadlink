@@ -97,3 +97,6 @@ footer button { background:transparent; border-color:transparent; }
   .hero-copy { padding-block: 16px; }
   .actions { margin-top: 12px; }
 }
+
+.download-progress { display:flex; align-items:center; gap:12px; margin-top:8px; font-variant-numeric:tabular-nums; }
+.download-progress progress { width:min(18rem,75%); accent-color:#acaaff; }

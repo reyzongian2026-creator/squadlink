@@ -15,7 +15,7 @@ if(location.hostname==='home'){
   contextBridge.exposeInMainWorld('squad',{
     state:()=>ipcRenderer.invoke('snapshot'), open:(key)=>ipcRenderer.invoke('open',key),
     action:key=>ipcRenderer.invoke('call',key), prefs:data=>ipcRenderer.invoke('prefs',data),
-    updates:()=>ipcRenderer.invoke('updates'), download:()=>ipcRenderer.invoke('download'),
+    updates:()=>ipcRenderer.invoke('updates'), download:()=>ipcRenderer.invoke('download'), install:()=>ipcRenderer.invoke('install-update'),
     listen:cb=>subscribe('snapshot',cb)
   });
 } else if(location.hostname==='app'){

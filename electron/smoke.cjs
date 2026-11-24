@@ -54,6 +54,21 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await home.screenshot({path:path.join(capture,'Inicio-Moderno.png')});
  async function memory(label){const values=await app.evaluate(({app})=>app.getAppMetrics().map(m=>m.memory.workingSetSize));console.log('RAM '+label+' MiB: '+(values.reduce((a,b)=>a+b,0)/1024).toFixed(1));}
  await memory('inicio');console.log('Inicio React correcto');
+ // Only GitHub requests are intercepted, in the isolated packaged app's main process.
+ const asset=process.platform==='darwin'?'Squadlink-Moderno-macOS-arm64.zip':'Squadlink-Moderno-Setup-x64.exe';
+ const qaBytes='contenido de prueba';
+ await app.evaluate((_,{asset,qaBytes,digest})=>{
+  const original=globalThis.fetch;
+  const tag='moderno-v9.9.9-preview.1';
+  const url='https://github.com/reyzongian2026-creator/squadlink/releases/download/'+tag+'/'+asset;
+  globalThis.fetch=(input,options)=>{
+   if(String(input).startsWith('https://api.github.com/repos/reyzongian2026-creator/squadlink/releases?')){
+    return Promise.resolve(Response.json([{tag_name:tag,assets:[{name:asset,state:'uploaded',size:Buffer.byteLength(qaBytes),digest:'sha256:'+digest,browser_download_url:url}]}]));
+   }
+   if(input===url)return Promise.resolve(new Response(qaBytes));
+   return original(input,options);
+  };
+ },{asset,qaBytes,digest:require('node:crypto').createHash('sha256').update(qaBytes).digest('hex')});
  await home.getByRole('button',{name:'Ajustes',exact:true}).click();
  const mainId=await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].id);
  async function checkWindow(featureVisible){
@@ -65,6 +80,15 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   assert.deepEqual(observed,{ids:[mainId],feature:featureVisible});
  }
  await home.getByRole('heading',{name:'Ajustes',exact:true}).waitFor();
+ await home.getByRole('button',{name:'Descargar actualización'}).click();
+ await home.getByRole('button',{name:'Instalar y reiniciar'}).waitFor();
+ const updateCache=path.join(profile,'update-cache');
+ const staged=fs.readdirSync(updateCache).find(dir=>dir.startsWith('squadlink-update-'));
+ fs.writeFileSync(path.join(updateCache,staged,asset),'archivo alterado');
+ await home.getByRole('button',{name:'Instalar y reiniciar'}).click();
+ await home.getByRole('button',{name:'Reintentar descarga'}).click();
+ await home.getByRole('button',{name:'Instalar y reiniciar'}).waitFor();
+ console.log('Ajustes descarga, verifica, rechaza archivos alterados y permite reintentar dentro de la app.');
  await home.getByRole('button',{name:'Experiencia completa'}).click();
  assert.equal((await home.evaluate(()=>window.squad.state())).low,false);
  await home.getByRole('button',{name:'Bajo consumo'}).click();

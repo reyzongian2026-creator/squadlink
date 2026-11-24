@@ -1,12 +1,12 @@
 {
   "name": "squadlink-desktop",
-  "version": "0.5.0-preview.19",
+  "version": "0.5.0-preview.20",
   "private": true,
   "main": "main.cjs",
   "scripts": {
     "build": "node build.cjs",
     "start": "electron stage",
-    "test": "node --test gateway.test.cjs player-vault.test.cjs"
+    "test": "node --test gateway.test.cjs player-vault.test.cjs update-release.test.cjs update-controller.test.cjs"
   },
   "devDependencies": {
     "electron": "45.4.1",

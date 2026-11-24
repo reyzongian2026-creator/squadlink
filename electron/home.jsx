@@ -16,8 +16,29 @@ const shapes={
   plus:<path d="M12 5v14M5 12h14"/>,code:<path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 20"/>,arrow:<path d="m9 5 7 7-7 7"/>,exit:<path d="M10 3H5v18h5m-1-9h12m-5-5 5 5-5 5"/>
 };
 function Icon({id}){return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{shapes[id]}</svg>}
+function UpdatePanel({state,run}){
+ const {phase,version,percent,message}=state.update;
+ useEffect(()=>{if(phase==='idle')run(()=>api.updates());},[phase]);
+ const status=message || ({
+  checking:'Buscando una versión nueva…', current:'Tienes la última versión.',
+  available:'Versión disponible · '+version, downloading:'Descargando '+version+' · '+percent+' %',
+  ready:state.joined?'Descarga lista. Sal de la sala cuando quieras instalar.':'Versión '+version+' verificada y lista para instalar.',
+  installing:'Preparando la instalación. Squadlink volverá a abrirse.'
+ }[phase] || '');
+ return <section aria-labelledby="updates-title">
+   <h2 id="updates-title">Actualizaciones</h2>
+   <p>Versión instalada · {state.version}</p>
+   <p role="status" aria-live="polite">{phase==='downloading'?'Descargando '+version+'…':status}</p>
+   {phase==='downloading'&&<div className="download-progress"><progress max="100" value={percent} aria-label="Descarga de la actualización"/><span>{percent} %</span></div>}
+   <div className="choices">
+    {['idle','current','check-error'].includes(phase)&&<button onClick={()=>run(()=>api.updates())}>Buscar actualizaciones</button>}
+    {phase==='available'&&<button onClick={()=>run(()=>api.download())}>{message?'Reintentar descarga':'Descargar actualización'}</button>}
+    {phase==='ready'&&<button disabled={state.joined} onClick={()=>run(()=>api.install())}>Instalar y reiniciar</button>}
+   </div>
+ </section>;
+}
 function App(){
- const [state,update]=useState(null),[error,setError]=useState(''),[serverFeedback,setServerFeedback]=useState(''),[updateFeedback,setUpdateFeedback]=useState(''),[address,setAddress]=useState(''),[checking,setChecking]=useState(false);
+ const [state,update]=useState(null),[error,setError]=useState(''),[serverFeedback,setServerFeedback]=useState(''),[address,setAddress]=useState('');
  const [rooms,setRooms]=useState([]),[directoryStatus,setDirectoryStatus]=useState('Buscando salas…');
  const directory=useRef(null);
  const [directoryFailed,setDirectoryFailed]=useState(false);
@@ -76,15 +97,8 @@ function App(){
        </form>
        <p role="status">{serverFeedback}</p>
      </section>
-     <section>
-       <h2>Actualizaciones</h2><p>Versión instalada · {state.version}</p>
-       <div className="choices"><button disabled={checking} onClick={()=>run(async()=>{
-         setChecking(true);setUpdateFeedback('');
-         try{setUpdateFeedback(await api.updates())}finally{setChecking(false)}
-       })}>{checking?'Buscando…':'Buscar actualizaciones'}</button>
-       {state.updateUrl&&<button onClick={()=>run(()=>api.download())}>Descargar actualización</button>}</div>
-       <p role="status">{updateFeedback}</p>
-     </section>
+     <UpdatePanel state={state} run={run}/>
+
      {error && <p className="error" role="alert">{error}</p>}
    </main> : <main>
      <section className="hero" aria-labelledby="room-title">

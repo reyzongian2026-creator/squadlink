@@ -18,7 +18,7 @@ jobs:
       - name: Verificar el lobby y la sesión
         run: |
           npm test
-          node --test electron/gateway.test.cjs
+          node --test electron/gateway.test.cjs electron/update-release.test.cjs electron/update-controller.test.cjs
       - name: Compilar la interfaz de Electron y React
         working-directory: electron
         run: |
@@ -76,6 +76,35 @@ jobs:
             $installed=Join-Path $target "resources\app\cartridges\$name"
             if ((Get-FileHash $installed).Hash -ne $expected) {throw "El cartucho $name no se instaló correctamente"}
           }
+          $profileDir=Join-Path $env:RUNNER_TEMP 'Perfil de prueba de actualización'
+          $publicSetup=(Resolve-Path artifacts/electron/Squadlink-Moderno-Setup-x64.exe).Path
+          $installedExe=Join-Path $target 'Squadlink.exe'
+          node test/windows/apply-update.cjs $publicSetup $installedExe $profileDir
+          if ($LASTEXITCODE) {exit $LASTEXITCODE}
+          $limit=[DateTime]::UtcNow.AddSeconds(65)
+          do {
+            $reopened=Get-CimInstance Win32_Process -Filter "Name='Squadlink.exe'" | Where-Object {
+              $_.ExecutablePath -eq $installedExe -and $_.CommandLine -notmatch '(?i)--type=' -and
+              $_.CommandLine.IndexOf($profileDir, [StringComparison]::OrdinalIgnoreCase) -ge 0
+            } | Select-Object -First 1
+            if (!$reopened) {Start-Sleep -Milliseconds 400}
+          } until ($reopened -or [DateTime]::UtcNow -gt $limit)
+          if (!$reopened) {throw 'La actualización silenciosa no reabrió la app en el perfil original'}
+          $wanted=(Get-Content electron/package.json -Raw | ConvertFrom-Json).version
+          $version=(Get-Content (Join-Path $target 'resources\app\package.json') -Raw | ConvertFrom-Json).version
+          if ($version -ne $wanted) {throw "Se reinició la versión $version, se esperaba $wanted"}
+          if ((Get-Content (Join-Path $profileDir 'jugador-prueba.txt') -Raw) -ne 'Pepe') {throw 'Se perdió el perfil'}
+          foreach ($name in 'mario3.nes','duck-nes.nes') {
+            if ((Get-FileHash (Join-Path $target "resources\app\cartridges\$name")).Hash -ne $expected) {throw "Se perdió $name"}
+          }
+          Write-Host "Actualización automática correcta: $version en la ruta y perfil originales con ambos cartuchos."
+          $process=Get-Process -Id $reopened.ProcessId
+          $limit=[DateTime]::UtcNow.AddSeconds(15)
+          while ($process.MainWindowHandle -eq 0 -and [DateTime]::UtcNow -lt $limit) {
+            Start-Sleep -Milliseconds 200
+            $process.Refresh()
+          }
+          if (!($process.CloseMainWindow()) -or !($process.WaitForExit(15000))) {throw 'No se cerró la ventana de la aplicación de prueba'}
           $remove=Start-Process (Join-Path $target 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
           if ($remove.ExitCode) {throw 'Falló la desinstalación con cartuchos'}
       - uses: actions/upload-artifact@v4
