@@ -43,3 +43,12 @@ for (const hz of [500,900]) {
     assert.throws(()=>quality.verify('tone',clipped,hz),/Saturación/);
   });
 }
+test('un corte de 200 ms baja la cobertura y no altera la altura medida del tono',()=>{
+  const input=samples('tone',quality.reference(900));
+  input.fill(0,rate*0.3,rate*0.5);
+  const result=quality.summarize(input.subarray(0,rate),rate,900);
+  assert.equal(result.coveragePct,80);
+  assert.equal(result.longestGapMs,200);
+  assert.ok(Math.abs(result.crossingHz-900)<2);
+  assert.throws(()=>quality.verify('tone',result,900),/Huecos/);
+});

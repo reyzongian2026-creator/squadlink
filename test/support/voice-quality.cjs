@@ -29,6 +29,46 @@ function reference(frequency) {
   };
 }
 
+// Playback uses the Web Audio rendering clock. No timer or writer runs for each
+// frame, even when the test page is in the background. Only the remote WebRTC
+// receiver plays the signal; the generator is not connected to local speakers.
+async function microphone(frequency, generator) {
+  const ctx = new AudioContext({sampleRate:48000});
+  const destination = ctx.createMediaStreamDestination();
+  destination.channelCount = 1;
+  const buffers = new Map();
+  let source;
+  function select(mode) {
+    const key = mode === 'noiseBypass' ? 'noise' : mode;
+    if (!buffers.has(key)) {
+      const buffer = ctx.createBuffer(1,48000,48000);
+      const pcm = buffer.getChannelData(0), generate = generator(frequency);
+      for (let i = 0; i < pcm.length; i += 960) pcm.set(generate(key),i);
+      buffers.set(key,buffer);
+    }
+    const next = ctx.createBufferSource();
+    next.buffer = buffers.get(key);
+    next.loop = true;
+    next.connect(destination);
+    const now = ctx.currentTime;
+    next.start(now);
+    if (source) { source.stop(now); source.disconnect(); }
+    source = next;
+  }
+  const track = destination.stream.getAudioTracks()[0];
+  const stop = track.stop.bind(track);
+  track.stop = () => {
+    stop();
+    if (source) { source.stop(); source.disconnect(); source = null; }
+    if (ctx.state !== 'closed') void ctx.close().catch(()=>{});
+  };
+  window.qaRawTrack = track;
+  window.qaSetSignal = select;
+  select('tone');
+  await ctx.resume();
+  return destination.stream;
+}
+
 // Project each 20 ms frame onto the expected tone; arbitrary phase shifts between
 // frames do not count as distortion. Both test frequencies make whole cycles.
 function summarize(samples, rate, frequency) {
@@ -40,16 +80,35 @@ function summarize(samples, rate, frequency) {
   const pitch = frequency === 500 ? 100 : 150;
   const pitchCos = Float64Array.from({length:frame}, (_, i) => Math.cos(2 * Math.PI * pitch * i / rate));
   const pitchSin = Float64Array.from({length:frame}, (_, i) => Math.sin(2 * Math.PI * pitch * i / rate));
-  let total = 0, tone = 0, fundamental = 0, peak = 0, clipped = 0, crossings = 0, below = false;
+  let total = 0, tone = 0, fundamental = 0, peak = 0, clipped = 0;
+  let periods = 0, periodSamples = 0, active = 0, gap = 0, longestGap = 0;
+  const slice = Math.round(frame/4); // 5 ms at the 48 kHz test rate.
+  const activityPower = 10**(-34/10);
   for (let offset = 0; offset < length; offset += frame) {
-    let x = 0, y = 0, px = 0, py = 0;
+    let x = 0, y = 0, px = 0, py = 0, power = 0, below = false;
+    let firstCrossing = -1, lastCrossing = -1, crossings = 0, frameActive = true;
     for (let i = 0; i < frame; i++) {
       const v = samples[offset+i], magnitude = Math.abs(v);
       total += v*v; peak = Math.max(peak, magnitude);
       if (magnitude >= 0.99) clipped++;
       if (v < -0.015) below = true;
-      if (below && v > 0.015) { crossings++; below = false; }
+      if (below && v > 0.015) {
+        if (!crossings) firstCrossing = i;
+        lastCrossing = i; crossings++; below = false;
+      }
+      power += v*v;
+      if ((i+1)%slice === 0) {
+        if (power/slice >= activityPower) { active++; gap=0; }
+        else { frameActive = false; gap++; longestGap = Math.max(longestGap,gap); }
+        power = 0;
+      }
       x += v*cos[i]; y += v*sin[i]; px += v*pitchCos[i]; py += v*pitchSin[i];
+    }
+    // A gap is a coverage failure, not a slower oscillation. Frequency uses
+    // complete periods inside active frames; coverage inspects every slice.
+    if (frameActive && crossings > 1) {
+      periods += crossings-1;
+      periodSamples += lastCrossing-firstCrossing;
     }
     tone += 2 * (x*x + y*y) / frame;
     fundamental += 2 * (px*px + py*py) / frame;
@@ -57,7 +116,8 @@ function summarize(samples, rate, frequency) {
   const round = value => Number(value.toFixed(2));
   const db = power => round(10 * Math.log10(Math.max(power, 1e-12)));
   return {sampleRateHz:rate, samples:length, rmsDbfs:db(total/length), peakDbfs:db(peak*peak),
-    clippedSamples:clipped, crossingHz:round(crossings * rate / length),
+    clippedSamples:clipped, crossingHz:periodSamples ? round(periods*rate/periodSamples) : 0,
+    coveragePct:round(100*active*slice/length), longestGapMs:round(longestGap*slice*1000/rate),
     pitchDbfs:db(fundamental/length), referenceDbfs:db(tone/length), residualDbfs:db(Math.max(0, total-tone)/length)};
 }
 
@@ -65,6 +125,9 @@ function verify(mode, result, hz, bypass) {
   const measured = JSON.stringify(result);
   assert.ok(result.samples >= 0.9 * result.sampleRateHz, measured);
   assert.equal(result.clippedSamples, 0, 'Saturación digital: ' + measured);
+  if (mode === 'tone' || mode === 'overload') {
+    assert.ok(result.coveragePct >= 90 && result.longestGapMs <= 60, 'Huecos en la señal continua: '+measured);
+  }
   if (mode === 'silence') {
     assert.ok(result.rmsDbfs <= -48, 'Fondo durante silencio digital: ' + measured);
   } else if (mode === 'noiseBypass') {
@@ -135,8 +198,8 @@ function observeCleaner() {
 }
 
 function fixtureSetup(hz) {
-  return '('+observeCleaner.toString()+')();\nwindow.qaReference = (' + reference.toString() + ')(' + hz + ');\n' +
-    'window.qaSummarize = ' + summarize.toString() + ';\nwindow.qaSignalMode = "tone";\n';
+  return '('+observeCleaner.toString()+')();\nwindow.qaMicrophone = () => (' + microphone.toString() +
+    ')(' + hz + ', ' + reference.toString() + ');\nwindow.qaSummarize = ' + summarize.toString() + ';\n';
 }
 
 async function testVoiceQuality(electron, peer) {
@@ -156,7 +219,7 @@ async function testVoiceQuality(electron, peer) {
   }
   for (const mode of ['tone','silence','noiseBypass','noise','voice','mixed','overload']) {
     await Promise.all(pages.map(page => page.evaluate(value => {
-      window.qaSignalMode = value;
+      window.qaSetSignal(value);
       window.qaCleaner.parameters.get('reduceNoise').value = value === 'noiseBypass' ? 0 : 1;
     }, mode)));
     const readings = await Promise.all(pages.map((page, i) => page.evaluate(capture, incomingHz[i])));
@@ -166,7 +229,7 @@ async function testVoiceQuality(electron, peer) {
       verify(mode, reading, incomingHz[i], bypass[i]);
     }
   }
-  await Promise.all(pages.map(page => page.evaluate(() => { window.qaSignalMode = 'tone'; })));
+  await Promise.all(pages.map(page => page.evaluate(() => { window.qaSetSignal('tone'); })));
 }
 
 module.exports = {reference, summarize, verify, fixtureSetup, testVoiceQuality};

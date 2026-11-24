@@ -93,7 +93,8 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   host?.addEventListener('message',audioCommand);
   const media = navigator.mediaDevices;
   const outputSupported = typeof HTMLMediaElement.prototype.setSinkId === 'function';
-  const noiseSupported = !!media?.getSupportedConstraints?.().noiseSuppression;
+  const noiseSupported = !!media?.getSupportedConstraints?.().noiseSuppression ||
+    Boolean(globalThis.AudioContext && globalThis.AudioWorkletNode);
   const renderOptions = (select, devices, chosen, kind) => {
     select.replaceChildren(new Option('Predeterminado del sistema', ''));
     let number = 0;
