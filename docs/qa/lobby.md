@@ -85,3 +85,21 @@ Si falla la conexión inicial de voz, «Reintentar conexión de voz» permite se
 Al pulsar «Salir de la sala», el cliente cierra inmediatamente el micrófono, WebRTC y el reproductor musical. La prueba retuvo la petición de salida, respondió con un error 503 y pulsó el atajo de radio antes y después del error. La operación pudo reintentarse y regresar al lobby. Una prueba de interfaz adicional simuló que la sesión ya había caducado y comprobó que se volvía al inicio conservando el apodo local.
 
 [Integración de voz en navegador](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45352277081) · [Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45352121282) · [Mac con Apple Silicon](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45352121278)
+
+## Pruebas de concurrencia en 0.5.0-preview.19
+
+Se retuvieron solicitudes HTTP y permisos de audio para comprobar qué sucede cuando una respuesta llega después de salir, cambiar de dispositivo o abrir otra pestaña.
+
+| Escenario | Comportamiento comprobado |
+| --- | --- |
+| Salir mientras se verifica la clave para crear una sala privada o entrar en ella | La petición pendiente termina y el jugador queda fuera. |
+| Salir y volver a entrar al mismo código antes de que llegue una petición anterior | La salida, la edición del directorio y el estado del micrófono se aplican únicamente a la estancia que los originó. |
+| Cerrar el formulario de creación mientras espera la sesión y abrir otro | El primer intento se cancela y el segundo formulario conserva el borrador. |
+| Editar la sala y recibir información más reciente en otra pestaña | La confirmación antigua conserva el último estado recibido. |
+| Cambiar el micrófono con el permiso anterior pendiente | La entrada seleccionada, el botón y el dispositivo guardado coinciden. |
+| Silenciar, cambiar de emisora o salir durante el inicio de la radio | El intento pendiente se cancela sin cambiar la cola compartida. |
+| El servidor cambia el estado del micrófono pero se pierde la confirmación | Ante una activación sin confirmar se cierra el dispositivo y se vuelve a comunicar el silencio. Si se pierde la confirmación al silenciar, el reintento conserva las pistas cerradas. |
+
+Se repitió 25 veces la combinación de pruebas de concurrencia de salas y voz en cada rama. Se usa un reloj fijo para verificar la reentrada al mismo código aun cuando las dos entradas comparten marca de tiempo. La prueba de radio usa una respuesta HTTP retenida y un reproductor de Chromium. La calidad acústica de micrófonos físicos requiere una llamada con esos dispositivos.
+
+[Pruebas de web y llamada en el lobby publicado](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45354371065) · [Pruebas de escritorio y voz](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45354370838) · [Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45354370832) · [macOS Apple Silicon](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45354370814)
