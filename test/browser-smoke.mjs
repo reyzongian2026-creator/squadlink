@@ -416,4 +416,6 @@ if (process.argv.includes('--run')) {
   const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
   process.env.SQUADLINK_MIC_TRIAL = "1";
   for (let trial=0;trial<12;trial++) {console.log("MIC_TRIAL",trial+1);await browserSmoke(chromium);}
+  delete process.env.SQUADLINK_MIC_TRIAL;
+  await browserSmoke(chromium);
 }
