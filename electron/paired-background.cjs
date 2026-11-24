@@ -6,7 +6,8 @@ const assert=require('node:assert/strict');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const base='http://127.0.0.1:4179';
 const fixture=fs.readFileSync('test/windows/audio-fixture.js','utf8');
-const boot='if(!window.testPeers && navigator.mediaDevices){'+fixture+'\n}';
+const {fixtureSetup}=require('../test/support/voice-quality.cjs');
+const boot='if(!window.testPeers && navigator.mediaDevices){'+fixtureSetup(500)+fixture+'\n}';
 const {radioStations}=require('../public/radio-stations.js');
 const station=radioStations[0];
 async function until(fn,label,timeout=18000){
@@ -47,8 +48,11 @@ async function signal(page){
 async function one(exe,version,run,radio,spki){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'squad-bench-'));
  fs.writeFileSync(path.join(dir,'desktop.json'),JSON.stringify({server:base,low:true}));
- let app,browser;
+ let app,browser,phase='';
+ const stage=label=>{phase=label;console.log('ETAPA',version,run,label,new Date().toISOString());};
+ const guard=setTimeout(()=>{console.error('Límite de 110 s, último estado: '+phase);process.exit(2);},110000);
  try{
+  stage('abrir Electron');
   app=await _electron.launch({executablePath:exe,args:['--user-data-dir='+dir,'--ignore-certificate-errors-spki-list='+spki],timeout:45000});
   const ctx=app.context();ctx.setDefaultTimeout(18000);
   await ctx.addInitScript({content:"if(location.hostname==='app'){"+boot+"}"});
@@ -63,22 +67,25 @@ async function one(exe,version,run,radio,spki){
    return surface(host);
   }
   assert.equal(await app.evaluate(({app})=>app.getVersion()),'0.5.0-preview.'+version);
-  let space=await surface('app');await space.evaluate(boot);
+  stage('onboarding');let space=await surface('app');await space.evaluate(boot);
   await space.getByRole('button',{name:'Elegir apodo y guardar',exact:true}).click();
   await space.getByLabel('Tu apodo').fill('Pepe');await space.locator('#submit-entry').click();
   await space.getByText('Apariencia guardada.',{exact:true}).waitFor();
-  const home=await nav(space,'Lobby de voz','home');
-  space=await nav(home,'Crear sala','app');
+  stage('abrir lobby normal');const home=await nav(space,'Lobby de voz','home');
+  stage('crear sala');space=await nav(home,'Crear sala','app');
   await space.locator('#name').fill('Medición '+run);await space.locator('#submit-entry').click();
   await space.locator('#room-name').waitFor({state:'visible'});
   await space.waitForFunction(()=>/^[A-Z0-9]{6}$/.test(document.querySelector('#room-code')?.textContent));
   const code=await space.locator('#room-code').textContent();await space.locator('#mic').click();
+  stage('abrir navegador del segundo participante');
   browser=await chromium.launch({channel:process.platform==='win32'?'msedge':'chrome',headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
   const peer=await browser.newPage();await peer.addInitScript({content:boot});await peer.goto(base+'/#main');
   await peer.getByRole('button',{name:'Unirme con código',exact:true}).first().click();
   await peer.locator('#nickname').fill('Segundo');await peer.locator('#code').fill(code);
   await peer.locator('#submit-entry').click();await peer.locator('#mic').click();
+  stage('conectar ambos micrófonos');
   await until(async()=>{const a=await signal(space),b=await signal(peer);return a?.energy>0 && b?.energy>0;},'audio bidireccional');
+  stage('seleccionar y escuchar la radio');
   const local='https://127.0.0.1:'+radio.server.address().port+'/stream.wav';
   await space.route(station.url,route=>route.fulfill({status:307,headers:{location:local,'access-control-allow-origin':'*'}}));
   const music=space.locator('#room-music');
@@ -87,10 +94,15 @@ async function one(exe,version,run,radio,spki){
   await music.locator('.station-options label').filter({hasText:station.name}).click();
   await music.getByRole('button',{name:'Escuchar solo aquí'}).click();
   await until(async()=>(await signal(space))?.radio>1,'radio HTTPS local con ritmo real');
+  stage('volver al lobby de la llamada');
   const lobby=await nav(space,'Lobby de voz',version===23?'home':'app');
   await lobby.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   const sample=async()=>{
-   const pcm=await signal(space);
+   // Read the receiver continuously in the separate participant browser. Native
+   // app metrics come from the main process, without waking its minimized page.
+   const remote=await signal(peer);
+   assert.ok(remote,'El otro participante debe permanecer conectado');
+   const pcm={rx:remote.tx,tx:remote.rx,energy:remote.energy};
    const processInfo=await app.evaluate(({app,webContents})=>{
     const metrics=app.getAppMetrics();const frames=webContents.getAllWebContents().flatMap(w=>w.mainFrame.framesInSubtree.map(f=>({pid:f.osProcessId,url:f.url.split('?')[0]})));
     return {ram:metrics.reduce((a,m)=>a+m.memory.workingSetSize/1024,0),cpu:metrics.reduce((a,m)=>a+m.cpu.percentCPUUsage,0),
@@ -98,17 +110,20 @@ async function one(exe,version,run,radio,spki){
    });
    return {t:performance.now()/1000,...processInfo,...pcm,radioBytes:radio.bytes};
   };
-  const foreground=await sample();
+  stage('minimizar y medir');const radioStart=(await signal(space)).radio;const foreground=await sample();
   await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
   await until(()=>app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].isMinimized()),'minimización');
   const zero=performance.now();
   const arr=[];
   for(let second=0;second<=30;second+=1){
    await sleep(Math.max(0,zero+second*1000-performance.now()));
-   arr.push(await sample());
+   arr.push(await sample());if(second%5===0)stage('segundo '+second);
   }
   const a=arr[15],b=arr[30],elapsed=b.t-a.t;
-  assert.ok(elapsed>=14 && elapsed<18 && b.rx>a.rx && b.tx>a.tx && b.energy>a.energy && b.radio-a.radio>13 && b.radioBytes>a.radioBytes,'Continuidad de la señal y de la radio');
+  await app.evaluate(({BaseWindow})=>{const w=BaseWindow.getAllWindows()[0];w.restore();w.show();w.focus();});
+  const radioEnd=(await signal(space)).radio;
+  assert.ok(radioEnd-radioStart>27,'La radio debe reproducirse mientras se mide desde el segundo participante');
+  assert.ok(elapsed>=14 && elapsed<18 && b.rx>a.rx && b.tx>a.tx && b.energy>a.energy && b.radioBytes>a.radioBytes,'Continuidad de la señal y de la radio');
   const median=values=>values.sort((a,b)=>a-b)[Math.floor(values.length/2)];
   const unowned=b.renderers.filter(m=>!b.frames.some(f=>f.pid===m.pid));
   let commands='';
@@ -132,7 +147,10 @@ async function one(exe,version,run,radio,spki){
    medianRam:median(arr.slice(15).map(x=>x.ram)),medianCpu:median(arr.slice(16).map(x=>x.cpu)),
    meanCpu:arr.slice(16).reduce((v,r,i)=>v+r.cpu*(r.t-arr[15+i].t),0)/elapsed,
    rxKbps:8*(b.rx-a.rx)/1000/elapsed,txKbps:8*(b.tx-a.tx)/1000/elapsed,radioKbps:8*(b.radioBytes-a.radioBytes)/1000/elapsed,commands,cdpInfo}));
- }finally{await browser?.close();await app?.close();}
+ }finally{
+  stage('cerrar navegador');await browser?.close();
+  stage('cerrar Electron');await app?.close();clearTimeout(guard);
+ }
 }
 (async()=>{
  const [v23,v24,keyFile,certFile]=process.argv.slice(2);

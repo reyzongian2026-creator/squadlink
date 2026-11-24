@@ -1,7 +1,7 @@
-name: 'QA de consumo .23 y .24 en la misma máquina'
+name: 'Diagnóstico pareado Mac .23 y .24'
 on:
   push:
-    branches: ['qa/paired-lobby-background-24']
+    branches: ['qa/paired-lobby-mac-trace24']
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2025, macos-15]
+        os: [macos-15]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 18
     env:
