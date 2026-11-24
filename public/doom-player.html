@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-3PA8VYvSVTg6pqTxRmdpdPlnzeINFj6uPEjAha0H9EI=' 'wasm-unsafe-eval' https://danborden1.github.io/doom-web/websockets-doom.js; connect-src https://danborden1.github.io/doom-web/; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-47FY03XgUGa2x3NakQJORJAmkmh1NsadL2o9iu8/nHg=' 'wasm-unsafe-eval' https://danborden1.github.io/doom-web/websockets-doom.js; connect-src https://danborden1.github.io/doom-web/; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <title>Freedoom · Squadlink</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:#13141a;color:#f3f2fa;font:15px system-ui}body{display:flex;flex-direction:column}
@@ -31,9 +31,34 @@ const progress = document.getElementById('progress');
 const pad = document.getElementById('pad');
 let stopped = false;
 let playing = false;
+let turnKey = 0, turnTimer;
+function turnEvent(type, keyCode) {
+  const key = keyCode === 37 ? 'ArrowLeft' : 'ArrowRight';
+  canvas.dispatchEvent(new KeyboardEvent(type,{bubbles:true,cancelable:true,key,code:key,keyCode,which:keyCode}));
+}
+function releaseTurn() {
+  clearTimeout(turnTimer);
+  if (turnKey) turnEvent('keyup', turnKey);
+  turnKey = 0;
+}
+// Windowed mouse controls remain available when the system declines pointer capture.
+canvas.addEventListener('mousemove', event => {
+  if (!playing || stopped || document.pointerLockElement === canvas || !event.movementX) return;
+  const key = event.movementX < 0 ? 37 : 39;
+  if (turnKey !== key) {
+    releaseTurn();
+    turnKey = key;
+    turnEvent('keydown', key);
+  }
+  clearTimeout(turnTimer);
+  turnTimer = setTimeout(releaseTurn, Math.min(160, 35 + Math.abs(event.movementX) * 2));
+});
+canvas.addEventListener('mouseleave', releaseTurn);
+document.addEventListener('pointerlockchange', releaseTurn);
 function stop() {
   if (stopped) return;
   stopped = true;
+  releaseTurn();
   if (document.pointerLockElement === canvas) document.exitPointerLock();
   const audio = window.Module?.SDL2?.audio;
   if (audio?.scriptProcessorNode) {
@@ -90,7 +115,6 @@ play.onclick = () => {
   boot.hidden = true;
   pad.hidden = false;
   canvas.focus();
-  captureMouse();
   try {
     callMain(['-iwad','freedoom1.wad','-config','squad.cfg','-extraconfig','squad-extra.cfg','-window','-nogui','-nomusic','-skill','2','-warp','1','1']);
   } catch (error) {
