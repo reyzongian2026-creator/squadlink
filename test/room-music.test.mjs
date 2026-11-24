@@ -38,3 +38,22 @@ test('dos jugadores comparten la cola, el audio privado y la posición de reprod
   await new Promise(r=>setTimeout(r,40));
   assert.deepEqual((await guest.hit('session')).data.room.music.queue,[]);
 });
+
+test('el catálogo de radio admite clientes antiguos y conserva la emisora ante un evento ended', async t=>{
+  const client=fixture(t).player();
+  await client.hit('session',{nick:'Pepe'});
+  const room=(await client.hit('rooms',{name:'Radio'})).data.room.code;
+  for (const stationId of ['tech-house','groove-salad']) {
+    assert.equal((await client.hit('music/add',{room,stationId})).status,200);
+  }
+  assert.equal((await client.hit('music/add',{room,stationId:'desconocida'})).status,400);
+  const queue=async()=>(await client.hit('session')).data.room.music.queue;
+  const [first, second]=await queue();
+  assert.equal(first.title,'Tech House · laut.fm');
+  assert.equal(first.duration,1800);
+  assert.equal(second.stationId,'groove-salad');
+  await client.hit('music/ended',{room,id:first.id});
+  assert.equal((await queue())[0].id,first.id);
+  await client.hit('music/next',{room,id:first.id});
+  assert.equal((await queue())[0].id,second.id);
+});

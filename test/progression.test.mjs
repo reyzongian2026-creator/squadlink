@@ -135,6 +135,25 @@ test('un archivo ilegible no se sobreescribe con un ranking vacío',async t=>{
   assert.equal(await readFile(s.file,'utf8'),'{incompleto');
 });
 
+test('récords del arcade se ordenan por desafío y sobreviven a reinicios y reintentos', async t=>{
+  const s=await setup(t), a=await s.a(), b=await s.b();
+  for (const [game,first,better] of [
+    ['flick',12000,11000],['precision',8,11],['ducks',6,9],['ducknes',500,900],
+    ['ducknesround',2,3],['mario3',200,450],['mario3world',2,3],['doom',1,4],
+    ['merge',128,256],['three',9000,8000],
+  ]) {
+    await s.api(b,'record',{game,value:first});
+    await Promise.all([better,first,better].map(value=>s.api(a,'record',{game,value})));
+    const {players}=await s.api(b,'ranking',{game});
+    assert.deepEqual(players.map(row=>row.best[game]),[better,first]);
+    assert.deepEqual(players.map(row=>row.nick),['Gian','Mia']);
+  }
+  const resumed=await s.a(s.fixtureWith());
+  assert.equal((await s.api(resumed,'profile')).profile.best.mario3,450);
+  for (const [game,value] of [['mario3world',9],['ducknesround',1],['merge',3],['reflex',90],['unknown',1]])
+    assert.equal((await resumed.hit('progress/record',{game,value})).status,400);
+});
+
 test('la evolución conserva XP y récords anteriores y el nivel de clasificación llega hasta 50', async t => {
   const s = await setup(t), player = await s.a();
   const fresh = (await s.api(player,'profile')).profile;

@@ -1,3 +1,4 @@
+import {stationById} from './public/radio-stations.js';
 import { randomUUID } from 'node:crypto';
 import { open, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,19 +8,6 @@ const fileLimit = 20 * 1024 * 1024;
 const roomLimit = 4 * fileLimit;
 const totalLimit = 12 * fileLimit;
 const maxTracks = 30;
-const stations = new Map([
-  ['reggaeton-fm','Reggaeton FM'],
-  ['mambo-inn','Mambo INN · Lima'],
-  ['rock-es','Rock en Español'],
-  ['rock-80','Rock Antenne · 80er Rock'],
-  ['oldschool','bigFM · Oldschool Rap'],
-  ['power-181','Power 181 · Top 40'],
-  ['italo-80','80s80s · Italo Disco'],
-  ['groove-salad','SomaFM · Groove Salad'],
-  ['tech-house','Tech House · laut.fm'],
-  ['sunshine-edm','SUNSHINE LIVE · EDM'],
-  ['seven-soul','SomaFM · Seven Inch Soul'],
-]);
 
 function audioType(header) {
   const magic = header.toString('latin1');
@@ -155,9 +143,9 @@ export function roomMusic({reject,broadcast}) {
     if (action==='add') {
       hasSpace(state);
       if (Object.hasOwn(data,'stationId')) {
-        const title = stations.get(data.stationId);
-        if (!title) reject(400,'Selecciona una emisora del catálogo.');
-        append(room,{id:randomUUID(),kind:'radio',stationId:data.stationId,title,duration:1800,addedBy:session.nick});
+        const station = stationById(data.stationId);
+        if (!station) reject(400,'Selecciona una emisora del catálogo.');
+        append(room,{id:randomUUID(),kind:'radio',stationId:station.id,title:station.name,duration:1800,addedBy:session.nick});
         return;
       }
       if (!/^[A-Za-z0-9_-]{11}$/.test(data.videoId ?? '') || typeof data.videoId !== 'string') reject(400,'Enlace de YouTube inválido.');

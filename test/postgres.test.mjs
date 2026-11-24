@@ -47,6 +47,11 @@ test('PostgreSQL real: concurrencia entre pools, rollback, ranking y perfil HTTP
   assert.deepEqual((await reopened.ranking('xp')).map(p=>[p.id,p.xp]), [[otherId,50],[id,10]]);
   assert.deepEqual((await reopened.ranking('reflex')).map(p=>p.id), [id,otherId]);
   assert.deepEqual((await reopened.ranking('sequence')).map(p=>p.id), [id,otherId]);
+  assert.deepEqual(await reopened.ranking('mario3world'), []);
+  await reopened.update(id, row=>({...row,best:{...row.best,mario3world:3,flick:2400}}));
+  await reopened.update(otherId, row=>({...row,best:{...row.best,mario3world:7,flick:3100}}));
+  assert.deepEqual((await reopened.ranking('mario3world')).map(p=>p.id), [otherId,id]);
+  assert.deepEqual((await reopened.ranking('flick')).map(p=>p.id), [id,otherId]);
   const deviceKey=randomBytes(32).toString('hex');
   async function reconnect() {
     const app = fixture(t,{progression:{env:{SQUADLINK_DATABASE_URL:url.href}}});

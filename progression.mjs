@@ -1,3 +1,4 @@
+import { arcadeBoards, reportedGames, validRecord, improvesRecord } from './public/arcade-boards.js';
 import { avatarOptions, defaultAvatar, normalizeAvatar, progressForXp, validAvatarOption } from './public/character-model.js';
 import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile, rm } from 'node:fs/promises';
@@ -8,16 +9,16 @@ const runLifetime = 120_000;
 const originalAvatarFields = ['skin','outfit','headgear'];
 const characterFields = ['species','gender','build','facialHair'];
 const gameNames = new Set(['reflex','sequence']);
-const boards = ['xp','reflex','sequence'];
+const boards = ['xp',...Object.keys(arcadeBoards)];
 const redisPrefix = '{squadlink}:v1:';
 const commitScript = `
 local current = redis.call('HGET', KEYS[1], ARGV[1])
 if (current or '') ~= ARGV[2] then return 0 end
 redis.call('HSET',KEYS[1],ARGV[1],ARGV[3])
-local row = cjson.decode(ARGV[3])
-if row.xp > 0 then redis.call('ZADD',KEYS[2],-row.xp,ARGV[1]) end
-if row.best.reflex ~= cjson.null then redis.call('ZADD',KEYS[3],row.best.reflex,ARGV[1]) end
-if row.best.sequence > 0 then redis.call('ZADD',KEYS[4],-row.best.sequence,ARGV[1]) end
+for i = 2, #KEYS do
+  local score = tonumber(ARGV[i + 2])
+  if score then redis.call('ZADD', KEYS[i], score, ARGV[1]) end
+end
 return 1`;
 const rankingScript = `
 local ids = redis.call('ZRANGE', KEYS[1], 0, 29)
@@ -51,8 +52,13 @@ function redisStore(url,token) {
         const row = raw && JSON.parse(raw);
         const next = transform(row);
         if (row === next) return row;
-        const committed = await command(['EVAL',commitScript,4,profiles,...boards.map(b=>redisPrefix+b),
-          id,raw || '',JSON.stringify(next)]);
+        const scores = boards.map(game=>{
+          const score = game === 'xp' ? next.xp : next.best[game];
+          if (!(score > 0)) return '';
+          return arcadeBoards[game]?.order === 'min' ? score : -score;
+        });
+        const committed = await command(['EVAL',commitScript,boards.length+1,profiles,...boards.map(b=>redisPrefix+b),
+          id,raw || '',JSON.stringify(next),...scores]);
         if (committed === 1) return next;
       }
       throw Error('Cambios simultáneos en el perfil.');
@@ -101,7 +107,7 @@ function localStore(file,scope) {
     ranking(board) {
       return exclusive(()=>{
         const value = row => board === 'xp' ? row.xp : row.best[board];
-        const sign = board === 'reflex' ? 1 : -1;
+        const sign = arcadeBoards[board]?.order === 'min' ? 1 : -1;
         return Object.values(rows).filter(row=>value(row)>0)
           .sort((a,b)=>sign*(value(a)-value(b)) || a.id.localeCompare(b.id)).slice(0,30);
       });
@@ -184,6 +190,16 @@ export function createProgression({reject,throttle,now=Date.now,env=process.env,
           for (const key of fields) avatar[key] = data[key];
           return {...row,avatar,characterCreated:row.characterCreated === true || configured,revision:row.revision+1};
         }));
+      }
+      if (action === 'record') {
+        const {game,value} = data;
+        if (!reportedGames.includes(game) || !validRecord(game,value))
+          reject(400,'La marca no corresponde al juego o está fuera de su rango.');
+        // Taking the best inside the storage transaction handles retries, concurrent
+        // tabs and submissions from an older game arriving after a better result.
+        return payload(await change(row=>improvesRecord(game,value,row.best[game])
+          ? {...row,best:{...row.best,[game]:value},revision:row.revision+1}
+          : row));
       }
       if (action === 'ranking') {
         const board = data.game ?? 'xp';
