@@ -17,7 +17,7 @@ function savePrefs(value){
  fs.renameSync(file+'.tmp',file);
 }
 const blank=()=>({joined:false,name:'',nickname:'',code:'',mic:false,canMic:false,members:[]});
-let prefs={server:base,low:true},state=blank(),home,view,hostSection='home',action,ready=false,visit=0,closing=false,microphone=false;
+let prefs={server:base,low:true,integratedLobby:!mac},state=blank(),home,view,hostSection='home',action,ready=false,visit=0,closing=false,microphone=false;
 let hostView, radioState='empty';
 let detectTimer,scanning=false,generation=0,detected=null;
 const locked=app.requestSingleInstanceLock();
@@ -32,7 +32,7 @@ protocol.registerSchemesAsPrivileged([{scheme:'squad',privileges:{standard:true,
 app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
 const options={contextIsolation:true,nodeIntegration:false,sandbox:true,preload:path.join(__dirname,'preload.cjs'),partition:'persist:squadlink-modern'};
 function reveal(w){if(w&&!w.isDestroyed()){if(w.isMinimized())w.restore();w.show();w.focus();}}
-function snapshot(){return {...state,...prefs,radioState,hostSection:action?'workspace':hostSection,version:app.getVersion(),update:updater.snapshot()};}
+function snapshot(){return {...state,...prefs,canChooseLobby:mac,radioState,hostSection:action?'workspace':hostSection,version:app.getVersion(),update:updater.snapshot()};}
 function hostContents(){return hostView?.webContents;}
 function callLobbyState(){return {...state,radioState,low:prefs.low};}
 function publish(){
@@ -166,7 +166,7 @@ function ensureView(){
 }
 function open(key,code){
  if(updater.snapshot().phase==='installing'&&!state.joined)return;
- if(key==='home' && state.joined && prefs.low)key='call-home';
+ if(key==='home' && state.joined && prefs.low && prefs.integratedLobby)key='call-home';
  else if(key==='home' || key==='preferences'){showHost(key);return;}
  else if(!Object.hasOwn(titles,key))throw Error('Opción desconocida.');
  if(state.joined&&['create','join'].includes(key))key='lobby';
@@ -243,6 +243,7 @@ ipcMain.handle('call',(e,key)=>{
 ipcMain.handle('prefs',(e,data)=>{
  hostPage(e);let next={...prefs};
  if(typeof data?.low==='boolean')next.low=data.low;
+ if(mac && typeof data?.integratedLobby==='boolean')next.integratedLobby=data.integratedLobby;
  if(typeof data?.server==='string'){next.server=parseServer(data.server);if(next.server!==prefs.server&&state.joined)throw Error('Sal de la llamada antes de cambiar de servidor.');}
  savePrefs(next);
  if(next.server!==prefs.server){disposeVoice();state=blank();microphone=false;}
@@ -297,8 +298,8 @@ for(const [channel,method] of [['updates','check'],['download','download'],['can
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.webp':'image/webp','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon'};
 const csp="default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data:;connect-src 'self';media-src 'self' blob: https:;object-src 'none';frame-src 'self';base-uri 'none';form-action 'self'";
 async function start(){
- try{const saved=JSON.parse(fs.readFileSync(prefsFile(),'utf8'));prefs={server:parseServer(saved.server),low:saved.low!==false,hasPlayer:saved.hasPlayer===true};}catch{}
- // Electron 45 initializes the default session on the first streamed response.
+ try{const saved=JSON.parse(fs.readFileSync(prefsFile(),'utf8'));prefs={server:parseServer(saved.server),low:saved.low!==false,integratedLobby:!mac || saved.integratedLobby===true,hasPlayer:saved.hasPlayer===true};}catch{}
+ // Electron 45 uses the default session when reading Blob uploads in the custom protocol.
  // Warm it before creating a view so Chromium can discard its spare renderer at startup.
  void session.defaultSession;
  const ses=session.fromPartition(options.partition);

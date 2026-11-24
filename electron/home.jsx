@@ -50,6 +50,10 @@ function App(){
          {[[true,'Bajo consumo'],[false,'Experiencia completa']].map(([value,label])=>
            <button key={label} aria-pressed={state.low===value} onClick={()=>run(()=>api.prefs({low:value}))}>{label}</button>)}
        </div>
+       {state.canChooseLobby && state.low && <label className="lobby-memory-choice">
+         <input type="checkbox" checked={state.integratedLobby} onChange={e=>run(()=>api.prefs({integratedLobby:e.target.checked}))}/>
+         <span>Usar menos memoria con el lobby visible<small>Si sueles jugar con Squadlink minimizado, deja esta opción desactivada.</small></span>
+       </label>}
      </section>
      <section>
        <h2><label htmlFor="server-address">Servidor del grupo</label></h2>

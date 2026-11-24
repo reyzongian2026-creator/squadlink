@@ -72,10 +72,13 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  diagnostics(home);app.context().on('page',diagnostics);
  const capture=path.resolve(__dirname,'../artifacts/capturas');fs.mkdirSync(capture,{recursive:true});
  await home.getByRole('button',{name:'Crear sala',exact:true}).waitFor();
- assert.equal((await home.evaluate(()=>window.squad.state())).server,'http://127.0.0.1:4179');
+ const initial=await home.evaluate(()=>window.squad.state());
+ assert.equal(initial.server,'http://127.0.0.1:4179');
+ let integrated=process.platform!=='darwin';
+ assert.equal(initial.integratedLobby,integrated,'Debe migrar las preferencias anteriores según la plataforma');
  await home.getByText('Todavía no hay salas públicas.').waitFor();
  await home.screenshot({path:path.join(capture,'Inicio-Moderno.png')});
- async function memory(label){
+ async function memory(label,modeLabel){
   // Electron reports working-set KiB per process. Keep timing and sample size
   // identical to the .22 benchmark, including all native helper processes.
   const samples=[];
@@ -85,7 +88,9 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    if(i<4)await delay(180);
   }
   const sorted=[...samples].sort((a,b)=>a-b);
-  console.log('RAM '+label+' MiB: '+samples[0].toFixed(1)+'; mínima '+sorted[0].toFixed(1)+'; mediana '+sorted[2].toFixed(1));
+  const summary=' MiB: '+samples[0].toFixed(1)+'; mínima '+sorted[0].toFixed(1)+'; mediana '+sorted[2].toFixed(1);
+  console.log('RAM '+label+summary);
+  if(modeLabel)console.log('Perfil de memoria '+modeLabel+summary);
  }
  await memory('inicio');console.log('Inicio React correcto');
  // Only GitHub requests are intercepted, in the isolated packaged app's main process.
@@ -173,8 +178,13 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await checkWindow(true);
  await space.getByText('Detalles de sala',{exact:true}).click();
  await space.waitForFunction(()=>/^[A-Z0-9]{6}$/.test(document.querySelector('#room-code')?.textContent));
- async function openCallHome(){
-  const same=await navigate(space,'Lobby de voz','app');
+ async function openCallHome(from=space){
+  const same=await navigate(from,'Lobby de voz',integrated?'app':'home');
+  if(!integrated){
+   assert.notEqual(same,space,'El lobby predeterminado de Mac debe liberar su proceso al minimizar');
+   await same.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
+   return same;
+  }
   assert.equal(same,space,'El lobby en llamada debe compartir su motor de voz');
   await same.waitForFunction(()=>document.body.dataset.workspace==='call-home',null,{polling:100});
   await same.locator('#call-home-panel').getByRole('button',{name:'Mi sala',exact:true}).waitFor();
@@ -188,7 +198,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  }
  const code=await space.locator('#room-code').innerText();assert.match(code,/^[A-Z0-9]{6}$/);
  home=await openCallHome();
- await checkWindow(true);
+ await checkWindow(integrated);
  await home.getByRole('button',{name:/Escuadra Lima.*Tu sala/}).waitFor();
  await home.getByRole('button',{name:'Activar micrófono',exact:true}).click();
  await home.getByRole('button',{name:'Silenciar',exact:true}).waitFor();
@@ -198,14 +208,15 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await peer.locator('#directory-list [data-room-code="'+code+'"]').click();await peer.locator('#nickname').fill('Amigo');await peer.locator('#code').fill(code);await peer.locator('#submit-entry').click();await peer.locator('#mic').click();
  const sample=p=>p.evaluate(async()=>{for(const pc of window.testPeers){for(const stat of (await pc.getStats()).values()){if(stat.type==='inbound-rtp'&&stat.kind==='audio')return stat.totalAudioEnergy||0;}}return 0;});
  async function audio(previous){let values;for(let i=0;i<100;i++){values=await Promise.all([sample(space),sample(peer)]);if(values.every((v,j)=>v>previous[j]))return values;await delay(250);}throw Error('Falta voz bidireccional '+JSON.stringify(values));}
- const first=await audio([0,0]);await checkWindow(true);await memory('voz');
+ const first=await audio([0,0]);await checkWindow(integrated);await memory('voz',integrated?null:'lobby macOS predeterminado');
  const beforeRoom=await windowState();
  const callView=beforeRoom.views.find(v=>v.host==='app');
  assert.ok(callView?.pid>0);
- await onlyCallRenderer(callView,externalLobby);
+ if(integrated)await onlyCallRenderer(callView,externalLobby);
+ const lobbyBeforeRoom=beforeRoom.views.find(v=>v.host==='home')||externalLobby;
  await openCurrentRoom();
  await memory('voz con sala visible');
- await onlyCallRenderer(callView,externalLobby);
+ await onlyCallRenderer(callView,lobbyBeforeRoom);
  await testVoiceQuality(space,peer);
  const {musicSmoke,assertRadioShortcut}=await import('../test/support/music-browser.mjs');
  async function radioAndVoice() {
@@ -328,27 +339,48 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   await requireProgress(await radioAndVoice(),'Radio y voz en el lobby');
   const inlineLobby=space.locator('#call-home-panel');
-  await inlineLobby.waitFor({state:'visible'});
-  await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
-  try{
-   await waitMinimized(true);
-   await requireProgress(await radioAndVoice(),'Radio y voz con el lobby minimizado');
-   await memory('voz y radio con lobby minimizado');
-   await onlyCallRenderer(callView,externalLobby);
-   await checkCallSurface(false);
-   await inlineLobby.waitFor({state:'detached',timeout:5000});
-   await backgroundShortcut('lobby minimizado');
-  }finally{
-   await app.evaluate(({BaseWindow})=>{const win=BaseWindow.getAllWindows()[0];win.restore();win.show();win.focus();});
-   await waitMinimized(false);
+  async function minimizeCallLobby(label){
+   const previousHome=home;
+   const previousRenderer=integrated?externalLobby:(await windowState()).views.find(v=>v.host==='home');
+   if(integrated)await inlineLobby.waitFor({state:'visible'});
+   await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
+   try{
+    await waitMinimized(true);
+    await requireProgress(await radioAndVoice(),'Radio y voz con el lobby minimizado');
+    await memory(label,integrated?null:'lobby macOS predeterminado minimizado');
+    await onlyCallRenderer(callView,previousRenderer);
+    await checkCallSurface(false);
+    await inlineLobby.waitFor({state:'detached',timeout:5000});
+    await backgroundShortcut('lobby minimizado');
+   }finally{
+    await app.evaluate(({BaseWindow})=>{const win=BaseWindow.getAllWindows()[0];win.restore();win.show();win.focus();});
+    await waitMinimized(false);
+   }
+   home=await surface(integrated?'app':'home');
+   if(integrated){
+    assert.equal(home,space,'Restaurar el lobby integrado debe conservar el motor de voz');
+    await checkCallSurface(true);
+    await home.waitForFunction(()=>document.body.dataset.workspace==='call-home',null,{polling:100});
+    await inlineLobby.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
+   }else{
+    assert.notEqual(home,previousHome,'Restaurar debe recrear el lobby externo');
+    await checkWindow(false);
+   }
+   await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
+   await requireProgress(await radioAndVoice(),'Radio y voz al restaurar el lobby');
   }
-  home=await surface('app');
-  assert.equal(home,space,'Restaurar el lobby integrado debe conservar su renderer');
-  await checkCallSurface(true);
-  await home.waitForFunction(()=>document.body.dataset.workspace==='call-home',null,{polling:100});
-  await inlineLobby.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
-  await requireProgress(await radioAndVoice(),'Radio y voz al restaurar el lobby');
-  await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
+  await minimizeCallLobby('voz y radio con lobby minimizado');
+  if(!integrated){
+   home=await navigate(home,'Ajustes','home');
+   const preference=home.getByRole('checkbox',{name:/Usar menos memoria con el lobby visible/});
+   assert.equal(await preference.isChecked(),false);
+   await preference.check();
+   await home.waitForFunction(async()=>(await window.squad.state()).integratedLobby);
+   assert.equal(JSON.parse(fs.readFileSync(path.join(profile,'desktop.json'),'utf8')).integratedLobby,true);
+   integrated=true;
+   home=await openCallHome(home);
+   await minimizeCallLobby('voz y radio con lobby integrado opcional minimizado');
+  }
   await assertRadioShortcut(space,peer,()=>home.keyboard.press('Alt+Shift+KeyR'),'teclado Chromium en el lobby de escritorio');
   const lobbyRadio=()=>home.getByRole('button',{name:/^(Silenciar mi radio|Reanudar mi radio)$/});
   let stop=true;
