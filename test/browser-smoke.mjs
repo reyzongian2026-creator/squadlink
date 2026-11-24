@@ -344,7 +344,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     await a.frameLocator('.doom-player').locator('title').waitFor({state:'attached'});
     assert.equal(doomRequests,1);
     await a.getByRole('button',{name:'Cerrar minijuego'}).click();
-    assert.equal(await a.locator('.doom-player').count(),0);
+    await a.locator('.doom-player').waitFor({state:'detached'});
     await a.locator('[data-game="three"]').click();
     await a.locator('.three-cell').first().click();
     assert.equal(await a.locator('.three-cell:disabled').count(),2);
