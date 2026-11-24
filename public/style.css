@@ -1609,3 +1609,9 @@ body.desktop-shell #social .section-head { position: absolute; width: 1px; heigh
   #friends .social-row { grid-template-columns: 36px minmax(0,1fr); }
   #friends .social-row .row-actions { grid-column: 2; }
 }
+
+.arcade-category { margin: 1rem 0 .55rem; font-size: 1rem; }
+.art-flick,.art-precision,.art-merge { color:#fff; font:700 1.65rem system-ui; letter-spacing:.12em; }
+.art-flick { background:linear-gradient(120deg,#233953,#414775); }
+.art-precision { background:linear-gradient(120deg,#214244,#285d52); }
+.art-merge { background:linear-gradient(120deg,#4b3356,#724865); }

@@ -62,6 +62,13 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  async function audio(previous){let values;for(let i=0;i<100;i++){values=await Promise.all([sample(space),sample(peer)]);if(values.every((v,j)=>v>previous[j]))return values;await delay(250);}throw Error('Falta voz bidireccional '+JSON.stringify(values));}
  const first=await audio([0,0]);await memory('voz');
  await home.getByRole('button',{name:'Arcade',exact:true}).click();await space.getByRole('button',{name:/Reflejos/}).waitFor();
+ for(const id of ['flick','precision','merge']){
+  await space.locator('[data-game="'+id+'"]').click();
+  await space.locator('#game-mount .practice-status').waitFor();
+  if(id==='merge')await space.getByRole('button',{name:'Izquierda'}).click();
+  else {await space.getByRole('button',{name:'Empezar',exact:true}).click();await space.getByRole('button',{name:'Blanco'}).click();}
+  await space.getByRole('button',{name:'Cerrar minijuego'}).click();
+ }
  for(const [label,section] of [['Amigos','friends'],['Mi personaje','player'],['Clasificación','ranking'],['Guía de sala','guide'],['Salas','rooms']]){
   await space.getByRole('button',{name:label,exact:true}).click();
   await space.waitForFunction(key=>document.body.dataset.workspace===key,section);

@@ -642,10 +642,12 @@ for (const button of document.querySelectorAll("[data-game]")) {
     $("game-mount").textContent = "Cargando juego…";
     $("game-dialog").showModal();
     try {
-      const { openArcade } = await import("./arcade.js");
-      if (desktopClient) await openDesktopProgress();
+      const practice = button.hasAttribute('data-practice');
+      const launch = practice ? (await import('./arcade-practice.js')).openPractice
+        : (await import('./arcade.js')).openArcade;
+      if (!practice && desktopClient) await openDesktopProgress();
       if (request === gameRequest && $("game-dialog").open)
-        cleanupGame = openArcade(button.dataset.game, $("game-mount"), loadout);
+        cleanupGame = launch(button.dataset.game, $("game-mount"), loadout);
     } catch {
       if (request === gameRequest)
         $("game-mount").textContent =
