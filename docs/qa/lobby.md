@@ -35,3 +35,14 @@ La suite ampliada pasó 12/12. Diez salas mantuvieron simultáneamente cinco ses
 La suite local de Node pasó 21 de 21 casos en la revisión del módulo social. El recorrido adicional con Happy DOM y el HTTP de la app utilizó una sesión del anfitrión y otra independiente del visitante. Se aceptó la amistad en la interfaz, se verificó la actividad VALORANT del visitante, se confirmó que este seguía fuera mientras esperaba y que pudo acceder a la misma sala protegida tras la autorización.
 
 El script de Chromium amplía el recorrido existente de código manual y audio sintético con tres perfiles, dos amistades confirmadas, estado y actividad, autorización por el anfitrión, persistencia tras recarga y diagnóstico de ruta. Comprueba además que desactivar la reducción de ruido en el navegador persiste al reabrir los controles. La prueba contra localhost en el entorno de desarrollo no llegó a arrancar por el bloqueo del puerto. Los resultados de Chromium de un runner deben vincularse a la revisión que realmente se ejecutó.
+
+## Calidad de voz en 0.5.0-preview.14
+
+Se midió el audio recibido después de la codificación y decodificación WebRTC a 48 kHz. Cada llamada conectó la aplicación instalada con un segundo participante de navegador. Se enviaron en ambos sentidos un tono, silencio, ruido sintético continuo a −38 dBFS RMS, una vocal sintética sola y con ruido, y una señal fuerte.
+
+| Ejecución | Atenuación del ruido entre frases frente al filtro desactivado | Mayor pico recibido con la señal fuerte |
+| --- | --- | --- |
+| [Windows x64](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45332894401) | 24,10 a 24,13 dB | −2,29 dBFS |
+| [macOS Apple Silicon](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45332894322) | 23,99 a 24,10 dB | −2,30 dBFS |
+
+El tono cubrió el 100 % de las ventanas medidas en cada sentido. Ninguna muestra alcanzó el umbral de saturación de la prueba (magnitud PCM ≥ 0,99). Las mediciones corresponden a señales de referencia. El ruido acústico del cuarto, la interfaz de audio y los altavoces de los jugadores requieren una escucha en sus equipos.

@@ -50,6 +50,7 @@ Para uso permanente quedan por definir el alojamiento continuo del relay y la co
 | Síntoma | Qué revisar |
 | --- | --- |
 | El código de sala no funciona | Comprueba que ambos estén en el mismo servidor, que quede un cupo y que el anfitrión siga en la sala o haya otro miembro conectado. Tras un reinicio hay que crear una sala nueva. |
+| Se oye un siseo entre frases o las voces llegan muy fuertes | Ambos jugadores pueden abrir **Ajustes → Dispositivos de audio → Restablecer volumen y filtros de voz**. Esto deja la reducción de ruido activa, la ganancia automática desactivada y el volumen de escucha al 70 %. Cada uno conserva el micrófono y la salida elegidos. |
 | Entran a la sala, pero no se oyen | Comprueben el permiso del micrófono, los dispositivos elegidos y el diagnóstico de conexión. Si en redes separadas falla, revisen la disponibilidad del relay. |
 
 ## Desarrollo, pruebas y operación
