@@ -19,7 +19,11 @@ export async function domSmoke(Window) {
     }
     let offline = false, expiredLeave = false;
     let expiredSocialSession = false, expiredSession = false;
+    let holdSession;
+    let holdDirectory;
+    let lastLeave;
     globalThis.fetch = async (url, options) => {
+      if (url === '/api/leave') lastLeave = JSON.parse(options.body);
       if (expiredLeave && url === '/api/leave')
         return Response.json({error:'Sesión caducada'}, {status:401});
       if (offline) throw new TypeError("sin conexión simulada");
@@ -30,10 +34,26 @@ export async function domSmoke(Window) {
       const res = await player.request(url, options?.body && JSON.parse(options.body));
       const chunks = [];
       for await (const chunk of res) chunks.push(chunk);
+      if (holdSession && url === '/api/session' && !options?.method) {
+        const hold = holdSession;
+        holdSession = null;
+        hold.received();
+        await hold.untilReleased;
+      }
+      if (holdDirectory && url === '/api/directory' && options?.method === 'POST') {
+        const hold = holdDirectory;
+        holdDirectory = null;
+        hold.received();
+        await hold.untilReleased;
+      }
       return new Response(Buffer.concat(chunks), { status: res.statusCode });
     };
     // Server-Sent Events delivery is exercised separately by the HTTP suite.
-    globalThis.EventSource = class extends win.EventTarget { close() {} };
+    let roomEvents;
+    globalThis.EventSource = class extends win.EventTarget {
+      constructor() { super(); roomEvents = this; }
+      close() {}
+    };
     const {onConfirmedGuest} = await import('../public/app.js');
     let guestSignals = 0;
     onConfirmedGuest(() => guestSignals++);
@@ -53,6 +73,7 @@ export async function domSmoke(Window) {
     el('entry-form').requestSubmit();
     await until(() => !el('mic').disabled && !el('room').hidden && !el('entry').open);
     const code = el('room-code').textContent;
+    const initialVisit = (await player.hit('session')).data.room.members[0].visitId;
     assert.match(code, /^[A-Z0-9]{6}$/);
     assert.equal(el('room-name').textContent, 'Sala QA');
     assert.match(el('privacy').textContent, /clave/);
@@ -87,6 +108,23 @@ export async function domSmoke(Window) {
     el('entry-form').requestSubmit();
     await until(() => !el('entry').open);
     assert.ok(!(await outsider.hit('directory')).data.rooms.some(item => item.code === code));
+
+    // A different window updates the directory after our edit reaches the server,
+    // while the first window is still waiting for its HTTP response.
+    let received, release;
+    const editReceived = new Promise(resolve => { received = resolve; });
+    holdDirectory = {received, untilReleased:new Promise(resolve => { release = resolve; })};
+    el('edit-room-fields').click();
+    el('directory-description').value = 'Primera edición';
+    el('entry-form').requestSubmit();
+    await editReceived;
+    const recent = await player.hit('directory', {published:false, description:'Última edición'});
+    assert.equal(recent.status, 200);
+    roomEvents.dispatchEvent(new win.MessageEvent('room', {data:JSON.stringify(recent.data.room)}));
+    assert.equal(el('room-description').textContent, 'Última edición');
+    release();
+    await until(() => !el('submit-entry').disabled);
+    assert.equal(el('room-description').textContent, 'Última edición', 'Una respuesta antigua no revierte el evento más reciente');
 
     // The owner exercises the UI, while a separately authenticated client signs its own requests.
     await until(() => /^[A-F0-9]{16}$/.test(el('friend-id').textContent));
@@ -134,9 +172,24 @@ export async function domSmoke(Window) {
     el('leave').click();
     assert.ok(el('mic').disabled);
     await until(() => el('leave').textContent === 'Reintentar salida');
+    assert.equal(lastLeave.room, code);
+    assert.equal(lastLeave.visitId, initialVisit);
     offline = false;
     el('leave').click();
     await until(() => el('room').hidden);
+    const preflight = Promise.withResolvers(), resume = Promise.withResolvers();
+    holdSession = {received:preflight.resolve, untilReleased:resume.promise};
+    el('create').click();
+    el('entry-form').requestSubmit();
+    await preflight.promise;
+    document.querySelector('[data-dismiss="entry"]').click();
+    el('create').click();
+    el('name').value = 'Borrador nuevo sin enviar';
+    resume.resolve();
+    await until(() => !el('submit-entry').disabled);
+    assert.ok(el('entry').open && el('room').hidden);
+    assert.equal((await player.hit('session')).data.room, null, 'Cancelar antes de enviar evita la creación al volver la red');
+    document.querySelector('[data-dismiss="entry"]').click();
     el('join').click();
     assert.equal(el('nickname').value, 'Prueba');
     const friend = f.player();

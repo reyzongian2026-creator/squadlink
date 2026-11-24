@@ -102,8 +102,12 @@ function roomView(room) {
   if (!room) return null;
   return {code:room.code, name:room.name, locked:Boolean(room.key), createdAt:room.createdAt, ownerId:room.ownerId,
     directory:room.directory, music:musicView(room),
-    members:[...room.members.values()].map(({id,nick,muted,joinedAt,social}) =>
-      ({id,nick,muted,joinedAt,game:social?.game || '',since:social?.since ?? null}))};
+    members:[...room.members.values()].map(({id,nick,muted,joinedAt,visitId,social}) =>
+      ({id,nick,muted,joinedAt,visitId,game:social?.game || '',since:social?.since ?? null}))};
+}
+function matchesVisit(session, {room, visitId}) {
+  return (room === undefined || room === session.room?.code) &&
+    (visitId === undefined || (session.room && visitId === session.visitId));
 }
 function writeEvent(stream, name, value) {
   if (stream.writableLength > 256 * 1024) { stream.destroy(); return; }
@@ -194,12 +198,15 @@ export function createServer(options = {}) {
     if (++limit.count > max) reject(429, 'Espera un minuto e inténtalo nuevamente.');
   }
   function leave(session) {
+    // An outstanding password check must not re-enter a session after it leaves.
+    session.exitVersion++;
     const room = session.room;
     if (!room) return;
     social.exiting(session, room);
     room.members.delete(session.id);
     if (room.ownerId === session.id) room.ownerId = room.members.keys().next().value ?? null;
     session.room = null;
+    session.visitId = null;
     session.pending = [];
     session.stream?.end();
     session.stream = null;
@@ -214,6 +221,7 @@ export function createServer(options = {}) {
     social.entering(session);
     session.room = room;
     session.joinedAt = clock();
+    session.visitId = randomUUID();
     session.muted = true;
     session.disconnected = Date.now();
     room.members.set(session.id, session);
@@ -238,6 +246,7 @@ export function createServer(options = {}) {
         reject(403, 'Origen no permitido.');
       const key = req.headers.cookie?.match(/(?:^|;\s*)squad_session=([\w-]{43})(?=;|$)/)?.[1];
       const session = sessions.get(key);
+      const exitVersion = session?.exitVersion;
       const route = req.method + ' ' + path;
       const ip = req.socket.remoteAddress || '';
       const data = req.method === 'POST' && path !== '/api/music/upload' ? await jsonBody(req) : null;
@@ -253,7 +262,7 @@ export function createServer(options = {}) {
         throttle('guest/' + ip, 60);
         if (sessions.size >= 10000) reject(429, 'Servidor ocupado.');
         const token = randomBytes(32).toString('base64url');
-        const guest = {id:randomUUID(), nick, room:null, stream:null, pending:[], used:Date.now()};
+        const guest = {id:randomUUID(), nick, room:null, exitVersion:0, stream:null, pending:[], used:Date.now()};
         sessions.set(token, guest);
         res.setHeader('Set-Cookie', 'squad_session=' + token + '; HttpOnly; Path=/; SameSite=Strict; Max-Age='
           + sessionLife / 1000 + (expected.startsWith('https:') ? '; Secure' : ''));
@@ -269,6 +278,7 @@ export function createServer(options = {}) {
       if (route === 'POST /api/directory') {
         const room = session.room;
         if (!room || room.ownerId !== session.id) reject(403, 'Solo el anfitrión puede editar la publicación.');
+        if (!matchesVisit(session, data)) reject(409, 'La estancia en la sala ha cambiado.');
         throttle('directory-edit/' + session.id, 40);
         const directory = directorySettings(data, room.directory);
         room.directory = directory;
@@ -283,6 +293,7 @@ export function createServer(options = {}) {
         const directory = directorySettings(data.directory);
         const salt = password ? randomBytes(16) : null;
         const key = password ? await hash(password, salt) : null;
+        if (session.exitVersion !== exitVersion) reject(409, 'Se canceló la creación de la sala.');
         if (session.room) return send(res, 200, {room:roomView(session.room)});
         let code;
         do { code = Array.from({length:6}, () => alphabet[randomInt(alphabet.length)]).join(''); }
@@ -304,11 +315,15 @@ export function createServer(options = {}) {
         if (!room) reject(404, 'No encontramos esa sala.');
         if (room.key && (!password || !timingSafeEqual(room.key, await hash(password, room.salt))))
           reject(403, 'Necesitas la clave correcta para entrar.');
+        if (session.exitVersion !== exitVersion) reject(409, 'Se canceló la entrada a la sala.');
         if (rooms.get(code) !== room) reject(404, 'La sala ya terminó.');
         enter(session, room);
         return send(res, 200, {room:roomView(room)});
       }
-      if (route === 'POST /api/leave') { leave(session); return send(res, 200, {ok:true}); }
+      if (route === 'POST /api/leave') {
+        if (matchesVisit(session, data)) leave(session);
+        return send(res, 200, {ok:true});
+      }
       const room = session.room;
       if (!room) reject(403, 'Entra a una sala primero.');
       if (path.startsWith('/api/music/')) {
@@ -332,6 +347,7 @@ export function createServer(options = {}) {
         return send(res, 200, {iceServers:servers});
       }
       if (route === 'POST /api/member') {
+        if (!matchesVisit(session, data)) reject(409, 'La estancia en la sala ha cambiado.');
         if (typeof data.muted !== 'boolean') reject(400, 'Estado de micrófono inválido.');
         if (session.muted !== data.muted) {
           session.muted = data.muted;

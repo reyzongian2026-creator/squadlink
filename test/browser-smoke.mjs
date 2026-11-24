@@ -1,6 +1,7 @@
 // Requires Playwright on the test machine only. A single process owns this isolated server.
 import assert from 'node:assert/strict';
 import { duckNesBrowser } from './duck-nes-browser.mjs';
+import {microphonePresenceSmoke} from './support/microphone-presence-browser.mjs';
 import {musicSmoke,leaveFailureSmoke} from './support/music-browser.mjs';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
@@ -317,6 +318,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
       'el reintento conserva el canal de eventos, conecta al miembro actual y mantiene el micro apagado');
     assert.equal(iceRequests, 2);
     await a.unroute('**/api/ice');
+    await microphonePresenceSmoke(a);
     for (const page of [a,b]) await page.getByRole('button', { name: 'Activar micrófono' }).click();
     async function inbound(page, minBytes = 0) {
       const deadline = Date.now() + 30000;

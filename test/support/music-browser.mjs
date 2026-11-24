@@ -1,3 +1,4 @@
+import {radioPendingBrowser} from '../radio-pending-browser.mjs';
 import assert from 'node:assert/strict';
 import {radioStations} from '../../public/radio-stations.js';
 
@@ -60,6 +61,7 @@ export async function assertRadioShortcut(listener,other,press,label) {
 }
 
 export async function musicSmoke(host,guest,whileBothListen) {
+  await radioPendingBrowser(guest);
   const panel=page=>page.locator('#room-music');
   const listen=(page,on)=>panel(page).locator('[data-listen][aria-pressed="'+on+'"]');
   await panel(host).getByText('Añadir música',{exact:true}).click();

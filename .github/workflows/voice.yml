@@ -36,7 +36,9 @@ jobs:
       - run: npm test
         env:
           SQUADLINK_TEST_DATABASE_URL: postgresql://postgres:local-ci-test@127.0.0.1:5432/squadlink_test
-      - run: npm install --no-save --package-lock=false playwright@1.56.1
+      - run: npm install --no-save --package-lock=false playwright@1.56.1 happy-dom@21.0.4
+      - run: node test/dom-smoke.mjs --run
+      - run: node --test test/radio-play-races.mjs
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
       - name: Wait for Render to serve this client revision
