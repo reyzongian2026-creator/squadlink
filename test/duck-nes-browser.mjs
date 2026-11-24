@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import {diagnosticCartridge} from './duck-nes-fixture.mjs';
 
 // Runs inside the browser smoke suite's isolated arcade page and uses no commercial ROM.
-export async function duckNesBrowser(page) {
-  await page.route('**/duck-nes.nes', route => route.fulfill({status:404,body:''}));
+export async function duckNesBrowser(page, installDiagnostics) {
+  const native = new URL(page.url()).protocol === 'squad:';
+  if (!native) await page.route('**/duck-nes.nes', route => route.fulfill({status:404,body:''}));
   await page.locator('[data-game="duck-nes"]').click();
   const panel = page.locator('.duck-nes');
   const input = panel.locator('input[type=file]');
@@ -34,19 +35,25 @@ export async function duckNesBrowser(page) {
   // Both desktop slots can start with a bundled diagnostic ROM on a fresh profile.
   const origin = new URL(page.url());
   if (origin.protocol !== 'squad:' && !['localhost','127.0.0.1','[::1]'].includes(origin.hostname)) return;
-  for (const game of ['duck-nes', 'mario3']) {
-    const route = '**/' + game + '.nes';
-    await page.route(route, request => request.fulfill({contentType:'application/octet-stream', body:Buffer.from(diagnosticCartridge())}));
-    try {
-      await page.locator('[data-game="' + game + '"]').click();
-      await page.locator('#game-mount [role=status]').filter({hasText:'Cartucho instalado'}).waitFor();
-      assert.ok(await input.isHidden());
-      await play.press('Enter');
-      await panel.getByRole('button', {name:'Pausar', exact:true}).waitFor();
-      await page.getByRole('button', {name:'Cerrar minijuego'}).click();
-      await panel.waitFor({state:'detached'});
-    } finally {
-      await page.unroute(route);
+  if (native && !installDiagnostics) return;
+  const removeDiagnostics = native ? await installDiagnostics(diagnosticCartridge()) : undefined;
+  try {
+    for (const game of ['duck-nes', 'mario3']) {
+      const route = '**/' + game + '.nes';
+      if (!native) await page.route(route, request => request.fulfill({contentType:'application/octet-stream', body:Buffer.from(diagnosticCartridge())}));
+      try {
+        await page.locator('[data-game="' + game + '"]').click();
+        await page.locator('#game-mount [role=status]').filter({hasText:'Cartucho instalado'}).waitFor();
+        assert.ok(await input.isHidden());
+        await play.press('Enter');
+        await panel.getByRole('button', {name:'Pausar', exact:true}).waitFor();
+        await page.getByRole('button', {name:'Cerrar minijuego'}).click();
+        await panel.waitFor({state:'detached'});
+      } finally {
+        if (!native) await page.unroute(route);
+      }
     }
+  } finally {
+    await removeDiagnostics?.();
   }
 }

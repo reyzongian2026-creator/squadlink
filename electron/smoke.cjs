@@ -137,7 +137,17 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
  await home.getByRole('button',{name:'Arcade',exact:true}).click();await space.locator('[data-game="reflex"]').waitFor();
  const {duckNesBrowser}=await import('../test/duck-nes-browser.mjs');
- await duckNesBrowser(space);
+ // Packaged Electron serves squad: from disk. Exercise that same handler on the
+ // temporary CI installation with generated diagnostic cartridges only.
+ const installDiagnostics = async bytes => {
+  const dir=path.join(await app.evaluate(({app})=>app.getAppPath()),'cartridges');
+  const relative=path.relative(fs.realpathSync(process.env.RUNNER_TEMP),fs.realpathSync(path.dirname(dir)));
+  assert.ok(relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+  await fs.promises.mkdir(dir);
+  for(const name of ['mario3.nes','duck-nes.nes']) await fs.promises.writeFile(path.join(dir,name),bytes,{flag:'wx'});
+  return ()=>fs.promises.rm(dir,{recursive:true});
+ };
+ await duckNesBrowser(space,process.env.GITHUB_ACTIONS && process.env.RUNNER_TEMP ? installDiagnostics : undefined);
  for(const id of ['flick','precision','merge','three','ducks','doom']){
   await space.locator('[data-game="'+id+'"]').click();
   await space.locator('#game-mount .practice-status').waitFor();
