@@ -24,7 +24,9 @@ Esta sección corresponde a la compilación de prueba **0.5.0-preview.13** para 
 
 ### Elegir el rostro y guardar la apariencia
 
-Abre **Mi personaje**. Cada especie (humano, humanoide, alienígena y robot) tiene tres rostros. Pulsa **Hombre**, **Mujer** o **Especie no identificada** para ver el cambio al instante. Puedes combinar cualquiera con la silueta, el vello facial y los accesorios que elijas. Pulsa **Guardar apariencia** para conservar la selección al cerrar la app. La primera vez, el botón te permite crear el personaje o elegir tu apodo.
+Abre **Mi personaje**. Cada especie (humano, humanoide, alienígena y robot) tiene tres rostros. Pulsa **Hombre**, **Mujer** o **Especie no identificada** para ver el cambio al instante. Puedes combinar cualquiera con la silueta, el vello facial y los accesorios que elijas. Mientras el editor muestra **Cambios sin guardar**, la selección es una vista previa. Pulsa **Guardar apariencia** para conservarla al cerrar la app. La primera vez, el botón te permite crear el personaje o elegir tu apodo.
+
+![Los doce rostros de Squadlink organizados por especie e identidad](docs/media/rostros-preview-13.png)
 
 En **Evoluciones** puedes consultar las siete etapas. Reflejos y Memoria conceden XP. Cada 100 XP se sube un nivel hasta el 50, que se alcanza con 4.900 XP. El aura dorada aparece en el nivel 10, la azul en el 30 y la prismática en el 50.
 
