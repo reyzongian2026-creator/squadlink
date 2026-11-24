@@ -52,3 +52,21 @@ test('un corte de 200 ms baja la cobertura y no altera la altura medida del tono
   assert.ok(Math.abs(result.crossingHz-900)<2);
   assert.throws(()=>quality.verify('tone',result,900),/Huecos/);
 });
+test('la medición verifica +6 y +12 dB en el tono suave y detecta una ganancia que no se aplica',()=>{
+  const input=samples('soft',quality.reference(500));
+  const baseline=quality.summarize(input,rate,500);
+  assert.ok(Math.abs(baseline.rmsDbfs+26.42)<0.05);
+  for (const db of [6,12]) {
+    const output=Float32Array.from(input,value=>value*10**(db/20));
+    assert.ok(Math.abs(quality.verifyGain(baseline,quality.summarize(output,rate,500),db)-db)<=0.01);
+  }
+  assert.throws(()=>quality.verifyGain(baseline,baseline,6),/Ganancia recibida/);
+  assert.equal(quality.verifyGain(baseline,baseline,0),0);
+});
+test('duplicar el volumen local equivale a +6,02 dB y se detecta si también aumenta el RTP',()=>{
+  const input=samples('soft',quality.reference(900));
+  const before=quality.summarize(input,rate,900);
+  const after=quality.summarize(Float32Array.from(input,sample=>2*sample),rate,900);
+  assert.ok(Math.abs(quality.verifyGain(before,after,20*Math.log10(2),900)-6.02)<=0.01);
+  assert.throws(()=>quality.verifyGain(before,after,0,900),/Ganancia recibida/);
+});

@@ -7,9 +7,11 @@ function reference(frequency) {
   const tau = 2*Math.PI/48000;
   const hissAmplitude = Math.sqrt(3) * 10**(-38/20);
   const sine = Float32Array.from({length:960}, (_, i) => 0.15 * Math.sin(2 * Math.PI * frequency * i / 48000));
+  const soft = Float32Array.from(sine, sample => 0.45*sample);
   const block = new Float32Array(sine.length);
   return mode => {
     if (mode === 'tone') return sine;
+    if (mode === 'soft') return soft;
     if (mode === 'silence') return block.fill(0);
     for (let i = 0; i < block.length; i++) {
       seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
@@ -33,6 +35,7 @@ function reference(frequency) {
 // frame, even when the test page is in the background. Only the remote WebRTC
 // receiver plays the signal; the generator is not connected to local speakers.
 async function microphone(frequency, generator) {
+  window.qaMicOpens = (window.qaMicOpens || 0) + 1;
   const ctx = new AudioContext({sampleRate:48000});
   const destination = ctx.createMediaStreamDestination();
   destination.channelCount = 1;
@@ -152,10 +155,16 @@ function verify(mode, result, hz, bypass) {
   }
 }
 
-async function capture(frequency) {
+async function capture(probe) {
+  const frequency = typeof probe === 'number' ? probe : probe.frequency;
   const pc = window.testPeers.find(connection => connection.connectionState === 'connected');
-  const track = pc?.getReceivers().find(receiver => receiver.track.kind === 'audio')?.track;
-  if (!track) throw Error('Falta la pista entrante en la llamada de prueba.');
+  let track = pc?.getReceivers().find(receiver => receiver.track.kind === 'audio')?.track;
+  if (probe.playback) {
+    const player = window.qaPlayback;
+    if (!player || player.paused || player.muted || player.volume !== 1) throw Error('El reproductor de voz debe estar activo al 100 %.');
+    track = player.srcObject?.getAudioTracks()[0];
+  }
+  if (!track) throw Error('Falta la pista de voz solicitada en la llamada de prueba.');
   const ctx = new AudioContext({sampleRate:48000});
   const source = ctx.createMediaStreamSource(new MediaStream([track]));
   // ScriptProcessor runs in the test document and needs no worklet URL or CSP change.
@@ -186,6 +195,16 @@ async function capture(frequency) {
   }
 }
 
+function observePlayer() {
+  // VoiceRoom uses a detached audio element. Observe its real source and leave the native setter intact.
+  const prototype = HTMLMediaElement.prototype;
+  const descriptor = Object.getOwnPropertyDescriptor(prototype,'srcObject');
+  Object.defineProperty(prototype,'srcObject',{...descriptor,set(stream) {
+    descriptor.set.call(this,stream);
+    if (this instanceof HTMLAudioElement && stream?.getAudioTracks().length) window.qaPlayback = this;
+  }});
+}
+
 function observeCleaner() {
   const Native = window.AudioWorkletNode;
   if (!Native) return;
@@ -198,7 +217,7 @@ function observeCleaner() {
 }
 
 function fixtureSetup(hz) {
-  return '('+observeCleaner.toString()+')();\nwindow.qaMicrophone = () => (' + microphone.toString() +
+  return '('+observePlayer.toString()+')();('+observeCleaner.toString()+')();\nwindow.qaMicrophone = () => (' + microphone.toString() +
     ')(' + hz + ', ' + reference.toString() + ');\nwindow.qaSummarize = ' + summarize.toString() + ';\n';
 }
 
@@ -232,4 +251,146 @@ async function testVoiceQuality(electron, peer) {
   await Promise.all(pages.map(page => page.evaluate(() => { window.qaSetSignal('tone'); })));
 }
 
-module.exports = {reference, summarize, verify, fixtureSetup, testVoiceQuality};
+function verifyGain(baseline,reading,targetDb,hz=500) {
+  const toneChange = reading.referenceDbfs - baseline.referenceDbfs;
+  const rmsChange = reading.rmsDbfs - baseline.rmsDbfs;
+  assert.ok(Math.abs(toneChange-targetDb)<=1.75 && Math.abs(rmsChange-targetDb)<=2,
+    'Ganancia recibida fuera de tolerancia: '+JSON.stringify({targetDb,toneChange,rmsChange,reading}));
+  assert.equal(reading.clippedSamples,0);
+  assert.ok(reading.coveragePct>=90 && reading.longestGapMs<=60,'Huecos en el tono suave: '+JSON.stringify(reading));
+  assert.ok(Math.abs(reading.crossingHz-hz)<=30,'Frecuencia incorrecta: '+JSON.stringify(reading));
+  return Number(toneChange.toFixed(2));
+}
+
+function captureIdentity() {
+  const pc = window.testPeers.find(item => item.connectionState === 'connected');
+  const sender = pc?.getSenders().find(item => item.track?.kind === 'audio');
+  if (!sender || !window.qaRawTrack || window.qaRawTrack.readyState !== 'live' || sender.track.readyState !== 'live') {
+    throw Error('No hay una pista activa para comprobar el cambio de ganancia.');
+  }
+  return {micOpens:window.qaMicOpens, raw:window.qaRawTrack.id, outgoing:sender.track.id,
+    connectionIndex:window.testPeers.indexOf(pc), connections:window.testPeers.length};
+}
+
+async function testManualGain(electron,peer) {
+  const slider = electron.getByRole('slider',{name:/Ganancia de mi micrófono/i});
+  const listen = electron.getByRole('slider',{name:/Volumen de las voces que escucho/i});
+  await slider.waitFor();
+  assert.equal(await slider.inputValue(),'0','Una nueva instalación debe iniciar en 0 dB.');
+  assert.equal(await slider.getAttribute('max'),'18');
+  const listenBefore = await listen.inputValue();
+  const identity = await electron.evaluate(captureIdentity);
+  const step = Number(await slider.getAttribute('step') || 1);
+  assert.ok(step>0 && 6%step===0,'El deslizador debe permitir seleccionar +6 dB.');
+  async function select(target) {
+    const current = Number(await slider.inputValue());
+    const direction = target>current ? 1 : -1;
+    for (let value=current; value!==target;) {
+      if (target===0 || target===18) {
+        value=target;
+        await slider.press(target===0?'Home':'End');
+      } else {
+        value+=direction*step;
+        await slider.press(direction>0?'ArrowRight':'ArrowLeft');
+      }
+      await electron.waitForFunction(expected => {
+        const control = document.querySelector('input[aria-label="Ganancia de mi micrófono"]');
+        const settings = JSON.parse(localStorage.getItem('squadlink.audio.v1') || '{}');
+        return control && !control.disabled && Number(control.value)===expected && settings.micGainDb===expected;
+      },value,{timeout:5000});
+    }
+    assert.equal(await slider.inputValue(),String(target));
+    assert.equal(await listen.inputValue(),listenBefore,'La ganancia del micrófono cambió la escucha.');
+    assert.deepEqual(await electron.evaluate(captureIdentity),identity,'Cambiar ganancia reabrió o sustituyó la captura.');
+  }
+  await electron.evaluate(() => window.qaSetSignal('soft'));
+  try {
+    const baseline = await peer.evaluate(capture,500);
+    assert.ok(baseline.referenceDbfs>=-33 && baseline.referenceDbfs<=-21,
+      'Tono de referencia suave fuera de rango: '+JSON.stringify(baseline));
+    for (const db of [6,12]) {
+      await select(db);
+      const received = await peer.evaluate(capture,500);
+      const measured = verifyGain(baseline,received,db);
+      console.log('Ganancia manual Electron → navegador', JSON.stringify({db,measuredDb:measured,baseline,received}));
+    }
+    await select(18);
+    await electron.evaluate(() => window.qaSetSignal('overload'));
+    const loud = await peer.evaluate(capture,500);
+    verify('overload',loud,500);
+    console.log('Pico limitado con ganancia manual +18 dB',JSON.stringify(loud));
+    await select(0);
+    await electron.evaluate(() => window.qaSetSignal('soft'));
+    const restored = await peer.evaluate(capture,500);
+    console.log('Ganancia restaurada a 0 dB',verifyGain(baseline,restored,0));
+  } finally {
+    if (Number(await slider.inputValue())!==0) await select(0);
+    await electron.evaluate(() => window.qaSetSignal('tone'));
+  }
+}
+
+async function testListenBoost(electron,peer) {
+  const listen = electron.getByRole('slider',{name:/Volumen de las voces que escucho/i});
+  const mic = electron.getByRole('slider',{name:/Ganancia de mi micrófono/i});
+  assert.equal(await listen.getAttribute('max'),'200');
+  const initial = Number(await listen.inputValue());
+  const micBefore = await mic.inputValue(), identity = await electron.evaluate(captureIdentity);
+  async function saved() {
+    await electron.waitForFunction(() => {
+      const slider = document.querySelector('input[aria-label="Volumen de las voces que escucho"]');
+      const stored = JSON.parse(localStorage.getItem('squadlink.audio.v1') || '{}');
+      return slider && !slider.disabled && Math.round(100*stored.listenVolume)===Number(slider.value);
+    },null,{timeout:5000});
+  }
+  async function select(percent) {
+    await listen.scrollIntoViewIfNeeded();
+    if (Number(await listen.inputValue())!==percent) {
+      if (percent === 200) await listen.press('End');
+      else if (percent === 0) await listen.press('Home');
+      else {
+        const box = await listen.boundingBox();
+        await listen.click({position:{x:Math.round((box.width-1)*percent/200),y:Math.floor(box.height/2)}});
+      }
+      await saved();
+    }
+    for(let i=0; i<16; i++) {
+      const current = Number(await listen.inputValue());
+      if (current===percent) break;
+      await listen.press(current<percent?'ArrowRight':'ArrowLeft');
+      await saved();
+    }
+    assert.equal(await listen.inputValue(),String(percent));
+    assert.equal(await mic.inputValue(),micBefore);
+  }
+  async function read(percent) {
+    await select(percent);
+    const boosted = percent>100;
+    await electron.waitForFunction(processed => {
+      const pc = window.testPeers.find(connection=>connection.connectionState==='connected');
+      const remote = pc?.getReceivers().find(r=>r.track.kind==='audio')?.track;
+      const el = window.qaPlayback, rendered = el?.srcObject?.getAudioTracks()[0];
+      return remote && rendered && !el.paused && !el.muted && el.volume===1 && (rendered.id!==remote.id)===processed;
+    },boosted,{timeout:6000});
+    const [playback,incoming,outgoing] = await Promise.all([
+      electron.evaluate(capture,{frequency:900,playback:true}),
+      electron.evaluate(capture,900), peer.evaluate(capture,500)
+    ]);
+    return {playback,incoming,outgoing};
+  }
+  try {
+    await Promise.all([electron,peer].map(page=>page.evaluate(()=>window.qaSetSignal('soft'))));
+    const at100 = await read(100);
+    const at200 = await read(200);
+    const gain = verifyGain(at100.playback,at200.playback,20*Math.log10(2),900);
+    const incomingDelta = verifyGain(at100.incoming,at200.incoming,0,900);
+    const outgoingDelta = verifyGain(at100.outgoing,at200.outgoing,0,500);
+    assert.deepEqual(await electron.evaluate(captureIdentity),identity,'Ajustar escucha cambió la captura de micrófono.');
+    console.log('Volumen local de 100 a 200 %',JSON.stringify({measuredDb:gain,incomingDeltaDb:incomingDelta,
+      outgoingDeltaDb:outgoingDelta,at100,at200}));
+  } finally {
+    await select(initial);
+    await Promise.all([electron,peer].map(page=>page.evaluate(()=>window.qaSetSignal('tone'))));
+  }
+}
+
+module.exports = {reference,summarize,verify,fixtureSetup,testVoiceQuality,verifyGain,testManualGain,testListenBoost};

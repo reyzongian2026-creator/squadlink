@@ -1,7 +1,7 @@
 const { _electron,chromium }=require('playwright-core');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const {spawn}=require('node:child_process');
-const {fixtureSetup,testVoiceQuality}=require('../test/support/voice-quality.cjs');
+const {fixtureSetup,testVoiceQuality,testManualGain,testListenBoost}=require('../test/support/voice-quality.cjs');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 (async()=>{
  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'squadlink-e2e-'));
@@ -155,6 +155,8 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await home.getByRole('heading',{name:'Ajustes',exact:true}).waitFor();
  await checkWindow(false);
  await home.getByRole('button',{name:'Dispositivos de audio'}).click();await space.getByText('Ganancia automática del micrófono').waitFor();
+ await testManualGain(space,peer);
+ await testListenBoost(space,peer);
  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
  await home.getByRole('button',{name:'Mi sala',exact:true}).click();await space.locator('#room-name').waitFor({state:'visible'});
  await space.screenshot({path:path.join(capture,'Sala-Moderna.png')});

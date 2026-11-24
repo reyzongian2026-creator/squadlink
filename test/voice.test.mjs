@@ -106,7 +106,7 @@ test('changing input and suppression during a call replaces the sender track and
   assert.equal(second.readyState, 'ended');
   assert.equal(requested.at(-1).noiseSuppression, false);
   const nextRoom = createRoom();
-  assert.deepEqual(nextRoom.settings, { inputId: 'usb-microphone', outputId: '', noiseSuppression: false, autoGainControl: false, listenVolume: 0.7 });
+  assert.deepEqual(nextRoom.settings, { inputId: 'usb-microphone', outputId: '', noiseSuppression: false, autoGainControl: false, listenVolume: 0.7, micGainDb: 0 });
 });
 
 test('failed input selection keeps existing microphone and saved setting', async t => {
@@ -230,17 +230,26 @@ test('las preferencias nuevas y parciales usan los valores recomendados y las gu
   const storage = new Map();
   globalThis.window = { localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) } };
   t.after(() => delete globalThis.window);
-  const defaults = {inputId:'',outputId:'',noiseSuppression:true,autoGainControl:false,listenVolume:0.7};
+  const defaults = {inputId:'',outputId:'',noiseSuppression:true,autoGainControl:false,listenVolume:0.7,micGainDb:0};
   assert.deepEqual(readAudioSettings(),defaults);
   assert.deepEqual(microphoneConstraints(defaults),{
     channelCount:{ideal:1},sampleRate:{ideal:48000},echoCancellation:true,noiseSuppression:true,autoGainControl:false
   });
-  for (const listenVolume of [0,1]) {
+  for (const listenVolume of [0,1,1.5,2]) {
     const legacy = {inputId:'mic',outputId:'usb',noiseSuppression:false,autoGainControl:true,listenVolume};
     saveAudioSettings(legacy);
-    assert.deepEqual(readAudioSettings(),legacy);
+    assert.deepEqual(readAudioSettings(),{...legacy,micGainDb:0});
     assert.deepEqual(microphoneConstraints(readAudioSettings()).deviceId,{exact:'mic'});
   }
+  for (const [stored, expected] of [[0,0],[8,8],[14.7,15],[-1,0],[20,18],['6',0]]) {
+    saveAudioSettings({ micGainDb:stored, listenVolume:0.35, autoGainControl:true });
+    const saved = readAudioSettings();
+    assert.equal(saved.micGainDb,expected);
+    assert.equal(saved.listenVolume,0.35);
+    assert.equal(saved.autoGainControl,true);
+  }
+  saveAudioSettings({ listenVolume:2.5 });
+  assert.equal(readAudioSettings().listenVolume,2);
   saveAudioSettings({inputId:'mic',listenVolume:0.35});
   assert.deepEqual(readAudioSettings(),{...defaults,inputId:'mic',listenVolume:0.35});
 });

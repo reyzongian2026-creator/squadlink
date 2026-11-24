@@ -1,7 +1,7 @@
 [Setup]
 AppId=Squadlink.Electron.Preview
 AppName=Squadlink Moderno
-AppVersion=0.5.0-preview.14
+AppVersion=0.5.0-preview.15
 DefaultDirName={localappdata}\Programs\Squadlink Moderno
 DefaultGroupName=Squadlink Moderno
 PrivilegesRequired=lowest

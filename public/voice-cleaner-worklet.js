@@ -1,7 +1,10 @@
 // Process one mono microphone. The relay and the listening path never run this filter.
 class VoiceCleaner extends AudioWorkletProcessor {
   static get parameterDescriptors() {
-    return [{name: 'reduceNoise', defaultValue: 1, minValue: 0, maxValue: 1, automationRate: 'k-rate'}];
+    return [
+      {name: 'reduceNoise', defaultValue: 1, minValue: 0, maxValue: 1, automationRate: 'k-rate'},
+      {name: 'micGainDb', defaultValue: 0, minValue: 0, maxValue: 18, automationRate: 'k-rate'},
+    ];
   }
 
   constructor() {
@@ -11,6 +14,7 @@ class VoiceCleaner extends AudioWorkletProcessor {
     this.highPass = Math.exp(-2 * Math.PI * 65 / sampleRate);
     this.openGain = 0.063;
     this.peakGain = 1;
+    this.micGain = 1;
     this.hold = 0;
   }
 
@@ -46,11 +50,20 @@ class VoiceCleaner extends AudioWorkletProcessor {
 
     // Only turn peaks down. Apply attenuation before the first sample in this block
     // to leave headroom for the codec without clipping the waveform.
-    const ceiling = peak > 0.75 ? 0.75 / peak : 1;
+    // Change gain smoothly after detecting speech so raising a quiet voice cannot
+    // open the noise gate. Keep the residual noise at its original gain in pauses.
+    const previousGain = this.micGain;
+    const requestedGain = 10 ** ((parameters.micGainDb?.[0] ?? 0) / 20);
+    const blend = Math.max(0, (this.openGain - 0.063) / (1 - 0.063));
+    const desiredGain = 1 + (requestedGain - 1) * blend;
+    this.micGain = desiredGain + (previousGain - desiredGain) * Math.exp(-seconds / 0.015);
+    const boostedPeak = peak * Math.max(previousGain, this.micGain);
+    const ceiling = boostedPeak > 0.75 ? 0.75 / boostedPeak : 1;
     this.peakGain = Math.min(ceiling, 1 + (this.peakGain - 1) * Math.exp(-seconds / 0.12));
     for (let i = 0; i < input.length; i++) {
       const gain = from + (this.openGain - from) * (i + 1) / input.length;
-      output[i] *= gain * this.peakGain;
+      const microphoneGain = previousGain + (this.micGain - previousGain) * (i + 1) / input.length;
+      output[i] *= gain * microphoneGain * this.peakGain;
     }
     return true;
   }
