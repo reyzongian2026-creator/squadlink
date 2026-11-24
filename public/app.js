@@ -146,6 +146,11 @@ function showGuest(nick) {
   $("profile").setAttribute("aria-label", $("profile").textContent + " · " + $("profile").title);
   $("avatar").textContent = [...(nick || "S")][0].toUpperCase();
 }
+function markGuest() {
+  resetRoom();
+  self = null;
+  showGuest(readNick());
+}
 function applySession(result) {
   self = result.self;
   showGuest(self.nick);
@@ -168,7 +173,7 @@ async function api(path, data, signal) {
     response = await fetch(
       "/api/" + path,
       data === undefined
-        ? { cache: "no-store" }
+        ? { cache: "no-store", signal }
         : {
             method: "POST",
             signal,
@@ -362,6 +367,7 @@ function renderMembers() {
   $("members").replaceChildren(fragment);
 }
 let roomMusicUI;
+let leavingRoom = false;
 let musicModule;
 window.addEventListener('keydown', event => {
   if (!room || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.code !== 'KeyR') return;
@@ -369,14 +375,16 @@ window.addEventListener('keydown', event => {
   if (!event.repeat) roomMusicUI?.toggleFromShortcut();
 }, true);
 function updateMusic() {
+  if (leavingRoom) return;
+  const attempt = generation;
   if (roomMusicUI) { roomMusicUI.update(room); return; }
   const currentCode = room.code;
   musicModule ??= import('./music.js').catch(error=>{ musicModule=null; throw error; });
   musicModule.then(({createMusic})=>{
-    if (room?.code !== currentCode || roomMusicUI) return;
+    if (generation !== attempt || room?.code !== currentCode || roomMusicUI) return;
     roomMusicUI = createMusic({mount:$('room-music'),api,notify:tell});
     roomMusicUI.update(room);
-  }).catch(()=>{ if(room?.code===currentCode) $('room-music').textContent='No se pudo cargar la música.'; });
+  }).catch(()=>{ if(generation===attempt && room?.code===currentCode) $('room-music').textContent='No se pudo cargar la música.'; });
 }
 function updateRoom(snapshot) {
   const previousCode = room?.code;
@@ -417,6 +425,7 @@ function setConnection(text, connected) {
   $("connection").lastChild.textContent = text;
   $("connection").classList.toggle("connected", connected);
 }
+const retryRoomVoice = new WeakMap();
 async function enterRoom(snapshot, restoring = false) {
   if (!desktopClient && !restoring && document.body.dataset.channel !== "main") location.hash = "main";
   resetRoom();
@@ -426,58 +435,107 @@ async function enterRoom(snapshot, restoring = false) {
   setConnection("Conectando", false);
   updateRoom(snapshot);
   directory.reload();
-  try {
-    const [{ VoiceRoom }, { iceServers }] = await Promise.all([
-      import("./voice.js"),
-      api("ice"),
-    ]);
-    if (generation !== attempt) return;
-    voice = new VoiceRoom({
-      selfId: self.id,
-      iceServers,
-      sendSignal: (to, data) => api("signal", { to, ...data }),
-      onStatus: (text) => {
-        $("voice-status").textContent = text;
-        $("listen").hidden = false;
-      },
-      onMicrophoneEnded: () => {
-        if (generation !== attempt) return;
-        $("voice-status").textContent = "El micrófono se desconectó. Elige otra entrada y vuelve a activarlo.";
-        updateMicrophone(false).catch(error => {
-          if (generation === attempt) tell(error.message);
-        });
-      },
-      onPeerState: (id, state) => {
-        if (room) {
+  const pendingSignals = new Map();
+  const listen = $("listen");
+  let starting = false;
+  async function startVoice() {
+    if (generation !== attempt || starting || voice) return;
+    starting = true;
+    listen.disabled = true;
+    $("voice-status").textContent = "Conectando el audio…";
+    let channel;
+    try {
+      const [{ VoiceRoom }, { iceServers }] = await Promise.all([
+        import("./voice.js"),
+        api("ice", undefined, AbortSignal.timeout(10000)),
+      ]);
+      if (generation !== attempt) return;
+      channel = new VoiceRoom({
+        selfId: self.id,
+        iceServers,
+        sendSignal: (to, data) => api("signal", { to, ...data }),
+        onStatus: (text) => {
+          if (generation !== attempt || voice !== channel) return;
+          $("voice-status").textContent = text;
+          listen.hidden = false;
+        },
+        onMicrophoneEnded: () => {
+          if (generation !== attempt || voice !== channel) return;
+          $("voice-status").textContent = "El micrófono se desconectó. Elige otra entrada y vuelve a activarlo.";
+          updateMicrophone(false).catch(error => {
+            if (generation === attempt) tell(error.message);
+          });
+        },
+        onPeerState: (id, state) => {
+          if (generation !== attempt || voice !== channel) return;
           peerStates.set(id, state);
           renderMembers();
-        }
-      },
-    });
-    for (const [id, percent] of volumes) voice.setVolume(id, percent / 100);
-    voice.syncMembers(snapshot.members.map((member) => member.id));
-  } catch (error) {
-    if (generation !== attempt) return;
-    $("voice-status").textContent =
-      "No se pudo iniciar el audio. " + error.message;
+        },
+      });
+      for (const [id, percent] of volumes) channel.setVolume(id, percent / 100);
+      channel.syncMembers(room.members.map(member => member.id));
+      voice = channel;
+      for (const [from, signals] of pendingSignals) {
+        if (signals.description) channel.receive(from, {description:signals.description});
+        for (const candidate of signals.candidates) channel.receive(from, {candidate});
+      }
+      pendingSignals.clear();
+      listen.textContent = "Reanudar audio";
+      listen.hidden = true;
+      $("voice-status").textContent = "";
+      $("mic").disabled = false;
+    } catch (error) {
+      if (generation !== attempt) return;
+      channel?.close();
+      voice = null;
+      $("mic").disabled = true;
+      $("voice-status").textContent = "No se pudo iniciar el audio. " + error.message;
+      listen.textContent = "Reintentar conexión de voz";
+      listen.hidden = false;
+    } finally {
+      if (generation === attempt) {
+        starting = false;
+        listen.disabled = false;
+      }
+    }
   }
-  $("mic").disabled = !voice;
   stream = new EventSource("/api/events");
+  retryRoomVoice.set(stream, startVoice);
+  const initialVoice = startVoice();
   stream.addEventListener("room", (event) => {
+    if (attempt !== generation) return;
     updateRoom(JSON.parse(event.data));
+    for (const id of pendingSignals.keys()) {
+      if (!room.members.some(member => member.id === id)) pendingSignals.delete(id);
+    }
     setConnection("En sala", true);
   });
   stream.addEventListener("signal", (event) => {
+    if (attempt !== generation) return;
     const { from, ...data } = JSON.parse(event.data);
-    voice?.receive(from, data);
+    if (voice) {
+      voice.receive(from, data);
+      return;
+    }
+    if (!room.members.some(member => member.id === from) || from === self.id) return;
+    // ICE can arrive before the offer. Keep the latest negotiation per current peer.
+    const signals = pendingSignals.get(from) || {candidates:[]};
+    if (data.description) signals.description = data.description;
+    if (data.candidate) {
+      if (signals.candidates.length >= 128) signals.candidates.shift();
+      signals.candidates.push(data.candidate);
+    }
+    pendingSignals.set(from, signals);
   });
   stream.addEventListener("superseded", () => {
+    if (attempt !== generation) return;
     resetRoom();
     tell(
       "La sala se abrió en otra pestaña. El audio de esta ventana se cerró.",
     );
   });
   stream.onerror = async () => {
+    if (attempt !== generation) return;
     setConnection("Reconectando", false);
     try {
       const result = await api("session");
@@ -497,8 +555,9 @@ async function enterRoom(snapshot, restoring = false) {
   ) {
     await api("member", { muted: true }).catch(() => {});
   }
+  await initialVoice;
 }
-function resetRoom() {
+function closeRoomMedia() {
   generation++;
   stream?.close();
   stream = null;
@@ -507,6 +566,11 @@ function resetRoom() {
   roomMusicUI?.close();
   roomMusicUI = null;
   $('room-music').replaceChildren();
+}
+function resetRoom() {
+  closeRoomMedia();
+  leavingRoom = false;
+  $("leave").disabled = false;
   room = null;
   $("match-code").textContent = $("directory-game-code").value = "";
   $("password").value = "";
@@ -551,16 +615,16 @@ $("mic").onclick = async () => {
   }
 };
 $("listen").onclick = () => {
+  if (!voice) return retryRoomVoice.get(stream)?.();
   $("voice-status").textContent = "";
-  voice?.resumePlayback();
+  return voice.resumePlayback();
 };
 $("leave").onclick = async () => {
+  if (!room || $("leave").disabled) return;
   $("leave").disabled = true;
-  generation++;
-  stream?.close();
-  stream = null;
-  voice?.close();
-  voice = null;
+  leavingRoom = true;
+  closeRoomMedia();
+  const attempt = generation;
   microphone = false;
   $("mic").disabled = true;
   $("mic").textContent = "Micro apagado";
@@ -570,18 +634,25 @@ $("leave").onclick = async () => {
   setConnection("Saliendo", false);
   try {
     await api("leave", {}, AbortSignal.timeout(8000));
-    resetRoom();
-    directory.reload();
-    history.replaceState(null, "", location.pathname);
-    $("create").focus();
-  } catch {
+  } catch (error) {
+    if (attempt !== generation) return;
+    if (error.status === 401) {
+      markGuest();
+      tell("Tu sesión terminó. Ya saliste de la sala.");
+      return;
+    }
     setConnection("Audio cerrado", false);
     $("voice-status").textContent =
-      "La voz está desconectada. Reintenta confirmar la salida cuando vuelva la conexión.";
+      "El micrófono y la radio están apagados. Reintenta confirmar la salida cuando vuelva la conexión.";
     $("leave").textContent = "Reintentar salida";
-  } finally {
     $("leave").disabled = false;
+    return;
   }
+  if (attempt !== generation) return;
+  resetRoom();
+  directory.reload();
+  history.replaceState(null, "", location.pathname);
+  $("create").focus();
 };
 $("compact").onclick = () => {
   const compact = document.body.classList.toggle("in-match");
