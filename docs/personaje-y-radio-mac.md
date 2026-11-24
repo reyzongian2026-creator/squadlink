@@ -8,6 +8,10 @@ Abre **Mi personaje**. Cada especie (humano, humanoide, alienígena y robot) tie
 
 Pulsa **Acercar rostro** para probar los audífonos, la gorra o el visor de cerca. Vuelve a pulsarlo para ver el cuerpo entero. En humanos y humanoides puedes elegir **Con cabello** o **Sin cabello** y probar siete tintes además del **Color original**. Al quitar y volver a poner el cabello se conserva el último color elegido. La barba, el bigote y la perilla se eligen por separado. En la sala y en la clasificación aparece su retrato con los rasgos y accesorios elegidos. Son imágenes prerenderizadas que conservan el detalle al ampliar el personaje y no requieren animación durante una llamada.
 
+Si ya tienes un perfil, puedes cerrar el editor con cambios sin guardar. En el mismo equipo y perfil, pulsa **Recuperar borrador** para seguir editando o **Descartar borrador** para conservar tu apariencia publicada. La sala y la clasificación reciben la nueva apariencia cuando pulsas **Guardar apariencia**.
+
+Con el teclado, pulsa **Tab** para pasar de un grupo al siguiente. Las **flechas** cambian la opción dentro del grupo y **Inicio** y **Fin** seleccionan la primera y la última. Junto a cada paleta se muestra el nombre del color elegido.
+
 ![El mismo personaje con cabello original, sin cabello, con tinte violeta, con gorra, con audífonos y con visor](media/personalizar-personaje.webp)
 
 ![Las doce apariencias de Squadlink, agrupadas por especie e identidad](media/personajes-3d.webp)

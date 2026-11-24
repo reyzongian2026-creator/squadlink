@@ -441,11 +441,12 @@ export function createMusic({mount, api, notify}) {
         } catch (error) {
           if (upload !== controller) return;
           if (error.status !== 400 || !/YouTube|Selecciona una emisora del catálogo/i.test(error.message)) throw error;
-          if (startListening && !locallyMuted) {
+          if (startListening && !locallyMuted && !track) {
             playPersonal(station);
             notify?.("Escuchando solo aquí. El servidor de esta sala todavía no admite emisoras compartidas.");
           } else {
-            feedback("Esta sala aún no admite emisoras compartidas. Elige «Escuchar solo aquí» para reproducirla.");
+            const report = track && notify ? notify : feedback;
+            report("Esta sala aún no admite emisoras compartidas. Elige «Escuchar solo aquí» para reproducirla.");
           }
           return;
         }
