@@ -18,6 +18,9 @@ if(location.hostname==='home'){
     postMessage:data=>ipcRenderer.send('desk-state',data),
     addEventListener:(type,cb)=>{if(type==='message')callbacks.add(cb);},
     removeEventListener:(type,cb)=>{if(type==='message')callbacks.delete(cb);},
+    loadPlayerPass:()=>ipcRenderer.invoke('player-pass:load'),
+    savePlayerPass:value=>ipcRenderer.invoke('player-pass:save',value),
+    exportPlayerPass:value=>ipcRenderer.invoke('player-pass:export',value),
     home:()=>ipcRenderer.send('home')
   });
 }

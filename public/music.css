@@ -7,7 +7,7 @@
   color: #f4f3f9;
   min-width: 0;
 }
-.music-panel [hidden], .youtube-widget [hidden] { display: none !important; }
+.music-panel [hidden] { display: none !important; }
 .music-panel .music-header, .music-current, .music-volume {
   display: flex;
   flex-wrap: wrap;
@@ -30,16 +30,36 @@
 .music-panel form label { display: grid; gap: .3rem; min-width: 0; font-size: .84rem; color: #dfdde9; }
 .music-panel form input, .music-panel form select { width: 100%; min-width: 0; box-sizing: border-box; }
 .music-panel form button { justify-self: start; }
-.music-panel [data-player] iframe {
-  display: block;
-  width: min(100%, 576px);
-  min-height: 200px;
-  aspect-ratio: 16 / 9;
-  margin-block-start: .65rem;
-  border: 0;
-  background: #101014;
-}
+.music-panel .music-track { display: grid; gap: .12rem; min-width: 0; }
+.music-track small, .music-panel .music-turn { font-size: .82rem; color: #c6c2d5; }
+.music-panel .music-turn { grid-column: 1 / -1; }
+.music-panel [data-player] button { margin-top: .5rem; }
 .music-panel :focus-visible { outline: 2px solid #c6baff; outline-offset: 2px; }
-.youtube-widget { margin: 0; height: 100vh; background: #101014; color: #f4f3f9; font: 14px system-ui; }
-.youtube-widget #video { display: block; width: 100%; height: 100%; border: 0; }
-.youtube-widget #video-status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; pointer-events: none; }
+
+/* Native radio groups retain their standard Tab, arrow and Space behavior. */
+.music-add form { display:grid; grid-template-columns:minmax(0,1fr); gap:15px; }
+.music-picker { margin:0; padding:0; border:0; min-width:0; }
+.music-picker legend { margin:0 0 7px; padding:0; font-size:.76rem; font-weight:650; color:#c9c1d6; }
+.music-panel .music-picker label { display:block; position:relative; min-width:0; margin:0; cursor:pointer; }
+.music-panel .music-picker input { position:absolute; width:1px; height:1px; margin:0; padding:0; overflow:hidden; clip-path:inset(50%); }
+.music-picker label > span { display:flex; align-items:center; box-sizing:border-box; line-height:1.25; }
+.music-picker input:focus-visible + span { outline:2px solid #e5ceff; outline-offset:2px; }
+.source-options { display:grid; grid-template-columns:1fr 1fr; gap:3px; padding:3px; border:1px solid #443c51; border-radius:12px; background:#18161e; }
+.source-options span { min-height:33px; padding:6px; justify-content:center; border-radius:8px; color:#c4bdce; font-size:.8rem; font-weight:600; }
+.source-options input:checked + span { background:#51435e; color:#fff2ff; }
+.genre-options { display:flex; flex-wrap:wrap; gap:5px; }
+.genre-options span { padding:5px 9px; min-height:27px; border:1px solid #494252; border-radius:20px; color:#d8d0df; font-size:.73rem; }
+.genre-options input:checked + span { border-color:#b5ce92; color:#dcf3bd; background:#30392c; }
+.station-options { border:1px solid #463e50; border-radius:11px; background:#1b1922; max-height:206px; overflow:auto; scrollbar-width:thin; scrollbar-color:#655a71 transparent; overscroll-behavior:contain; }
+.station-options label + label { border-top:1px solid #35303d; }
+.station-options label > span { position:relative; display:grid; grid-template-columns:12px minmax(0,1fr) auto; column-gap:10px; min-height:34px; padding:7px 11px; font-size:.8rem; font-weight:650; color:#f1edf7; }
+.station-options label > span::before { content:""; width:10px; height:10px; box-sizing:border-box; border:1px solid #7c7288; border-radius:50%; }
+.station-options small { font-size:.66rem; color:#bcb3c8; font-weight:450; }
+.station-options input:checked + span { background:#36313f; color:#fff; }
+.station-options input:checked + span::before { background:#d0eaa6; border:3px solid #484e3e; outline:1px solid #c0d59d; }
+.station-options input:focus-visible + span { outline-offset:-3px; }
+.music-picker label:hover > span { background-color:#332e3b; }
+.music-panel .music-turn { font-size:.73rem; color:#bdb5c9; }
+.music-panel .music-submit { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:7px; }
+#room .music-panel .music-submit button.primary, .music-panel .music-submit button.primary { background:#d1eab1; color:#182119; border-color:transparent; }
+@media(max-width:480px) { .station-options label > span { grid-template-columns:12px minmax(0,1fr); } .station-options small { grid-column:2; } }

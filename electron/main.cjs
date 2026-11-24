@@ -1,15 +1,23 @@
-const {app,BrowserWindow,WebContentsView,protocol,session,ipcMain,dialog,shell,Menu,systemPreferences}=require('electron');
+const {app,BaseWindow,BrowserWindow,WebContentsView,protocol,session,ipcMain,dialog,shell,Menu,systemPreferences,safeStorage}=require('electron');
 const fs=require('node:fs'),path=require('node:path');
 const {relay,parseServer}=require('./gateway.cjs');
 const {detect}=require('./detection.cjs');
+const {createPlayerVault,writePrivateFile,checkPass}=require('./player-vault.cjs');
 const base='https://squadlink-lobby.onrender.com';
 const repo='reyzongian2026-creator/squadlink';
 const mac=process.platform==='darwin';
-const channel=mac?{workflow:'electron-macos.yml',artifact:'Squadlink-Moderno-macOS-arm64'}:{workflow:'electron.yml',artifact:'Squadlink-Electron-Windows-x64'};
+const downloadPage=base+'/descargar.html';
 const titles={create:'Crear sala',join:'Unirme con código',lobby:'Mi sala',rooms:'Explorar salas',friends:'Amigos',player:'Mi jugador',arcade:'Arcade',guide:'Guía de sala',ranking:'Clasificación',settings:'Dispositivos de audio'};
 const prefsFile=()=>path.join(app.getPath('userData'),'desktop.json');
+function savePrefs(value){
+ const file=prefsFile();
+ fs.mkdirSync(path.dirname(file),{recursive:true});
+ fs.writeFileSync(file+'.tmp',JSON.stringify(value),{mode:0o600});
+ fs.renameSync(file+'.tmp',file);
+}
 const blank=()=>({joined:false,name:'',nickname:'',code:'',mic:false,canMic:false,members:[]});
 let prefs={server:base,low:true},state=blank(),home,view,hostSection='home',action,ready=false,visit=0,closing=false,updateUrl='',microphone=false;
+let hostView;
 let detectTimer,scanning=false,generation=0,detected=null;
 const locked=app.requestSingleInstanceLock();
 if(!locked)app.quit();
@@ -24,13 +32,17 @@ app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
 const options={contextIsolation:true,nodeIntegration:false,sandbox:true,preload:path.join(__dirname,'preload.cjs'),partition:'persist:squadlink-modern'};
 function reveal(w){if(w&&!w.isDestroyed()){if(w.isMinimized())w.restore();w.show();w.focus();}}
 function snapshot(){return {...state,...prefs,hostSection:action?'workspace':hostSection,version:app.getVersion(),updateUrl};}
-function publish(){if(home&&!home.isDestroyed())home.webContents.send('snapshot',snapshot());}
+function hostContents(){return mac ? hostView?.webContents : home?.webContents;}
+function publish(){
+ const wc=hostContents();
+ if(wc&&!wc.isDestroyed())wc.send('snapshot',snapshot());
+}
 function guard(contents){
   contents.setWindowOpenHandler(()=>({action:'deny'}));
   contents.on('will-navigate',e=>e.preventDefault());
   contents.on('will-attach-webview',e=>e.preventDefault());
 }
-function isHome(e){return home&&!home.isDestroyed()&&e.sender===home.webContents&&e.senderFrame===home.webContents.mainFrame;}
+function isHome(e){const wc=hostContents();return wc&&!wc.isDestroyed()&&e.sender===wc&&e.senderFrame===wc.mainFrame;}
 function fromVoice(e){return view&&e.sender===view.webContents&&e.senderFrame===view.webContents.mainFrame;}
 function hostPage(event){if(!isHome(event))throw Error('Acceso no disponible.');}
 function send(data){if(view&&!view.webContents.isDestroyed())view.webContents.send('desk-message',data);}
@@ -43,12 +55,16 @@ function showHost(section='home'){
   if(ready)dispatch('background');
  }
  hostSection=section;
+ if(mac)mountHost();
  publish();
- home.webContents.focus();
+ hostContents()?.focus();
 }
 function contentBounds(){
-  if(!action||!view)return;
-  const [width,height]=home.getContentSize();view.setBounds({x:0,y:0,width,height});
+  if(!home||home.isDestroyed())return;
+  const [width,height]=home.getContentSize();
+  const bounds={x:0,y:0,width,height};
+  hostView?.setBounds(bounds);
+  if(action)view?.setBounds(bounds);
 }
 function stopDetection(){generation++;clearInterval(detectTimer);detectTimer=null;detected=null;}
 async function scan(){if(scanning||!detectTimer)return;scanning=true;const ticket=generation;
@@ -58,13 +74,31 @@ function disposeVoice(){
  if(view){const old=view;view=null;if(action&&!home.isDestroyed())home.contentView.removeChildView(old);old.webContents.close();}
  action=null;
 }
+function mountHost(){
+ if(hostView)return;
+ hostView=new WebContentsView({webPreferences:options});
+ const wc=hostView.webContents;
+ guard(wc);
+ home.contentView.addChildView(hostView);
+ contentBounds();
+ wc.loadURL('squad://home/');
+}
+function releaseHost(){
+ if(!hostView)return;
+ const old=hostView;
+ hostView=null;
+ home.contentView.removeChildView(old);
+ old.webContents.close();
+}
 function createHome(){
- const w=new BrowserWindow({title:'Squadlink',width:1080,height:700,minWidth:700,minHeight:520,backgroundColor:'#0d1217',icon:path.join(__dirname,'Squadlink.ico'),autoHideMenuBar:true,webPreferences:options});
- guard(w.webContents);
- if(mac)w.once('ready-to-show',()=>reveal(w));
+ const frame={title:'Squadlink',width:1080,height:700,minWidth:700,minHeight:520,backgroundColor:'#0d1217',icon:path.join(__dirname,'Squadlink.ico'),autoHideMenuBar:true};
+ const w=mac ? new BaseWindow(frame) : new BrowserWindow({...frame,webPreferences:options});
+ if(!mac){
+  guard(w.webContents);
+  w.loadURL('squad://home/');
+ }
  w.on('resize',contentBounds);
- w.on('close',()=>{closing=true;disposeVoice();});
- w.loadURL('squad://home/');
+ w.on('close',()=>{closing=true;disposeVoice();releaseHost();});
  return w;
 }
 function ensureView(){
@@ -84,6 +118,7 @@ function open(key,code){
  if(!action)home.contentView.addChildView(view);
  visit++;
  action={key,code};
+ if(mac&&prefs.low&&state.joined)releaseHost();
  publish();
  contentBounds();
  view.webContents.focus();
@@ -94,8 +129,12 @@ ipcMain.on('home',e=>{if(fromVoice(e))showHost();});
 ipcMain.on('desk-state',async(e,m)=>{
  if(!fromVoice(e)||!m||typeof m!=='object')return;
  if(m.type==='desktop:navigate'){
-  if(['home','rooms','friends','player','arcade','ranking','guide','preferences'].includes(m.page))open(m.page);
+  if(['home','lobby','rooms','friends','player','arcade','ranking','guide','preferences'].includes(m.page))open(m.page);
  }else if(m.type==='desktop:state'){
+  if(m.identified===true&&!prefs.hasPlayer){
+   const next={...prefs,hasPlayer:true};
+   try{savePrefs(next);prefs=next;}catch{} // A read-only profile can still join this session.
+  }
   const before=state.joined;state={joined:m.joined===true,name:String(m.name||'').slice(0,80),nickname:String(m.nickname||'').slice(0,40),code:String(m.code||'').slice(0,6),mic:m.mic===true,canMic:m.canMic===true,members:Array.isArray(m.members)?m.members.slice(0,5):[]};publish();
   if(!ready){ready=true;if(action)dispatch(action.key,action.code);else dispatch('background');}
   if(state.joined&&!before)open('lobby');
@@ -111,6 +150,20 @@ ipcMain.on('desk-state',async(e,m)=>{
   if(response===1&&generation===ticket&&fromVoice(e)){detectTimer=setInterval(scan,30000);gameStatus();scan();}
  }
 });
+const playerVault=createPlayerVault(()=>path.join(app.getPath('userData'),'player-pass.enc'),safeStorage);
+function playerPage(event){
+ if(!fromVoice(event)||!event.senderFrame.url.startsWith('squad://app/'))throw Error('Acceso no disponible.');
+}
+ipcMain.handle('player-pass:load',event=>{playerPage(event);return playerVault.load();});
+ipcMain.handle('player-pass:save',(event,raw)=>{playerPage(event);return playerVault.save(raw);});
+ipcMain.handle('player-pass:export',async(event,raw)=>{
+ playerPage(event);checkPass(raw);
+ const result=await dialog.showSaveDialog(home,{title:'Guardar mi pase privado',defaultPath:'Mi-jugador.squadlink',
+ filters:[{name:'Pase de jugador Squadlink',extensions:['squadlink']}]});
+ if(result.canceled||!result.filePath)return false;
+ await writePrivateFile(result.filePath,raw);
+ return true;
+});
 ipcMain.handle('snapshot',e=>{hostPage(e);return snapshot();});
 ipcMain.handle('open',(e,value)=>{hostPage(e);open(typeof value==='string'?value:value?.key,/^[A-Z0-9]{6}$/.test(value?.code)?value.code:undefined);});
 ipcMain.handle('call',(e,key)=>{hostPage(e);if(state.joined&&['mic','leave'].includes(key))dispatch(key);});
@@ -118,28 +171,59 @@ ipcMain.handle('prefs',(e,data)=>{
  hostPage(e);let next={...prefs};
  if(typeof data?.low==='boolean')next.low=data.low;
  if(typeof data?.server==='string'){next.server=parseServer(data.server);if(next.server!==prefs.server&&state.joined)throw Error('Sal de la llamada antes de cambiar de servidor.');}
- fs.mkdirSync(path.dirname(prefsFile()),{recursive:true});fs.writeFileSync(prefsFile()+'.tmp',JSON.stringify(next));fs.renameSync(prefsFile()+'.tmp',prefsFile());
+ savePrefs(next);
  if(next.server!==prefs.server){disposeVoice();state=blank();microphone=false;}
  prefs=next;if(ready&&action)dispatch(action.key,action.code);publish();
 });
+function versionParts(version) {
+ const match = /^(\d+)\.(\d+)\.(\d+)(?:-preview\.(\d+))?$/.exec(version);
+ return match && [Number(match[1]), Number(match[2]), Number(match[3]), Number(match[4] ?? Infinity)];
+}
+function isNewer(candidate, current) {
+ for (let i = 0; i < current.length; i++) {
+  if (candidate[i] !== current[i]) return candidate[i] > current[i];
+ }
+ return false;
+}
+async function latestDesktopVersion() {
+ const files = ['Squadlink-Moderno-Setup-x64.exe', 'Squadlink-Moderno-macOS-arm64.zip'];
+ const signal = AbortSignal.timeout(10000);
+ let best;
+ for (let page = 1; ; page++) {
+  const response = await fetch('https://api.github.com/repos/'+repo+'/releases?per_page=100&page='+page, {signal});
+  if (!response.ok) throw Error();
+  const releases = await response.json();
+  for (const release of releases) {
+   if (release.draft || !release.tag_name.startsWith('moderno-v')) continue;
+   const version = release.tag_name.slice('moderno-v'.length);
+   const parts = versionParts(version);
+   if (!parts || (best && !isNewer(parts, best.parts))) continue;
+   if (files.every(name => release.assets.some(a => a.name===name && a.state==='uploaded' && a.size>0))) {
+    best = {version, parts};
+   }
+  }
+  if (releases.length < 100) return best;
+ }
+}
 ipcMain.handle('updates',async e=>{
- hostPage(e);const url='https://api.github.com/repos/'+repo+'/actions/workflows/'+channel.workflow+'/runs?branch=preview%2Felectron-escritorio&status=success&per_page=1';
- const response=await fetch(url,{signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('No se pudo consultar GitHub.');
- const [run]=(await response.json()).workflow_runs;
- const build=Number(require('./package.json').squadBuild||0),attempt=Number(require('./package.json').squadAttempt||1);
+ hostPage(e);
  updateUrl='';
- if(run&&(run.run_number>build||(run.run_number===build&&run.run_attempt>attempt))){
- const assets=await fetch('https://api.github.com/repos/'+repo+'/actions/runs/'+run.id+'/artifacts',{signal:AbortSignal.timeout(10000)});
- if(!assets.ok)throw Error('No se pudo consultar el instalador.');
- const asset=(await assets.json()).artifacts.find(a=>a.name===channel.artifact&&!a.expired);
- if(asset)updateUrl='https://github.com/'+repo+'/actions/runs/'+run.id+'/artifacts/'+asset.id;
- }publish();return updateUrl?'Hay una nueva compilación disponible.':'Tienes la compilación más reciente disponible.';
+ publish();
+ let latest;
+ try { latest=await latestDesktopVersion(); }
+ catch { return 'No se pudo consultar la versión publicada. Vuelve a intentarlo.'; }
+ const current=versionParts(app.getVersion());
+ if (!latest || !current) return 'No se pudo comparar la versión instalada con la publicada.';
+ if (!isNewer(latest.parts,current)) return 'Tu aplicación está al día.';
+ updateUrl=downloadPage;
+ publish();
+ return 'Disponible para descargar: '+latest.version+'.';
 });
 ipcMain.handle('download',async e=>{hostPage(e);if(updateUrl)await shell.openExternal(updateUrl);});
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.webp':'image/webp','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon'};
-const csp="default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data:;connect-src 'self';media-src 'self' blob:;object-src 'none';frame-src 'self' https://squadlink-lobby.onrender.com/music-youtube.html;base-uri 'none';form-action 'self'";
+const csp="default-src 'self';script-src 'self';style-src 'self' 'unsafe-inline';img-src 'self' data:;connect-src 'self';media-src 'self' blob: https:;object-src 'none';frame-src 'self';base-uri 'none';form-action 'self'";
 async function start(){
- try{const saved=JSON.parse(fs.readFileSync(prefsFile(),'utf8'));prefs={server:parseServer(saved.server),low:saved.low!==false};}catch{}
+ try{const saved=JSON.parse(fs.readFileSync(prefsFile(),'utf8'));prefs={server:parseServer(saved.server),low:saved.low!==false,hasPlayer:saved.hasPlayer===true};}catch{}
  const ses=session.fromPartition(options.partition);
  ses.protocol.handle('squad',async req=>{
   const {hostname,pathname}=new URL(req.url);if(!['home','app'].includes(hostname))return new Response(null,{status:404});
@@ -154,14 +238,20 @@ async function start(){
    if(['home.html','home.css','home.js','channels.css'].includes(name))dir=__dirname;
    else if(!['hero-art.webp','icon-192.png'].includes(name))return new Response(null,{status:404});
   }else name=name||'index.html';
+  if (hostname==='app' && ['mario3.nes','duck-nes.nes'].includes(name)) {
+   try {
+    const bytes=await fs.promises.readFile(path.join(__dirname,'cartridges',name));
+    return new Response(bytes,{headers:{'Content-Type':'application/octet-stream','Cache-Control':'no-store'}});
+   } catch {return new Response(null,{status:404});}
+  }
   const type=mime[path.extname(name)];if(!type)return new Response(null,{status:404});
   try{return new Response(await fs.promises.readFile(path.join(dir,name)),{headers:{'Content-Type':type,'Content-Security-Policy':name==='doom-player.html' ? "frame-ancestors 'self'; object-src 'none'" : csp,'X-Content-Type-Options':'nosniff'}});}catch{return new Response(null,{status:404});}
  });
  const trusted=wc=>wc&&view?.webContents===wc&&wc.getURL().startsWith('squad://app/');
- ses.setPermissionCheckHandler((wc,p)=>trusted(wc)&&((p==='media'&&microphone)||p==='speaker-selection'||(p==='pointerLock'&&action?.key==='arcade')));
+ ses.setPermissionCheckHandler((wc,p)=>trusted(wc)&&((p==='media'&&microphone)||p==='speaker-selection'||(['pointerLock','fullscreen'].includes(p)&&action?.key==='arcade')));
  ses.setPermissionRequestHandler(async(wc,p,done,details)=>{
   if(!trusted(wc))return done(false);
-  if(p==='pointerLock')return done(action?.key==='arcade');
+  if(['pointerLock','fullscreen'].includes(p))return done(action?.key==='arcade');
   if(['speaker-selection','clipboard-sanitized-write'].includes(p))return done(true);
   if(p!=='media'||!details.mediaTypes?.includes('audio')||details.mediaTypes.includes('video'))return done(false);
   if(!microphone){const answer=await dialog.showMessageBox(home,{type:'question',message:'¿Permitir que Squadlink use tu micrófono?',buttons:['Cancelar','Permitir'],cancelId:0,defaultId:0});microphone=answer.response===1&&trusted(wc);}
@@ -171,8 +261,11 @@ async function start(){
  if(mac)Menu.setApplicationMenu(Menu.buildFromTemplate([{role:'appMenu'},{role:'editMenu'},{role:'windowMenu'}]));
  else Menu.setApplicationMenu(null);
  home=createHome();
- // Restore presence and membership for returning players. Guests only start the voice renderer on demand.
- if((await ses.cookies.get({url:prefs.server,name:'squad_session'})).length)ensureView();
+ if(mac){mountHost();reveal(home);}
+ // A saved player can authenticate again after the room session cookie expires.
+ const returning=prefs.hasPlayer||(await ses.cookies.get({url:prefs.server,name:'squad_session'})).length>0;
+ if(returning)ensureView();
+ else open('player');
 }
 if(locked)app.whenReady().then(start);
 app.on('window-all-closed',()=>app.quit());

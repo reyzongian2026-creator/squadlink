@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {NES} from '../public/duck-nes-core.js';
-import {readCartridge, zapperPoint} from '../public/duck-nes.js';
+import {readCartridge, zapperPoint, cartridgeMarks} from '../public/duck-nes.js';
 import {diagnosticCartridge} from './duck-nes-fixture.mjs';
 
 test('acepta iNES y rechaza cabecera, tamaño o bancos declarados inválidos', () => {
@@ -38,4 +38,36 @@ test('el núcleo real reproduce vídeo y audio y el cartucho lee luz y gatillo d
   assert.equal(nes.cpu.mem[0x10] & 0x18, 0x10, 'el cartucho detecta un disparo');
   nes.zapperFireUp(); nes.frame();
   assert.equal(nes.cpu.mem[0x10] & 0x10, 0, 'el cartucho recibe la liberación del gatillo');
+});
+
+test('marcas de cartucho conservan el orden de bytes y los dígitos de puntuación',()=>{
+  const mem = new Uint8Array(2048);
+  mem.set([1,2,3],0x715); mem[0x727]=4;
+  assert.deepEqual(cartridgeMarks('mario3',mem),{mario3:660510,mario3world:5});
+  mem.set([0x12,0x34,0x56],0xc4); mem[0xc1]=0x12;
+  assert.deepEqual(cartridgeMarks('duck-nes',mem),{ducknes:123456,ducknesround:12});
+  mem[0xc6]=0xfb;
+  assert.ok(Number.isNaN(cartridgeMarks('duck-nes',mem).ducknes));
+});
+
+test('los sprites de 8 × 16 conservan ambas mitades en las dos tablas gráficas', () => {
+  const nes = new NES({emulateSound:false});
+  nes.loadROM(diagnosticCartridge());
+  const ppu = nes.ppu;
+  const rendered = [];
+  ppu.ptTile = Array.from({length:512}, (_,index) => ({render:() => rendered.push(index)}));
+  ppu.f_spVisibility = 1;
+  ppu.f_spriteSize = 1;
+  for (const tile of [0, 1, 4, 5, 254, 255]) {
+    for (const flipped of [false,true]) {
+      rendered.length = 0;
+      for (const line of [20,28]) {
+        ppu.scanlineSpriteCount[line] = 1;
+        ppu.scanlineSecondaryOAM.set([19,tile,flipped ? 128 : 0,42], line * 32);
+        ppu.renderSpritesPartially(line,1,0);
+      }
+      const base = (tile & 254) + (tile % 2) * 256;
+      assert.deepEqual(rendered, flipped ? [base+1,base] : [base,base+1]);
+    }
+  }
 });

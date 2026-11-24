@@ -1,4 +1,4 @@
-#game-dialog:has(.duck-nes) { width: min(660px, calc(100% - 20px)); }
+#game-dialog:has(.duck-nes) { width:min(1180px,calc(100vw - 24px)); max-width:none; padding:clamp(14px,2vw,24px); max-height:calc(100dvh - 16px); }
 .duck-nes { display: grid; gap: 10px; }
 .duck-nes label { display: grid; gap: 5px; margin: 0; }
 .duck-nes input { max-width: 100%; }
@@ -9,3 +9,45 @@
   touch-action: none; cursor: crosshair;
 }
 .duck-nes-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.nes-pad { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin:.5rem 0; }
+.nes-pad button { touch-action:none; min-width:42px; user-select:none; }
+.duck-nes:has(canvas[hidden]) .nes-pad { display:none; }
+
+.duck-nes canvas[hidden] { display:none; }
+.nes-cartridge summary { cursor:pointer; color:var(--muted); font-size:.9rem; }
+.nes-cartridge[open] label { margin-top:8px; }
+.duck-nes:has(.nes-pad) canvas { cursor:default; }
+
+.nes-screen { position:relative; width:min(100%,76dvh); margin-inline:auto; }
+.nes-screen canvas { width:100%; }
+.nes-sight { position:absolute; width:14px; height:14px; transform:translate(-50%,-50%); border:2px solid white; outline:1px solid #161721; border-radius:50%; pointer-events:none; }
+@media (hover:hover) and (pointer:fine) { .duck-nes .nes-pad { display:none; } }
+
+.nes-screen:has(canvas[hidden]) { display:none; }
+#game-dialog:has(.duck-nes) .label { display:none; }
+#game-dialog:has(.duck-nes) .practice-status { min-height:0; margin-bottom:.35rem; }
+#game-dialog:has(.duck-nes) .practice-account { display:block; color:var(--muted); font-size:.8rem; }
+@media (min-width:700px) and (min-height:420px) {
+  #game-dialog:has(.duck-nes canvas:not([hidden])) #game-mount {
+    display:grid; grid-template-columns:minmax(0,1fr) minmax(185px,25%); gap:10px 20px; align-items:start;
+    grid-template-rows:repeat(5,auto) 1fr;
+  }
+  #game-dialog:has(.duck-nes canvas:not([hidden])) #game-mount > * { grid-column:2; }
+  .duck-nes:has(canvas:not([hidden])) { display:contents; }
+  .duck-nes:has(canvas:not([hidden])) > * { grid-column:2; }
+  .duck-nes:has(canvas:not([hidden])) .nes-screen {
+    grid-column:1; grid-row:1 / span 6; width:min(100%,calc((100dvh - 112px)*1.06667)); align-self:center;
+  }
+  #game-dialog:has(.duck-nes canvas:not([hidden])) .practice-status { grid-row:4; }
+  #game-dialog:has(.duck-nes canvas:not([hidden])) .practice-account { grid-row:5; }
+  .nes-cartridge { grid-row:1; }
+  .nes-help { grid-row:2; margin:0; }
+  .duck-nes-controls { grid-row:3; }
+  .nes-pad { grid-row:6; }
+}
+:fullscreen #game-dialog:has(.duck-nes canvas:not([hidden])) { width:100vw; max-height:100dvh; padding:10px; border:0; border-radius:0; }
+@media (hover:hover) and (pointer:fine) {
+  :fullscreen #game-dialog:has(.duck-nes canvas:not([hidden])) #game-mount { display:block; }
+  :fullscreen #game-dialog:has(.duck-nes canvas:not([hidden])) :is(h2,.practice-status,.practice-account,.nes-cartridge,.nes-help,.duck-nes-controls,.nes-pad) { display:none; }
+  :fullscreen .duck-nes:has(canvas:not([hidden])) .nes-screen { width:min(100%,calc((100dvh - 24px)*1.06667)); }
+}

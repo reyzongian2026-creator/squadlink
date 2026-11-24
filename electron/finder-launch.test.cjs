@@ -7,7 +7,7 @@ const { execFileSync } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const { chromium } = require('playwright-core');
 
-test('LaunchServices abre la app empaquetada y muestra el formulario de sala', { timeout: 60000 }, async t => {
+test('LaunchServices abre la creación del personaje y guarda su apariencia con un único apodo', { timeout: 60000 }, async t => {
   const bundle = process.env.SQUADLINK_TEST_APP;
   assert.ok(bundle, 'Se requiere la ruta al paquete compilado');
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'squadlink-finder-'));
@@ -36,9 +36,23 @@ test('LaunchServices abre la app empaquetada y muestra el formulario de sala', {
     }
     assert.fail('Falta la ventana ' + host);
   }
-  const home = await pageAt('home');
-  await home.getByRole('button', { name: 'Crear sala', exact: true }).click({ timeout: 10000 });
-  const form = (await pageAt('app')).locator('#entry[open]');
-  await form.waitFor({ state: 'visible', timeout: 10000 });
-  assert.ok(await form.locator('#nickname').isVisible());
+  const player = await pageAt('app');
+  await player.getByRole('heading', {name:'Crea tu personaje',exact:true}).waitFor();
+  const controls = player.locator('#kit-options');
+  for (const name of ['Hombre','Mujer','Especie no identificada']) {
+    assert.ok(await controls.getByRole('button',{name,exact:true}).isVisible());
+  }
+  for (const name of ['Hombre','Alienígena','Curvilínea','Bigote']) {
+    await controls.getByRole('button',{name,exact:true}).click();
+  }
+  await player.getByRole('button',{name:'Elegir apodo y guardar',exact:true}).click();
+  const form = player.locator('#entry[open]');
+  await form.getByLabel('Tu apodo').fill('Pepe');
+  await form.locator('#submit-entry').click();
+  await player.getByText('Apariencia guardada.',{exact:true}).waitFor();
+  assert.equal(await player.locator('#kit-nick').innerText(),'Pepe');
+  assert.equal(await player.locator('#kit-level').innerText(),'Nivel 1 / 50');
+  for (const name of ['Hombre','Alienígena','Curvilínea','Bigote']) {
+    assert.equal(await controls.getByRole('button',{name,exact:true}).getAttribute('aria-pressed'),'true');
+  }
 });

@@ -12,7 +12,26 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  let available=false;for(let i=0;i<100;i++){try{available=(await fetch('http://127.0.0.1:4179/api/directory')).ok;}catch{}if(available)break;await delay(100);}assert.ok(available);
  app=await _electron.launch({executablePath,args:['--user-data-dir='+profile],timeout:45000});
  app.context().setDefaultTimeout(15000);
- const home=await app.firstWindow({timeout:20000});console.log('Ventana principal',home.url());
+ async function surface(host) {
+  for(let i=0;i<200;i++){
+   const page=app.context().pages().find(p=>!p.isClosed()&&p.url().startsWith('squad://'+host+'/'));
+   if(page)return page;
+   await delay(100);
+  }
+  throw Error('No apareció la vista '+host);
+ }
+ const fixture=fs.readFileSync(path.join(__dirname,'../test/windows/audio-fixture.js'),'utf8');
+ const audioSetup="if(location.hostname==='app' && navigator.mediaDevices && !window.testPeers){"+fixture+"\n}";
+ await app.context().addInitScript({content:audioSetup});
+ const onboarding=await surface('app');
+ await onboarding.evaluate(audioSetup);
+ await onboarding.getByRole('heading',{name:'Crea tu personaje',exact:true}).waitFor();
+ await onboarding.getByRole('button',{name:'Elegir apodo y guardar',exact:true}).click();
+ await onboarding.getByLabel('Tu apodo').fill('Prueba Electron');
+ await onboarding.locator('#submit-entry').click();
+ await onboarding.getByText('Apariencia guardada.',{exact:true}).waitFor();
+ await onboarding.getByRole('button',{name:'Lobby de voz',exact:true}).click();
+ let home=await surface('home');console.log('Ventana principal',home.url());
  const diagnostics=page=>{page.on('pageerror',err=>console.log('RENDER',err.message));page.on('console',m=>{if(m.type()==='error')console.log('RENDER',m.text())});};
  diagnostics(home);app.context().on('page',diagnostics);
  const capture=path.resolve(__dirname,'../artifacts/capturas');fs.mkdirSync(capture,{recursive:true});
@@ -23,7 +42,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  async function memory(label){const values=await app.evaluate(({app})=>app.getAppMetrics().map(m=>m.memory.workingSetSize));console.log('RAM '+label+' MiB: '+(values.reduce((a,b)=>a+b,0)/1024).toFixed(1));}
  await memory('inicio');console.log('Inicio React correcto');
  await home.getByRole('button',{name:'Ajustes',exact:true}).click();
- const mainId=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].id);
+ const mainId=await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].id);
  async function checkWindow(featureVisible){
   const observed=await app.evaluate(({BaseWindow},id)=>{
    const windows=BaseWindow.getAllWindows();
@@ -38,18 +57,16 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await home.getByRole('button',{name:'Bajo consumo'}).click();
  await checkWindow(false);
  await home.getByRole('button',{name:'Lobby de voz'}).click();
- const fixture=fs.readFileSync(path.join(__dirname,'../test/windows/audio-fixture.js'),'utf8');
- await app.context().addInitScript({content:"if(location.hostname==='app' && navigator.mediaDevices){"+fixture+"\n}"});
  await home.getByRole('button',{name:'Crear sala',exact:true}).click();
  let space;
  for(let i=0;i<120&&!space;i++){space=app.context().pages().find(p=>p.url().startsWith('squad://app/'));if(!space)await delay(100);}
  console.log("Motor de sala",space?.url());assert.ok(space,'El motor debe cargar dentro de la ventana principal.');
- await space.locator('#entry[open]').waitFor();await space.locator('#nickname').fill('Prueba Electron');await space.locator('#name').fill('Escuadra Lima');
+ await space.locator('#entry[open]').waitFor();assert.ok(await space.locator('#nickname').isHidden());await space.locator('#name').fill('Escuadra Lima');
  await space.screenshot({path:path.join(capture,'Crear-sala-Moderna.png')});await space.locator('#submit-entry').click();
  await space.locator('#room-name').waitFor({state:'visible'});
  await checkWindow(true);
  const code=await space.locator('#room-code').innerText();assert.match(code,/^[A-Z0-9]{6}$/);
- await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();
+ await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
  await checkWindow(false);
  await home.getByRole('button',{name:/Escuadra Lima.*Tu sala/}).waitFor();
  await home.getByRole('button',{name:'Activar micrófono',exact:true}).click();
@@ -64,7 +81,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await home.getByRole('button',{name:'Mi sala',exact:true}).click();
  const {musicSmoke}=await import('../test/support/music-browser.mjs');
  await musicSmoke(space,peer);
- await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();
+ await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
  await home.getByRole('button',{name:'Arcade',exact:true}).click();await space.getByRole('button',{name:/Reflejos/}).waitFor();
  const {duckNesBrowser}=await import('../test/duck-nes-browser.mjs');
  await duckNesBrowser(space);
@@ -80,7 +97,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    await game.getByRole('button',{name:'Jugar',exact:true}).click({timeout:120000});
    const canvas=game.getByLabel('Partida de Freedoom');
    await game.locator('#boot[hidden]').waitFor({state:'attached'});
-   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].focus());
+   await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].focus());
    await canvas.click();
    // Exercise windowed aiming too, including systems that decline pointer capture.
    await canvas.evaluate(async el=>{
@@ -129,17 +146,17 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    assert.ok(await space.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   }
  }
- await space.getByRole('button',{name:'Ajustes',exact:true}).click();
+ await space.getByRole('button',{name:'Ajustes',exact:true}).click();home=await surface('home');
  await home.getByRole('heading',{name:'Ajustes',exact:true}).waitFor();
  await checkWindow(false);
  await home.getByRole('button',{name:'Dispositivos de audio'}).click();await space.getByText('Ganancia automática del micrófono').waitFor();
- await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();
+ await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
  await home.getByRole('button',{name:'Mi sala',exact:true}).click();await space.locator('#room-name').waitFor({state:'visible'});
  await space.screenshot({path:path.join(capture,'Sala-Moderna.png')});
  console.log('Voz bidireccional durante la navegación',first,await audio(first));
- await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();
+ await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
  await home.getByRole('button',{name:'Salir de sala'}).click();await home.getByRole('button',{name:'Unirme con código'}).click();
- await space.locator('#code').fill(code);await space.locator('#submit-entry').click();await space.locator('#room-name').waitFor({state:'visible'});await checkWindow(true);
+ space=await surface('app');await space.locator('#code').fill(code);await space.locator('#submit-entry').click();await space.locator('#room-name').waitFor({state:'visible'});await checkWindow(true);
  console.log('Instalación, ajustes, sala, entrada por código y continuidad de voz verificados.');
  }finally{await browser?.close();await app?.close();backend.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

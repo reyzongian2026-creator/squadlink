@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const identityKey = "squadlink.device.v1";
+import {getPlayerKey} from "./player-pass.js";
 const contactsKey = "squadlink.contacts.v1";
 const friendId = /^[A-F0-9]{16}$/;
 const secret = /^[a-f0-9]{64}$/;
@@ -11,16 +11,6 @@ function loadContacts() {
         (item) => item && friendId.test(item.id) && secret.test(item.token),
       )
     : [];
-}
-function identity() {
-  let key = localStorage.getItem(identityKey);
-  if (!secret.test(key || "")) {
-    key = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
-      b.toString(16).padStart(2, "0"),
-    ).join("");
-    localStorage.setItem(identityKey, key);
-  }
-  return key;
 }
 function age(value) {
   if (!value) return "";
@@ -217,6 +207,7 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom, onUnauthoriz
             token: grant.token,
           });
       localStorage.setItem(contactsKey, JSON.stringify([...contacts.values()]));
+      window.dispatchEvent(new window.Event("squadlink:player-saved"));
     }
     const previous = snapshot;
     snapshot = s;
@@ -251,7 +242,7 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom, onUnauthoriz
         if (snapshot?.grants.length) {
           accept(
             await api("social/connect", {
-              deviceKey: identity(),
+              deviceKey: await getPlayerKey(),
               contacts: loadContacts(),
             }),
           );
@@ -277,7 +268,7 @@ export function createSocial({ api, tell, copy, enterRoom, getRoom, onUnauthoriz
     connecting = run(async () => {
       let deviceKey, contacts;
       try {
-        deviceKey = identity();
+        deviceKey = await getPlayerKey();
         contacts = loadContacts();
       } catch {
         throw Error(

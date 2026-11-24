@@ -1,3 +1,4 @@
+import {stationById} from './public/radio-stations.js';
 import { randomUUID } from 'node:crypto';
 import { open, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -141,14 +142,12 @@ export function roomMusic({reject,broadcast}) {
     const state = get(room);
     if (action==='add') {
       hasSpace(state);
-      if (!/^[A-Za-z0-9_-]{11}$/.test(data.videoId ?? '') || typeof data.videoId !== 'string') reject(400,'Enlace de YouTube inválido.');
-      append(room,{id:randomUUID(),kind:'youtube',videoId:data.videoId,title:name(data.title),
-        duration:data.duration ? duration(data.duration) : null,addedBy:session.nick});
-    } else if (action==='duration') {
-      if (state.queue[0]?.id===data.id && !state.queue[0].duration) {
-        state.queue[0].duration=duration(data.duration); schedule(room); broadcast(room);
-      }
-    } else if (action==='next' || action==='ended') advance(room,data.id);
+      const station = stationById(data.stationId);
+      if (!station) reject(400,'Selecciona una emisora del catálogo.');
+      append(room,{id:randomUUID(),kind:'radio',stationId:station.id,title:station.name,
+        duration:1800,addedBy:session.nick});
+    } else if (action==='next' || (action==='ended' && state.queue[0]?.kind==='file')) advance(room,data.id);
+    else if (action==='ended') return;
     else reject(404,'Acción de música desconocida.');
   }
   return {upload,file,command,clear};

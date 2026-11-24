@@ -28,7 +28,7 @@ function record(id, score, lowerWins = false) {
   return score;
 }
 
-function aim(id, mount, status) {
+function aim(id, mount, status, report) {
   const speed = id === 'flick';
   const instructions = speed ? 'Acierta 12 blancos en el menor tiempo posible.'
     : 'Tienes 16 intentos. El blanco se reduce con cada acierto.';
@@ -63,9 +63,11 @@ function aim(id, mount, status) {
       const accuracy = Math.round(100 * hits / shots);
       if (speed) {
         const time = Math.max(1, Math.round(performance.now() - started));
+        report(id,time);
         const best = record(id, time, true);
         status.textContent = (time/1000).toFixed(2) + ' s · Precisión ' + accuracy + ' % · Récord local ' + (best/1000).toFixed(2) + ' s.';
       } else {
+        report(id,hits);
         const best = record(id, hits);
         status.textContent = hits + ' de 16 aciertos · ' + accuracy + ' % · Récord local ' + best + '/16.';
       }
@@ -114,7 +116,7 @@ function addTile(board) {
   if (empty.length) board[empty[Math.floor(Math.random() * empty.length)]] = Math.random() < 0.9 ? 2 : 4;
 }
 
-function puzzle(mount, status) {
+function puzzle(mount, status, report) {
   const grid = element('div', 'merge-board');
   grid.tabIndex = 0;
   grid.setAttribute('role','group');
@@ -145,6 +147,7 @@ function puzzle(mount, status) {
     paint();
     const won = board.includes(2048);
     done = won || (!board.includes(0) && !Object.values(directions).some(dir => slide(board, dir).changed));
+    report('merge',score);
     const best = record('merge', score);
     status.textContent = (won ? '¡Llegaste a 2048! · ' : done ? 'Sin movimientos · ' : '') + score + ' puntos · Récord local ' + best;
     if (done) Array.from(arrows.children).forEach(b => { b.disabled = true; });
@@ -185,11 +188,13 @@ export function botMove(cells) {
   }
   return empty[0];
 }
-function three(mount, status) {
+function three(mount, status, report) {
   const grid = element('div','three-board');
+  let started;
   const cells = Array(9).fill('');
   const moves = cells.map((_, index) => button('', 'three-cell', () => {
     if (moves[index].disabled) return;
+    started ??= performance.now();
     if (place(index,'X')) return;
     place(botMove(cells),'O');
   }));
@@ -202,12 +207,14 @@ function three(mount, status) {
     control.disabled = true;
     const line = winningLine(cells,mark);
     if (!line && cells.includes('')) return false;
+    if (line && mark === 'X') report('three',Math.max(1,Math.round(performance.now()-started)));
     line?.forEach(i => { moves[i].dataset.win = 'true'; });
     moves.forEach(b => { b.disabled = true; });
     status.textContent = line ? (mark === 'X' ? '¡Ganaste!' : 'Ganó la computadora.') : 'Empate.';
     return true;
   }
   function reset() {
+    started = null;
     cells.fill('');
     moves.forEach((b,i) => { b.textContent = ''; b.disabled = false; delete b.dataset.win; b.setAttribute('aria-label', label(i)); });
     status.textContent = 'Eres X. Juega contra la computadora y alinea tres fichas.';
@@ -218,7 +225,7 @@ function three(mount, status) {
 }
 
 
-function ducks(mount, status) {
+function ducks(mount, status, report) {
   const pond = element('div', 'duck-pond');
   const total = 10;
   let current = 0, hits = 0, timer, active = false;
@@ -237,6 +244,7 @@ function ducks(mount, status) {
       pond.hidden = true;
       start.hidden = false;
       start.textContent = 'Otra partida';
+      report('ducks',hits);
       status.textContent = hits + ' de ' + total + ' patos · Récord local ' + record('ducks',hits) + '/10.';
       start.focus();
       return;
@@ -272,10 +280,12 @@ function ducks(mount, status) {
   return () => { active = false; clearTimeout(timer); document.removeEventListener('visibilitychange', visibility); };
 }
 
-function doom(mount, status) {
+function doom(mount, status, report) {
   let player;
   function gameExit(event) {
-    if (player && event.source === player.contentWindow && event.data === 'squadlink:doom:closed')
+    if (!player || event.source !== player.contentWindow) return;
+    if (event.data?.type === 'squadlink:doom:maps') report('doom',event.data.count);
+    if (event.data === 'squadlink:doom:closed')
       mount.closest('dialog')?.close();
   }
   window.addEventListener('message', gameExit);
@@ -303,8 +313,8 @@ function doom(mount, status) {
   };
 }
 
-export function openPractice(id, mount) {
-  if (!['flick','precision','merge','three','ducks','duck-nes','doom'].includes(id)) throw Error('Juego desconocido');
+export function openPractice(id, mount, loadout) {
+  if (!['flick','precision','merge','three','ducks','duck-nes','mario3','doom'].includes(id)) throw Error('Juego desconocido');
   if (!document.querySelector('link[data-practice-style]')) {
     const style = document.createElement('link');
     style.rel = 'stylesheet';
@@ -315,13 +325,18 @@ export function openPractice(id, mount) {
   const status = element('p', 'practice-status');
   status.setAttribute('role', 'status');
   mount.replaceChildren(status);
+  if (!loadout?.ranked?.()) {
+    const hint = element('small','practice-account','Modo práctica · Elige tu apodo antes de jugar para registrar récords.');
+    mount.append(hint);
+  }
+  const report = (game,value) => loadout?.report?.(game,value);
   let dispose;
-  if (id === 'merge') dispose = puzzle(mount, status);
-  else if (id === 'three') three(mount, status);
-  else if (id === 'ducks') dispose = ducks(mount, status);
-  else if (id === 'duck-nes') dispose = mountDuckNes(mount, status);
-  else if (id === 'doom') dispose = doom(mount, status);
-  else aim(id, mount, status);
+  if (id === 'merge') dispose = puzzle(mount, status, report);
+  else if (id === 'three') three(mount, status, report);
+  else if (id === 'ducks') dispose = ducks(mount, status, report);
+  else if (id === 'duck-nes' || id === 'mario3') dispose = mountDuckNes(mount, status, undefined, {game:id,report});
+  else if (id === 'doom') dispose = doom(mount, status, report);
+  else aim(id, mount, status, report);
   return () => { dispose?.(); mount.replaceChildren(); };
 }
 

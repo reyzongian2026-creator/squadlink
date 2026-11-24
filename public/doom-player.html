@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-47FY03XgUGa2x3NakQJORJAmkmh1NsadL2o9iu8/nHg=' 'wasm-unsafe-eval' https://danborden1.github.io/doom-web/websockets-doom.js; connect-src https://danborden1.github.io/doom-web/; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-bYfIzBCmWuMNxx9Aen8RiYPBIK12g7bnpdl8eXOPZfo=' 'wasm-unsafe-eval' https://danborden1.github.io/doom-web/websockets-doom.js; connect-src https://danborden1.github.io/doom-web/; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <title>Freedoom · Squadlink</title>
 <style>
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:#13141a;color:#f3f2fa;font:15px system-ui}body{display:flex;flex-direction:column}
@@ -31,6 +31,21 @@ const progress = document.getElementById('progress');
 const pad = document.getElementById('pad');
 let stopped = false;
 let playing = false;
+let statsCompatible = false, statsTimer, activeMap = '';
+const completedMaps = new Set();
+function sampleMaps() {
+  // gamestate, gameepisode, gamemap and demoplayback in this WASM build's DWARF.
+  const ram = window.Module.HEAP32;
+  if (!statsCompatible || !ram) return;
+  const state = ram[0xec2d4 >>> 2], episode = ram[0xec7c0 >>> 2], map = ram[0xec310 >>> 2];
+  if (ram[0xec86c >>> 2] || episode < 1 || episode > 4 || map < 1 || map > 9) { activeMap = ''; return; }
+  if (state === 0) { activeMap = episode + '.' + map; return; }
+  if (activeMap && (state === 1 || state === 2) && !completedMaps.has(activeMap)) {
+    completedMaps.add(activeMap);
+    parent.postMessage({type:'squadlink:doom:maps',count:completedMaps.size}, '*');
+  }
+  activeMap = '';
+}
 let turnKey = 0, turnTimer;
 function turnEvent(type, keyCode) {
   const key = keyCode === 37 ? 'ArrowLeft' : 'ArrowRight';
@@ -57,6 +72,8 @@ canvas.addEventListener('mouseleave', releaseTurn);
 document.addEventListener('pointerlockchange', releaseTurn);
 function stop() {
   if (stopped) return;
+  if (playing) sampleMaps();
+  clearInterval(statsTimer);
   stopped = true;
   releaseTurn();
   if (document.pointerLockElement === canvas) document.exitPointerLock();
@@ -116,6 +133,7 @@ play.onclick = () => {
   pad.hidden = false;
   canvas.focus();
   try {
+    if (statsCompatible) statsTimer = setInterval(sampleMaps,500);
     callMain(['-iwad','freedoom1.wad','-config','squad.cfg','-extraconfig','squad-extra.cfg','-window','-nogui','-nomusic','-skill','2','-warp','1','1']);
   } catch (error) {
     if (error !== 'unwind') failed();
@@ -140,7 +158,19 @@ loader.src = base + 'websockets-doom.js';
 loader.crossOrigin = 'anonymous';
 loader.integrity = 'sha384-n1eyH16zS54fXknxRYXs4+h4I5OMCVA9KxFAl38aumsoPbT7hJtReDncU29MN2rh';
 loader.onerror = failed;
-document.head.append(loader);
+async function loadEngine() {
+  try {
+    const response = await fetch(base + 'websockets-doom.wasm');
+    if (!response.ok) throw Error();
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const digest = await crypto.subtle.digest('SHA-256',bytes);
+    const hash = Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2,'0')).join('');
+    statsCompatible = hash === '4a55e4381d374b9bf347116e8c6f52547bb990fd7fc28a5e21af354830f80f78';
+    window.Module.wasmBinary = bytes;
+  } catch { /* Let the loader retry using its own fetch implementation. */ }
+  if (!stopped) document.head.append(loader);
+}
+loadEngine();
 </script>
 </body>
 </html>

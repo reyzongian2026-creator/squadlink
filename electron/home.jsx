@@ -54,6 +54,8 @@ function App(){
  async function run(work){setError('');try{return await work()}catch(e){setError(e.message.replace(/^Error invoking remote method.*?Error: /,''));}}
  function open(key,code){run(()=>api.open(code?{key,code}:key))}
  if(!state)return <main><p role="status">{error||'Abriendo Squadlink…'}</p></main>;
+ // The workspace covers the home window. Keep its state, release its artwork and controls.
+ if(state.low && state.hostSection==='workspace')return null;
  return <div className="desktop-shell">
    <aside className="channel-rail">
      <div className="channel-brand"><img src="/icon-192.png" alt=""/><span className="rail-label">Squadlink</span></div>
@@ -126,7 +128,7 @@ function App(){
            return <li key={r.code}><button disabled={r.code!==state.code && (state.joined || full)} onClick={()=>r.code===state.code?open('lobby'):open('join',r.code)}>
              <span className="room-symbol"><Icon id="sound"/></span>
              <span className="room-label"><b>{r.name}</b><small>{[r.game,r.level].filter(Boolean).join(' · ')||'Sala de voz'}</small></span>
-             <em aria-label={(r.code===state.code?'Tu sala · ':'')+r.count+' de '+r.capacity+' plazas ocupadas'}>{r.code===state.code?'Tu sala':full?'Llena':r.count+'/'+r.capacity}</em>
+             <em aria-label={(r.code===state.code?'Tu sala · ':'')+r.count+' de '+r.capacity+' plazas ocupadas'}>{r.code===state.code?'Volver a mi sala':full?'Llena':r.count+'/'+r.capacity}</em>
            </button></li>})}</ul> :
            <p className="empty" role="status"><Icon id="headset"/>{directoryStatus}</p>}
        </section>

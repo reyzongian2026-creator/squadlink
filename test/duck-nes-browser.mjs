@@ -3,6 +3,7 @@ import {diagnosticCartridge} from './duck-nes-fixture.mjs';
 
 // Runs inside the browser smoke suite's isolated arcade page and uses no commercial ROM.
 export async function duckNesBrowser(page) {
+  await page.route('**/duck-nes.nes', route => route.fulfill({status:404,body:''}));
   await page.locator('[data-game="duck-nes"]').click();
   const panel = page.locator('.duck-nes');
   const input = panel.locator('input[type=file]');

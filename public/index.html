@@ -113,10 +113,6 @@
           ><button class="secondary small" id="invite">Copiar enlace</button>
         </div>
         <ul id="members" aria-label="Jugadores en la sala"></ul>
-        <button id="measure-voice" class="secondary small" type="button">
-          Medir conexión de voz
-        </button>
-        <div id="voice-measurements" class="status" role="status"></div>
         <div class="actions">
           <button class="primary" id="mic" aria-pressed="false">
             Activar micrófono</button
@@ -124,6 +120,13 @@
           ><button class="secondary danger" id="leave">Salir de la sala</button>
         </div>
         <p class="status" id="voice-status" role="status"></p>
+        <details class="connection-details settings">
+          <summary>Conexión de voz</summary>
+        <button id="measure-voice" class="secondary small" type="button">
+          Medir conexión de voz
+        </button>
+        <div id="voice-measurements" class="status" role="status"></div>
+        </details>
         <div id="room-music"></div>
         <details id="audio-panel" class="settings">
           <summary>Ajustes de audio</summary>
@@ -274,46 +277,50 @@
           <div class="section-head">
             <h2 id="arcade-title">Arcade</h2>
           </div>
-          <h3 class="arcade-category">Puntería</h3>
-          <div class="games">
-            <button class="game-card" data-game="flick" data-practice>
-              <span class="art art-flick" aria-hidden="true"><b>◎  ·  ◉</b></span>
-              <span class="game-body"><strong>Cambio de blanco</strong><span>Acierta 12 blancos a contrarreloj.</span><i data-icon="play"></i></span>
-            </button>
-            <button class="game-card" data-game="precision" data-practice>
-              <span class="art art-precision" aria-hidden="true"><b>◉  ◎  ∘</b></span>
-              <span class="game-body"><strong>Precisión</strong><span>Aprovecha 16 intentos sobre blancos cada vez más pequeños.</span><i data-icon="play"></i></span>
-            </button>
+          <div class="arcade-tools">
+            <div class="arcade-filters" role="group" aria-label="Filtrar juegos por categoría">
+              <button type="button" data-category="" aria-pressed="true">Todos</button>
+              <button type="button" data-category="Clásicos" aria-pressed="false">Clásicos</button>
+              <button type="button" data-category="Puntería" aria-pressed="false">Puntería</button>
+              <button type="button" data-category="Lógica y estrategia" aria-pressed="false">Estrategia</button>
+              <button type="button" data-category="Reflejos y memoria" aria-pressed="false">Reflejos y memoria</button>
+            </div>
+            <span class="arcade-count" role="status">10 juegos</span>
           </div>
-          <h3 class="arcade-category">Clásicos</h3>
-          <div class="games">
-            <button class="game-card" data-game="ducks" data-practice>
-              <span class="art art-ducks" aria-hidden="true"><b>🦆</b></span>
-              <span class="game-body"><strong>Mata patos</strong><span>Acierta a los diez patos antes de que crucen la laguna.</span><i data-icon="play"></i></span>
+          <div class="games arcade-library">
+            <button class="game-card" data-genre="Clásicos" data-game="mario3" data-practice>
+              <span class="art art-mario" aria-hidden="true"><b>NES</b></span>
+              <span class="game-body"><strong>Super Mario Bros. 3</strong><span>Recorre los ocho mundos del clásico de NES.</span><i data-icon="play"></i></span>
             </button>
-            <button class="game-card" data-game="duck-nes" data-practice>
+            <button class="game-card" data-genre="Clásicos" data-game="duck-nes" data-practice>
               <span class="art art-ducks" aria-hidden="true"><b>NES</b></span>
-              <span class="game-body"><strong>Duck Hunt · NES</strong><span>Juega el cartucho original con tu ROM .nes y el Zapper virtual.</span><i data-icon="play"></i></span>
+              <span class="game-body"><strong>Duck Hunt · NES</strong><span>Apunta y dispara con el Zapper virtual.</span><i data-icon="play"></i></span>
             </button>
-            <button class="game-card" data-game="doom" data-practice>
+            <button class="game-card" data-genre="Clásicos" data-game="doom" data-practice>
               <span class="art art-doom" aria-hidden="true"><b>DOOM</b></span>
               <span class="game-body"><strong>DOOM · Freedoom</strong><span>Explora la campaña Phase 1 en Chocolate Doom.</span><i data-icon="play"></i></span>
             </button>
-          </div>
-          <h3 class="arcade-category">Lógica y estrategia</h3>
-          <div class="games">
-            <button class="game-card" data-game="merge" data-practice>
+            <button class="game-card" data-genre="Clásicos" data-game="ducks" data-practice>
+              <span class="art art-ducks" aria-hidden="true"><b>🦆</b></span>
+              <span class="game-body"><strong>Mata patos</strong><span>Acierta a los diez patos antes de que crucen la laguna.</span><i data-icon="play"></i></span>
+            </button>
+            <button class="game-card" data-genre="Lógica y estrategia" data-game="merge" data-practice>
               <span class="art art-merge" aria-hidden="true"><b>2　4　8</b></span>
               <span class="game-body"><strong>2048</strong><span>Desliza y combina fichas iguales.</span><i data-icon="play"></i></span>
             </button>
-            <button class="game-card" data-game="three" data-practice>
+            <button class="game-card" data-genre="Lógica y estrategia" data-game="three" data-practice>
               <span class="art art-memory" aria-hidden="true"><b>×　○　×</b></span>
               <span class="game-body"><strong>Tres en raya</strong><span>Alinea tres fichas contra la computadora.</span><i data-icon="play"></i></span>
             </button>
-          </div>
-          <h3 class="arcade-category">Reflejos y memoria</h3>
-          <div class="games">
-            <button class="game-card" data-game="reflex">
+            <button class="game-card" data-genre="Puntería" data-game="flick" data-practice>
+              <span class="art art-flick" aria-hidden="true"><b>◎  ·  ◉</b></span>
+              <span class="game-body"><strong>Cambio de blanco</strong><span>Acierta 12 blancos a contrarreloj.</span><i data-icon="play"></i></span>
+            </button>
+            <button class="game-card" data-genre="Puntería" data-game="precision" data-practice>
+              <span class="art art-precision" aria-hidden="true"><b>◉  ◎  ∘</b></span>
+              <span class="game-body"><strong>Precisión</strong><span>Aprovecha 16 intentos sobre blancos cada vez más pequeños.</span><i data-icon="play"></i></span>
+            </button>
+            <button class="game-card" data-genre="Reflejos y memoria" data-game="reflex">
               <span class="art art-target" aria-hidden="true"
                 ><span class="scope"><b></b></span><i class="target-line"></i
               ></span>
@@ -322,7 +329,7 @@
                 ><span>Reacciona a la señal.</span><i data-icon="play"></i
               ></span>
             </button>
-            <button class="game-card" data-game="sequence">
+            <button class="game-card" data-genre="Reflejos y memoria" data-game="sequence">
               <span class="art art-memory" aria-hidden="true"
                 ><span class="tiles"><b></b><b></b><b></b><b></b></span
               ></span>
@@ -383,8 +390,15 @@
             autocomplete="nickname"
             maxlength="24"
             required
-            placeholder="Ej. Luna"
+            placeholder="Ej. Pepe"
           />
+        </div>
+        <div id="player-pass">
+          <p id="player-pass-hint" class="status"></p>
+          <button type="button" class="secondary small" id="player-pass-open">Abrir mi pase de jugador</button>
+          <button type="button" class="secondary small" id="player-pass-save" hidden>Guardar mi pase privado</button>
+          <input type="file" id="player-pass-file" accept=".squadlink" hidden>
+          <p id="player-pass-note" class="status" role="status"></p>
         </div>
         <div id="name-field">
           <label for="name">Nombre de la sala</label

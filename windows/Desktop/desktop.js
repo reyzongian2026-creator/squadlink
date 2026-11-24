@@ -1,4 +1,4 @@
-import { desktopNickname, enterFromWindows, onConfirmedGuest, canReleaseGuestWorkspace, openDesktopProgress } from './app.js';
+import { identityReady, desktopNickname, enterFromWindows, onConfirmedGuest, canReleaseGuestWorkspace, openDesktopProgress } from './app.js';
 const byId = id => document.getElementById(id);
 const bridge = window.squadBridge ?? window.chrome.webview;
 byId('hero-title').textContent = 'Mi sala';
@@ -13,6 +13,31 @@ details.className = 'desktop-room-details';
 const roomPanel = byId('room');
 while (roomPanel.firstChild) details.append(roomPanel.firstChild);
 roomPanel.append(details, occupants);
+
+if (window.squadBridge) {
+  const top = details.querySelector('.room-top');
+  const actions = details.querySelector('.actions');
+  const invite = byId('invite');
+  invite.textContent = 'Copiar invitación';
+  invite.title = 'Copiar el enlace para invitar a tu grupo';
+  actions.insertBefore(invite, byId('leave'));
+  const heading = top.querySelector('div');
+  heading.querySelector('.label').replaceWith(byId('room-published'));
+  const rosterHeader = document.createElement('header');
+  rosterHeader.className = 'roster-heading';
+  rosterHeader.append(membersTitle, byId('count'));
+  occupants.prepend(rosterHeader);
+  occupants.append(byId('room-requests'));
+
+  const extra = document.createElement('details');
+  extra.className = 'room-inspector';
+  const summary = document.createElement('summary');
+  summary.textContent = 'Detalles de sala';
+  extra.append(summary, details.querySelector('.room-info'), details.querySelector('.room-meta'),
+    details.querySelector('.invite'), byId('private-match'), details.querySelector('.connection-details'));
+  details.append(top, byId('room-description'), actions, byId('voice-status'));
+  roomPanel.append(details, occupants, byId('room-music'), extra);
+}
 
 const pages = {
   lobby: ['home', 'room'],
@@ -45,8 +70,10 @@ const pageIds = new Set(Object.values(pages).flat());
 let section = 'lobby';
 function show(next) {
   if (!Object.hasOwn(pages, next)) return;
+  const previousSection = section;
   section = next;
   document.body.dataset.workspace = next;
+  if (previousSection === 'rooms' && next !== 'rooms') window.dispatchEvent(new Event('squad:directory-close'));
   if (next === 'rooms') window.dispatchEvent(new Event('squad:directory-open'));
   for (const id of pageIds) {
     byId(id).classList.toggle('desktop-inactive', !pages[next].includes(id));
@@ -140,8 +167,8 @@ for (const id of ['room-name', 'friend-id', 'members', 'room-code', 'voice-statu
 }
 observer.observe(friendRows, {...textChanges, attributeFilter: ['class']});
 observer.observe(requestRows, {childList: true, subtree: true, attributeFilter: ['data-action']});
-let releaseTimer;
-bridge.addEventListener('message', ({data}) => {
+let releaseTimer, lastVisit;
+bridge.addEventListener('message', async ({data}) => {
   if (data?.type === 'desktop:submit') {
     clearTimeout(releaseTimer);
     enterFromWindows(data.data).then(
@@ -151,6 +178,7 @@ bridge.addEventListener('message', ({data}) => {
     return;
   }
   if (data?.type !== 'desktop:action') return;
+  lastVisit = data.visit;
   document.body.classList.toggle("low-power", data.low === true);
   clearTimeout(releaseTimer);
   if (data.action === 'background') {
@@ -163,6 +191,8 @@ bridge.addEventListener('message', ({data}) => {
     show('friends');
     if (!byId('social-login').hidden && !byId('entry').open) byId('social-login').click();
   } else if (['create','join'].includes(data.action)) {
+    await identityReady;
+    if (lastVisit !== data.visit) return;
     show('lobby');
     if (!inRoom) {
       byId(data.action).click();

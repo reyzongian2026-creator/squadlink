@@ -1,21 +1,9 @@
-const videoPattern = /^[\w-]{11}$/;
-const widgetChannel = "squadlink:music";
-const desktopWidget = "https://squadlink-lobby.onrender.com/music-youtube.html";
+import {radioStations, stationById} from "./radio-stations.js";
+
 const maxFileBytes = 20 * 1024 * 1024;
 
-export function youtubeId(input) {
-  let url;
-  try { url = new URL(input.trim()); } catch { return null; }
-  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.port) return null;
-  const host = url.hostname.toLowerCase();
-  const parts = url.pathname.split("/").filter(Boolean);
-  let id;
-  if (host === "youtu.be" && parts.length === 1) id = parts[0];
-  if (["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"].includes(host)) {
-    if (url.pathname === "/watch") id = url.searchParams.get("v");
-    if (parts.length === 2 && ["shorts", "embed", "live"].includes(parts[0])) id = parts[1];
-  }
-  return typeof id === "string" && videoPattern.test(id) ? id : null;
+export function stationsForGenre(genre) {
+  return radioStations.filter(station => !genre || station.genre === genre);
 }
 
 export function roomPosition(startedAt, clockOffset, now = Date.now()) {
@@ -53,30 +41,73 @@ export function createMusic({mount, api, notify}) {
   mount.innerHTML = `
     <section class="music-panel" aria-labelledby="music-heading">
       <header class="music-header"><h3 id="music-heading">Música de sala</h3><button type="button" data-listen class="secondary small" aria-pressed="false">Escuchar</button></header>
-      <div class="music-current" hidden><strong data-title></strong><button type="button" data-next class="secondary small">Siguiente</button></div>
+      <div class="music-current" hidden><div class="music-track"><strong data-title></strong><small data-kind></small></div><button type="button" data-next class="secondary small">Siguiente</button></div>
       <div data-player></div>
       <label class="music-volume" hidden>Volumen de música <input type="range" min="0" max="100" value="60" aria-label="Volumen de música"><output>60 %</output></label>
       <p class="music-empty" hidden>La cola está vacía.</p>
       <p class="music-notice" role="status"></p>
       <details class="music-queue" hidden><summary>Cola de reproducción</summary><ol></ol></details>
       <details class="music-add"><summary>Añadir música</summary><form>
-        <label>Fuente<select data-source><option value="youtube">YouTube</option><option value="file">Archivo de audio</option></select></label>
-        <label data-link>Enlace de YouTube<input type="url" placeholder="https://youtu.be/…" required></label>
-        <label data-name>Título (opcional)<input maxlength="80" autocomplete="off"></label>
+        <fieldset class="music-picker source-picker"><legend>Fuente</legend>
+          <div class="source-options">
+            <label><input type="radio" name="music-source" value="radio" checked><span>Radio en directo</span></label>
+            <label><input type="radio" name="music-source" value="file"><span>Archivo de audio</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="music-picker genre-picker" data-radio><legend>Género</legend><div class="genre-options"></div></fieldset>
+        <fieldset class="music-picker station-picker" data-radio><legend>Emisora</legend><div class="station-options"></div></fieldset>
+        <p class="music-turn" data-radio>Turnos de 30 min en la sala.</p>
         <label data-file hidden>Archivo de audio (hasta 20 MiB)<input type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.webm" disabled></label>
-        <button class="primary" type="submit">Añadir a la cola</button>
+        <div class="music-submit"><button type="button" class="secondary" data-personal data-radio>Escuchar solo aquí</button> <button class="primary" type="submit">Añadir a la sala</button></div>
       </form></details>
     </section>`;
   const el = selector => mount.querySelector(selector);
+  if (window.squadBridge) {
+    el("#music-heading").textContent = "Radio y música";
+    const artist = document.createElement("small");
+    artist.className = "room-dj";
+    artist.textContent = "DJ Squadlink";
+    el(".music-header").prepend(artist);
+  }
   const listen = el("[data-listen]"), current = el(".music-current"), next = el("[data-next]");
   const player = el("[data-player]"), title = el("[data-title]"), notice = el(".music-notice");
   const volume = el('input[type="range"]'), volumeLabel = el(".music-volume");
   const queueDetails = el(".music-queue"), queueList = el("ol");
-  const form = el("form"), add = el('[type="submit"]'), source = el("[data-source]");
-  const link = el("[data-link] input"), name = el("[data-name] input"), file = el('[type="file"]');
+  const form = el("form"), add = el('[type="submit"]'), file = el('[type="file"]');
+  const genres = [...new Set(radioStations.map(station => station.genre))].sort((a, b) => a.localeCompare(b, "es"));
+  const activeChoice = name => el('input[name="music-' + name + '"]:checked');
+  function choice(name, value, text, selected) {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "music-" + name;
+    input.value = value;
+    input.defaultChecked = selected;
+    input.checked = selected;
+    const caption = document.createElement("span");
+    caption.textContent = text;
+    label.append(input, caption);
+    return label;
+  }
+  el(".genre-options").replaceChildren(...["", ...genres].map(value => choice("genre",value,value || "Todos",!value)));
+  function listStations() {
+    const previous = activeChoice("station")?.value;
+    const matches = stationsForGenre(activeChoice("genre")?.value || "");
+    const selected = matches.some(item => item.id === previous) ? previous : matches[0]?.id;
+    el(".station-options").replaceChildren(...matches.map(station => {
+      const row = choice("station",station.id,station.name,station.id === selected);
+      row.dataset.stationId = station.id;
+      const genre = document.createElement("small");
+      genre.textContent = station.genre;
+      row.lastChild.append(genre);
+      return row;
+    }));
+  }
+  listStations();
+  el(".genre-options").onchange = listStations;
   let room = null, track = null, clockOffset = 0, optedIn = false;
   let release = null, setPlayerVolume = null, syncPlayer = null, delivery = null, skipId = null, lastQueue = "";
-  let upload;
+  let upload, personalStation = null;
   const position = () => roomPosition(room?.music?.startedAt, clockOffset);
   const post = (action, data) => api("music/" + action, data);
   function feedback(text) { notice.textContent = text; }
@@ -105,112 +136,116 @@ export function createMusic({mount, api, notify}) {
       try { await post("ended", {room: code, id: item.id}); }
       catch (error) { if (active()) { sentEnd = false; feedback(error.message); } }
     }
-    if (item.kind === "file") {
-      const audio = document.createElement("audio");
-      audio.preload = "auto";
-      audio.volume = Number(volume.value) / 100;
-      const sync = () => {
-        if (!audio.readyState || !Number.isFinite(audio.duration)) return;
-        const target = Math.min(position(), audio.duration);
-        if (Math.abs(audio.currentTime - target) > 2) audio.currentTime = target;
-      };
-      async function play() {
-        sync();
-        try { await audio.play(); if (active()) feedback(""); }
-        catch (error) {
-          if (active() && error.name !== "AbortError") {
-            feedback("Pulsa Reproducir para escuchar la música.");
-            retry.hidden = false;
-          }
-        }
-      }
-      const retry = document.createElement("button");
-      retry.type = "button";
-      retry.className = "secondary small";
-      retry.hidden = true;
-      retry.textContent = "Reproducir";
-      retry.onclick = () => { retry.hidden = true; play(); };
-      audio.onloadedmetadata = play;
-      audio.onended = ended;
-      audio.onerror = () => feedback("Audio no disponible. Puedes pasar a la siguiente pista.");
-      audio.src = "/api/music/file?" + new URLSearchParams({room: code, id: item.id});
-      setPlayerVolume = () => { audio.volume = Number(volume.value) / 100; };
-      syncPlayer = sync;
-      release = () => {
-        audio.onended = audio.onloadedmetadata = audio.onerror = null;
-        audio.pause();
-        audio.removeAttribute("src");
-        audio.load();
-      };
-      player.append(audio, retry);
+    const live = item.kind === "radio";
+    const station = live && stationById(item.stationId);
+    if (live ? !station : item.kind !== "file") {
+      feedback("Esta pista ya no está disponible. Puedes pasar a la siguiente.");
       return;
     }
-    if (item.kind !== "youtube" || !videoPattern.test(item.videoId || "")) {
-      feedback("Esta pista no está disponible.");
-      return;
+    const audio = document.createElement("audio");
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "secondary small";
+    retry.hidden = true;
+    audio.preload = "auto";
+    audio.volume = Number(volume.value) / 100;
+    const src = live ? station.url : "/api/music/file?" + new URLSearchParams({room: code, id: item.id});
+    let reconnect = false, stallTimer;
+    function awaitRadio() {
+      if (!live || !active()) return;
+      clearTimeout(stallTimer);
+      feedback("Conectando con la emisora…");
+      stallTimer = setTimeout(unavailable, 15000);
     }
-    const frame = document.createElement("iframe");
-    const url = new URL(location.protocol === "squad:" ? desktopWidget : "/music-youtube.html", location.href);
-    url.searchParams.set("video", item.videoId);
-    frame.title = "Reproductor de YouTube · " + item.title;
-    frame.allow = "autoplay; encrypted-media; fullscreen; picture-in-picture";
-    frame.allowFullscreen = true;
-    frame.referrerPolicy = "strict-origin-when-cross-origin";
-    frame.onload = () => frame.contentWindow?.postMessage({channel: widgetChannel, action: "connect"}, url.origin);
-    frame.src = url.href;
-    let ready = false, visible = false, sentDuration = false;
-    const send = (action, values = {}) => {
-      if (ready) frame.contentWindow?.postMessage({channel: widgetChannel, action, ...values}, url.origin);
-    };
-    const canPlay = () => visible && !document.hidden;
-    function visibility() {
-      if (canPlay()) send("play", {position: position(), volume: Number(volume.value)});
-      else send("pause");
-    }
-    const observer = new IntersectionObserver(entries => {
+    function playing() {
       if (!active()) return;
-      const entry = entries[entries.length - 1];
-      visible = entry.isIntersecting && entry.intersectionRatio >= 0.5;
-      visibility();
-    }, {threshold: [0, 0.5]});
-    const timeout = setTimeout(() => {
-      if (active() && !ready) feedback("YouTube no respondió. Puedes pasar a la siguiente pista.");
-    }, 15000);
-    function onMessage(event) {
-      const data = event.data;
-      if (!active() || event.origin !== url.origin || event.source !== frame.contentWindow || data?.channel !== widgetChannel) return;
-      switch (data.action) {
-        case "ready": ready = true; clearTimeout(timeout); feedback(""); visibility(); break;
-        case "ended": ended(); break;
-        case "blocked": feedback("Pulsa reproducir en el video para escuchar."); break;
-        case "playing": feedback(""); break;
-        case "unavailable": clearTimeout(timeout); feedback("Este video no admite reproducción aquí. Puedes pasar a la siguiente pista."); break;
-        case "duration":
-          if (!sentDuration && !item.duration && Number.isFinite(data.seconds) && data.seconds > 0) {
-            sentDuration = true;
-            post("duration", {room: code, id: item.id, duration: data.seconds}).catch(() => { sentDuration = false; });
-          }
-          break;
+      clearTimeout(stallTimer);
+      reconnect = false;
+      retry.hidden = true;
+      feedback("");
+    }
+    function unavailable() {
+      if (!active()) return;
+      clearTimeout(stallTimer);
+      reconnect = true;
+      retry.textContent = "Reintentar";
+      retry.hidden = false;
+      feedback(live ? "No se pudo conectar con la emisora. Reintenta o pasa a la siguiente pista."
+        : "No se pudo reproducir el archivo. Reintenta o pasa a la siguiente pista.");
+    }
+    function syncFile() {
+      if (!audio.readyState || !Number.isFinite(audio.duration)) return;
+      const target = Math.min(position(), audio.duration);
+      if (Math.abs(audio.currentTime - target) > 2) audio.currentTime = target;
+    }
+    async function play() {
+      if (!active()) return;
+      if (live) awaitRadio();
+      else syncFile();
+      try {
+        await audio.play();
+        playing();
+      } catch (error) {
+        if (!active() || error.name === "AbortError") return;
+        if (error.name !== "NotAllowedError") { unavailable(); return; }
+        clearTimeout(stallTimer);
+        reconnect = false;
+        retry.textContent = "Reproducir";
+        retry.hidden = false;
+        feedback("Pulsa Reproducir para escuchar la música.");
       }
     }
-    window.addEventListener("message", onMessage);
-    document.addEventListener("visibilitychange", visibility);
-    setPlayerVolume = () => send("volume", {volume: Number(volume.value)});
-    syncPlayer = () => { if (canPlay()) send("sync", {position: position()}); };
-    release = () => {
-      clearTimeout(timeout);
-      observer.disconnect();
-      window.removeEventListener("message", onMessage);
-      document.removeEventListener("visibilitychange", visibility);
+    retry.onclick = () => {
+      retry.hidden = true;
+      if (reconnect) { reconnect = false; audio.load(); }
+      play();
     };
-    player.append(frame);
-    observer.observe(frame);
+    // A radio may disconnect locally. Only the shared room timer or Siguiente ends its turn.
+    audio.onended = live ? unavailable : ended;
+    audio.onerror = unavailable;
+    audio.onplaying = playing;
+    if (live) audio.onwaiting = awaitRadio;
+    if (!live) { syncPlayer = syncFile; audio.onloadedmetadata = syncFile; }
+    audio.src = src;
+    setPlayerVolume = () => { audio.volume = Number(volume.value) / 100; };
+    release = () => {
+      clearTimeout(stallTimer);
+      audio.onwaiting = audio.onplaying = audio.onended = audio.onloadedmetadata = audio.onerror = null;
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    };
+    player.append(audio, retry);
+    play();
   }
 
   listen.onclick = () => {
+    if (!track && !optedIn) {
+      el(".music-add").open = true;
+      if (activeChoice("source").value === "file") file.focus();
+      else activeChoice("station")?.focus();
+      return;
+    }
     optedIn = !optedIn;
+    if (!optedIn && personalStation) {
+      personalStation = null;
+      update(room);
+    }
     drawListening();
     setupPlayer();
+  };
+  function playPersonal(station) {
+    const same = personalStation?.stationId === station.id;
+    personalStation = {id:"personal/" + station.id, stationId:station.id, kind:"radio", title:station.name};
+    optedIn = true;
+    drawListening();
+    update(room);
+    if (same) setupPlayer();
+    el(".music-add").open = false;
+  }
+  el("[data-personal]").onclick = () => {
+    const station = radioStations.find(item => item.id === activeChoice("station")?.value);
+    if (room && station) playPersonal(station);
   };
   volume.oninput = () => {
     el("output").textContent = volume.value + " %";
@@ -229,13 +264,13 @@ export function createMusic({mount, api, notify}) {
     }
   };
   function selectSource() {
-    const isFile = source.value === "file";
+    const isFile = activeChoice("source").value === "file";
     file.disabled = !isFile; file.required = isFile;
-    link.disabled = name.disabled = isFile; link.required = !isFile;
+    el(".genre-picker").disabled = el(".station-picker").disabled = isFile;
+    for (const field of mount.querySelectorAll("[data-radio]")) field.hidden = isFile;
     el("[data-file]").hidden = !isFile;
-    el("[data-link]").hidden = el("[data-name]").hidden = isFile;
   }
-  source.onchange = selectSource;
+  el(".source-options").onchange = selectSource;
   form.onsubmit = async event => {
     event.preventDefault();
     if (!room || upload) return;
@@ -243,7 +278,7 @@ export function createMusic({mount, api, notify}) {
     upload = controller;
     add.disabled = true;
     try {
-      if (source.value === "file") {
+      if (activeChoice("source").value === "file") {
         const chosen = file.files?.[0];
         if (!chosen?.size || chosen.size > maxFileBytes) throw Error("Elige un archivo de audio de hasta 20 MiB.");
         const duration = await fileDuration(chosen, controller.signal);
@@ -257,12 +292,32 @@ export function createMusic({mount, api, notify}) {
           throw Error(body.error || "No se pudo añadir el archivo.");
         }
       } else {
-        const videoId = youtubeId(link.value);
-        if (!videoId) throw Error("Ingresa el enlace de un video de YouTube.");
-        await api("music/add", {room: code, videoId, title: name.value.trim() || "YouTube · " + videoId}, controller.signal);
+        const stationId = activeChoice("station")?.value;
+        const station = radioStations.find(item => item.id === stationId);
+        if (!station) throw Error("Selecciona una emisora.");
+        const startListening = !room.music?.queue?.length && !personalStation;
+        try {
+          await api("music/add", {room:code, stationId}, controller.signal);
+        } catch (error) {
+          if (upload !== controller) return;
+          if (error.status !== 400 || !/YouTube|Selecciona una emisora del catálogo/i.test(error.message)) throw error;
+          if (startListening) {
+            playPersonal(station);
+            notify?.("Escuchando solo aquí. El servidor de esta sala todavía no admite emisoras compartidas.");
+          } else {
+            feedback("Esta sala aún no admite emisoras compartidas. Elige «Escuchar solo aquí» para reproducirla.");
+          }
+          return;
+        }
+        if (upload !== controller) return;
+        if (startListening && !optedIn) {
+          optedIn = true;
+          drawListening();
+          setupPlayer();
+        }
       }
       if (upload !== controller) return;
-      form.reset(); selectSource();
+      file.value = "";
       el(".music-add").open = false;
       notify?.("Pista añadida a la cola.");
     } catch (error) {
@@ -272,7 +327,7 @@ export function createMusic({mount, api, notify}) {
     }
   };
   function close() {
-    room = track = null;
+    room = track = personalStation = null;
     optedIn = false;
     skipId = null;
     upload?.abort(); upload = null;
@@ -282,21 +337,24 @@ export function createMusic({mount, api, notify}) {
     queueList.replaceChildren();
     current.hidden = queueDetails.hidden = el(".music-empty").hidden = true;
     queueDetails.open = el(".music-add").open = false;
-    form.reset(); selectSource(); drawListening(); feedback("");
+    form.reset(); listStations(); selectSource(); drawListening(); feedback("");
   }
   function update(snapshot) {
     if (!snapshot) { close(); return; }
     if (room && room.code !== snapshot.code) close();
     const music = snapshot.music;
     const queue = Array.isArray(music?.queue) ? music.queue : [];
-    const changed = track?.id !== queue[0]?.id;
+    const currentTrack = personalStation || queue[0] || null;
+    const changed = track?.id !== currentTrack?.id;
     room = snapshot;
     if (Number.isFinite(music?.serverNow)) clockOffset = music.serverNow - Date.now();
-    track = queue[0] || null;
+    track = currentTrack;
+    next.hidden = Boolean(personalStation);
     current.hidden = !track;
     el(".music-empty").hidden = Boolean(track);
     title.textContent = track?.title || "";
-    const waiting = queue.slice(1);
+    el("[data-kind]").textContent = personalStation ? "Radio en directo · Solo aquí" : track?.kind === "radio" ? "Radio en directo" : "Archivo de audio";
+    const waiting = personalStation ? queue : queue.slice(1);
     const key = JSON.stringify(waiting.map(item => [item.id, item.title]));
     if (key !== lastQueue) {
       lastQueue = key;

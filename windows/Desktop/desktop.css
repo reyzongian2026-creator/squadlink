@@ -65,3 +65,7 @@ body[data-workspace=player] .kit-ranking { display: none; }
 }
 
 .low-power *, .low-power *::before, .low-power *::after { transition-duration: 0s !important; scroll-behavior: auto !important; }
+
+/* The NES owns the foreground while playing. Avoid painting the covered catalog. */
+body.low-power:has(#game-dialog[open] .duck-nes) .workspace-column { visibility:hidden; }
+body.low-power #game-dialog:has(.duck-nes)::backdrop { background:#161720; }

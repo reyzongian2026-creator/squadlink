@@ -4,7 +4,7 @@ const esbuild=require('esbuild');
 const out=path.join(__dirname,'stage');
 mkdirSync(out,{recursive:true});
 cpSync(path.join(__dirname,'../public'),path.join(out,'client'),{recursive:true});
-for(const file of ['main.cjs','preload.cjs','gateway.cjs','detection.cjs','home.html','home.css','space.css','channels.css','channels.js','feature.js']) copyFileSync(path.join(__dirname,file),path.join(out,file));
+for(const file of ['main.cjs','preload.cjs','gateway.cjs','detection.cjs','player-vault.cjs','home.html','home.css','space.css','channels.css','channels.js','feature.js']) copyFileSync(path.join(__dirname,file),path.join(out,file));
 copyFileSync(path.join(__dirname,'../windows/Squadlink.ico'),path.join(out,'Squadlink.ico'));
 cpSync(path.join(__dirname,'../windows/Desktop'),path.join(out,'client'),{recursive:true});
 const client=path.join(out,'client');

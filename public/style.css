@@ -1545,3 +1545,32 @@ body.desktop-shell #social .section-head { position: absolute; width: 1px; heigh
 }
 
 .arcade-category { margin: 1rem 0 .55rem; font-size: 1rem; }
+
+/* One shelf keeps cover sizes consistent when filtering the collection. */
+#arcade { container-type: inline-size; }
+.arcade-tools { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+.arcade-filters { display:flex; flex-wrap:wrap; gap:5px; }
+.arcade-filters button { border:1px solid transparent; background:transparent; color:#c5c7d4; padding:8px 12px; border-radius:20px; font:inherit; font-size:.86rem; cursor:pointer; }
+.arcade-filters button:hover { background:#2a2c37; }
+.arcade-filters [aria-pressed=true] { background:#34384b; border-color:#606785; color:white; }
+.arcade-count { color:#b2b5c3; font-size:.82rem; font-variant-numeric:tabular-nums; }
+#arcade .arcade-library { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr)); gap:16px; }
+#arcade .arcade-library .game-card { border:1px solid #393c48; border-radius:14px; background:#22242e; }
+#arcade .game-card[hidden] { display:none; }
+#arcade .game-card:hover { border-color:#929ab9; }
+#arcade .game-body { padding:14px 16px 16px; }
+#arcade .game-body strong { font-size:1.04rem; letter-spacing:-.02em; }
+#arcade .game-body > span { display:block; font-size:.84rem; color:#bec2cf; line-height:1.4; }
+#arcade .game-card .art-mario { background:url("/mario-cover.png") center 45% / cover no-repeat; }
+@container (max-width:490px) {
+  #arcade .arcade-library { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  #arcade .game-body { padding:10px; }
+  #arcade .game-body strong { font-size:.93rem; }
+  #arcade .game-body > span { display:none; }
+  .arcade-tools { gap:6px; margin-bottom:12px; }
+}
+
+#room .connection-details { border-top:1px solid var(--border); margin:12px 0; padding-top:10px; }
+#room .connection-details summary { cursor:pointer; font-weight:600; color:var(--muted); }
+#room .connection-details[open] summary { margin-bottom:8px; }
+#room .status:empty { margin:0; }

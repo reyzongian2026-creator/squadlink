@@ -5,7 +5,7 @@ function label(tag, text, className) {
   return node;
 }
 
-export function mountDirectory({ api, getRoom, join, create }) {
+export function mountDirectory({ api, getRoom, visitCurrent, join, create }) {
   const list = document.getElementById("directory-list");
   const query = document.getElementById("directory-query");
   const status = document.getElementById("directory-status");
@@ -46,7 +46,7 @@ export function mountDirectory({ api, getRoom, join, create }) {
       const button = label(
         "button",
         current?.code === room.code
-          ? "Tu sala"
+          ? "Volver a mi sala"
           : room.count >= room.capacity
             ? "Llena"
             : "Unirme",
@@ -55,10 +55,10 @@ export function mountDirectory({ api, getRoom, join, create }) {
       button.type = "button";
       button.dataset.roomCode = room.code;
       button.setAttribute("aria-label", button.textContent + " · " + room.name);
-      button.disabled = Boolean(current) || room.count >= room.capacity;
+      button.disabled = current?.code !== room.code && (Boolean(current) || room.count >= room.capacity);
       if (current && current.code !== room.code)
         button.title = "Sal de tu sala actual para unirte.";
-      button.addEventListener("click", () => join(room.code));
+      button.addEventListener("click", () => getRoom()?.code === room.code ? visitCurrent() : join(room.code));
       foot.append(info, button);
       card.append(foot);
       fragment.append(card);
@@ -90,7 +90,13 @@ export function mountDirectory({ api, getRoom, join, create }) {
     }
     list.replaceChildren(fragment);
   }
+  const desktop = Boolean(window.squadBridge);
+  function visible() {
+    const body = document.body.dataset;
+    return !document.hidden && (desktop ? body.workspace === "rooms" : body.channel === "directory");
+  }
   async function reload(append = false) {
+    if (desktop && !visible()) return;
     if (pending) {
       if (!append) refreshQueued = true;
       return pending;
@@ -134,11 +140,18 @@ export function mountDirectory({ api, getRoom, join, create }) {
   query.addEventListener("input", draw);
   refresh.onclick = () => reload();
   more.onclick = () => reload(true);
-  window.addEventListener("focus", () => reload());
-  window.addEventListener("squad:directory-open", () => reload());
-  window.setInterval(() => {
-    const body = document.body.dataset;
-    if (!document.hidden && !paged && !pending && (body.channel === "directory" || body.workspace === "rooms")) reload();
-  }, 15000);
+  let timer;
+  function updatePolling() {
+    window.clearInterval(timer);
+    if (!visible()) return;
+    reload();
+    timer = window.setInterval(() => { if (!paged && !pending) reload(); }, 15000);
+  }
+  window.addEventListener("focus", () => { if (visible()) reload(); });
+  window.addEventListener("squad:directory-open", updatePolling);
+  window.addEventListener("squad:directory-close", updatePolling);
+  window.addEventListener("hashchange", updatePolling);
+  document.addEventListener("visibilitychange", updatePolling);
+  updatePolling();
   return { reload, draw };
 }

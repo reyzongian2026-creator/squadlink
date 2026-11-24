@@ -1,3 +1,4 @@
+import {mountPlayerPass} from "./player-pass.js";
 import { readMemberVolumes, saveMemberVolume } from "./member-volumes.js";
 import { bindVoiceDiagnostics } from "./connection.js";
 import { mountDirectory } from "./directory.js";
@@ -53,10 +54,23 @@ let self,
   generation = 0,
   gameRequest = 0;
 const desktopClient = Boolean(document.querySelector('script[src="/desktop.js"]'));
+let deviceRestoreBlocked = false;
+const playerPass = mountPlayerPass({
+  getSelf: () => self,
+  tell,
+  signedIn: async nick => {
+    await identityReady;
+    deviceRestoreBlocked = false;
+    const result = await api("session", {nick});
+    applySession(result);
+    if (mode === "profile") $("entry").close();
+  },
+});
 // Windows owns the room directory and refreshes it only when visible.
 const directory = desktopClient && !window.squadBridge ? { reload() {}, draw() {} } : mountDirectory({
   api,
   getRoom: () => room,
+  visitCurrent: showCurrentRoom,
   join: (code) => openEntry("join", { code }),
   create: () => openEntry("create", { published: true }),
 });
@@ -109,6 +123,7 @@ async function setupSocial() {
       });
   const client = await socialImport;
   await client.connect();
+  playerPass.remember();
   if (!desktopClient || loadoutImport) refreshLoadout();
 }
 function startSocial() {
@@ -224,7 +239,16 @@ function directoryFields() {
     gameCode: $("directory-game-code").value.trim(),
   };
 }
+function showCurrentRoom() {
+  if (window.squadBridge) window.squadBridge.postMessage({type:"desktop:navigate", page:"lobby"});
+  else location.hash = "main";
+}
+
 function openEntry(next, preset = {}) {
+  if ((next === "create" || next === "join") && room) {
+    showCurrentRoom();
+    return;
+  }
   mode = next;
   const edit = next === "edit",
     create = next === "create",
@@ -247,6 +271,8 @@ function openEntry(next, preset = {}) {
   $("nickname").value = self?.nick || readNick();
   $("nickname-field").hidden = edit || (next !== "profile" && Boolean(self));
   $("nickname").disabled = $("nickname-field").hidden;
+  $("player-pass").hidden = $("nickname-field").hidden;
+  playerPass.show(Boolean(self || readNick()));
   $("name").value = "";
   $("name-field").hidden = !create;
   $("directory-fields").hidden = !create && !edit;
@@ -294,7 +320,20 @@ $("entry-form").onsubmit = async (event) => {
       return;
     }
     await identityReady;
-    const nick = $("nickname").value.trim() || self?.nick;
+    if (deviceRestoreBlocked) throw Error("Abre tu pase privado o desbloquea el almacén del equipo y vuelve a abrir Squadlink.");
+    if (mode === "join" || mode === "create") {
+      let current;
+      try { current = await api("session"); }
+      catch (error) { if (error.status !== 401) throw error; }
+      if (current && self?.id !== current.self.id) applySession(current);
+      if (current?.room) {
+        $("entry").close();
+        if (room?.code !== current.room.code) await enterRoom(current.room, true);
+        showCurrentRoom();
+        return;
+      }
+    }
+    const nick = (mode !== "profile" && self ? self.nick : $("nickname").value.trim()) || self?.nick;
     if (!self || self.nick !== nick) {
       applySession(await api("session", { nick }));
     }
@@ -352,6 +391,10 @@ function renderMembers() {
     const li = document.createElement("li");
     const nick = document.createElement("strong");
     nick.textContent = member.nick + (member.id === self.id ? " (tú)" : "");
+    if (window.squadBridge) {
+      li.dataset.initials = member.nick.trim().split(/\s+/).slice(0,2).map(word=>[...word][0] || '').join('').toLocaleUpperCase('es');
+      li.dataset.muted = String(member.muted);
+    }
     const info = document.createElement("small");
     const state = peerStates.get(member.id);
     const suffix =
@@ -372,13 +415,14 @@ function renderMembers() {
         });
       activity.textContent = [
         member.id === room.ownerId && "Anfitrión",
-        member.joinedAt && "En sala desde " + clock(member.joinedAt),
+        !window.squadBridge && member.joinedAt && "En sala desde " + clock(member.joinedAt),
         member.game &&
           member.game + (member.since ? " desde " + clock(member.since) : ""),
       ]
         .filter(Boolean)
         .join(" · ");
-      li.append(activity);
+      if (member.joinedAt) li.title = "En sala desde " + clock(member.joinedAt);
+      if (activity.textContent) li.append(activity);
     }
     if (member.id !== self.id) {
       const slider = document.createElement("input");
@@ -396,7 +440,7 @@ function renderMembers() {
     }
     fragment.append(li);
   }
-  if (room.music?.queue?.length) {
+  if (!window.squadBridge && room.music?.queue?.length) {
     const bot = document.createElement('li');
     const name = document.createElement('strong'), playing = document.createElement('small');
     name.textContent = '♫ DJ Squadlink';
@@ -660,6 +704,19 @@ $("invite").onclick = () => {
     : "Enlace copiado. Comparte la clave por separado si la sala la pide.";
   copy(link.href, notice);
 };
+const gameFilters = [...document.querySelectorAll('[data-category]')];
+for (const filter of gameFilters) {
+  filter.onclick = () => {
+    const category = filter.dataset.category;
+    let count = 0;
+    for (const card of document.querySelectorAll('.arcade-library .game-card')) {
+      card.hidden = Boolean(category && card.dataset.genre !== category);
+      if (!card.hidden) count++;
+    }
+    for (const option of gameFilters) option.setAttribute('aria-pressed', String(option === filter));
+    document.querySelector('.arcade-count').textContent = count + (count === 1 ? ' juego' : ' juegos');
+  };
+}
 for (const button of document.querySelectorAll("[data-game]")) {
   button.onclick = async () => {
     const request = ++gameRequest;
@@ -769,6 +826,15 @@ function setupWebChannels() {
 }
 if (!desktopClient) setupWebChannels();
 async function restoreIdentity() {
+  try { await playerPass.restoreDevice(); }
+  catch (error) {
+    // A locked keychain must not prevent signing in with an existing device key.
+    if (!localStorage.getItem("squadlink.device.v1")) {
+      deviceRestoreBlocked = true;
+      throw Error("El respaldo del jugador no se pudo abrir. Puedes entrar con tu pase privado.");
+    }
+    tell("El respaldo automático del equipo no está disponible. Puedes guardar tu pase desde tu apodo.");
+  }
   const nick = readNick();
   showGuest(nick);
   let result;
@@ -783,11 +849,19 @@ async function restoreIdentity() {
   applySession(result);
   if (result.room) await enterRoom(result.room, true);
 }
-const identityReady = restoreIdentity().catch((error) => tell(error.message));
+export const identityReady = restoreIdentity().catch((error) => tell(error.message));
 async function boot() {
   directory.reload();
   await identityReady;
   if (!self && !desktopClient) refreshLoadout();
+  if (!self && !desktopClient && !invited && !location.hash && !$("entry").open) {
+    try {
+      if (!localStorage.getItem("squadlink.character.welcome")) {
+        localStorage.setItem("squadlink.character.welcome", "1");
+        location.hash = "loadout";
+      }
+    } catch {}
+  }
   if (!room && /^[a-z0-9]{6}$/i.test(invited) && !$("entry").open)
     openEntry("join");
 }

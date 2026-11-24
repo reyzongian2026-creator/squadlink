@@ -17,3 +17,8 @@
 @media (prefers-reduced-motion:reduce) {.flying-duck {animation:none;left:40%}}
 #game-dialog:has(.doom-player) {width:min(860px,calc(100% - 20px))}
 .doom-player {display:block;width:100%;height:clamp(230px,65dvh,660px);border:0;background:#111}
+
+#game-dialog:has(.aim-arena,.merge-board,.three-board,.duck-pond) { width:min(680px,calc(100% - 24px)); }
+#game-dialog .aim-arena, #game-dialog .duck-pond { height:clamp(200px,49dvh,410px); }
+#game-dialog .three-board { max-width:min(340px,55dvh); }
+#game-dialog .merge-board { max-width:min(420px,58dvh); }

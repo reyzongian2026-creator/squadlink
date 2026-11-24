@@ -1,5 +1,6 @@
+import { arcadeBoards, reportedGames } from './public/arcade-boards.js';
 // The WebRTC server can still run without pg when no PostgreSQL URL is configured.
-const schema = `
+let schema = `
 CREATE TABLE IF NOT EXISTS squadlink_progress_profiles (
   id text PRIMARY KEY,
   profile jsonb NOT NULL,
@@ -17,6 +18,16 @@ const rankQueries = {
   reflex:'WHERE reflex_ms > 0 ORDER BY reflex_ms, id',
   sequence:'WHERE sequence_round > 0 ORDER BY sequence_round DESC, id'
 };
+
+// Only identifiers from our fixed catalog enter the SQL expressions. Old JSON
+// profiles have NULL for the new fields and stay outside their partial indexes.
+for (const game of reportedGames) {
+  const score = "((profile #>> '{best," + game + "}')::bigint)";
+  const order = arcadeBoards[game].order === 'min' ? 'ASC' : 'DESC';
+  rankQueries[game] = 'WHERE ' + score + ' > 0 ORDER BY ' + score + ' ' + order + ', id';
+  schema += 'CREATE INDEX IF NOT EXISTS squadlink_progress_' + game + ' ON squadlink_progress_profiles (' +
+    score + ' ' + order + ', id) WHERE ' + score + ' > 0;\n';
+}
 
 async function transaction(pool, operation) {
   const client = await pool.connect();
