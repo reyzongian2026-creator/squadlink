@@ -129,6 +129,29 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   }
   throw Error('La ventana no alcanzó el estado minimizado='+expected);
  }
+ // CDP keyboard events target the renderer, bypassing Electron's native
+ // before-input-event. Dispatch physical-key equivalents through WebContents.
+ async function focusedRadioShortcut(hostname){
+  const input=await app.evaluate(async ({webContents},host)=>{
+   const wc=webContents.getAllWebContents().find(contents=>contents.getURL().startsWith('squad://'+host+'/'));
+   if(!wc)throw Error('No está montada la superficie '+host);
+   wc.focus();
+   const observed=new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>{wc.off('before-input-event',record);reject(Error('Electron no recibió el atajo en '+host));},3000);
+    function record(_event,key){
+     if(key.type!=='keyDown')return;
+     clearTimeout(timer);wc.off('before-input-event',record);
+     resolve({code:key.code,alt:key.alt,shift:key.shift});
+    }
+    wc.on('before-input-event',record);
+   });
+   const key={keyCode:'R',modifiers:['alt','shift']};
+   wc.sendInputEvent({...key,type:'keyDown'});
+   wc.sendInputEvent({...key,type:'keyUp'});
+   return observed;
+  },hostname);
+  assert.deepEqual(input,{code:'KeyR',alt:true,shift:true},hostname+' recibió un acorde incorrecto');
+ }
  await musicSmoke(space,peer,async()=>{
   try{
    await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
@@ -154,10 +177,17 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
   await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   await requireProgress(await radioAndVoice(),'Radio y voz en el lobby');
-  await assertRadioShortcut(space,peer,()=>home.keyboard.press('Alt+Shift+KeyR'),'teclas en el lobby de escritorio');
+  await assertRadioShortcut(space,peer,()=>home.keyboard.press('Alt+Shift+KeyR'),'teclado Chromium en el lobby de escritorio');
+  const lobbyRadio=()=>home.getByRole('button',{name:/^(Silenciar mi radio|Reanudar mi radio)$/});
+  let stop=true;
+  await assertRadioShortcut(space,peer,async()=>{
+   assert.equal(await lobbyRadio().textContent(),stop?'Silenciar mi radio':'Reanudar mi radio');
+   await lobbyRadio().click();
+   stop=!stop;
+  },'botón de radio del lobby');
   await home.getByRole('button',{name:'Arcade',exact:true}).click();
   await space.locator('[data-game="reflex"]').waitFor();
-  await assertRadioShortcut(space,peer,()=>space.keyboard.press('Alt+Shift+KeyR'),'teclas en Arcade');
+  await assertRadioShortcut(space,peer,()=>focusedRadioShortcut('app'),'teclas en Arcade');
   await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
   await home.getByRole('button',{name:'Mi sala',exact:true}).click();
   await space.locator('#room-music [data-listen][aria-pressed="true"]').waitFor();

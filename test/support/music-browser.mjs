@@ -28,14 +28,18 @@ export async function assertRadioShortcut(listener,other,press,label) {
         mic:document.querySelector('#mic').getAttribute('aria-pressed'),energy:inbound?.totalAudioEnergy};
     });
   }
+  async function reportTimeout(error) {
+    const readings=await Promise.allSettled([listener,other].map(state));
+    throw new Error(label+' · '+JSON.stringify(readings),{cause:error});
+  }
   const before=await Promise.all([listener,other].map(state));
   await press();
   await listener.waitForFunction(()=>document.querySelector('#room-music [data-listen]')?.getAttribute('aria-pressed')==='false'
-      && !document.querySelector('#room-music audio'),null,{timeout:5000});
+      && !document.querySelector('#room-music audio'),null,{timeout:5000,polling:100}).catch(reportTimeout);
   await other.waitForFunction(time=>{
     const audio=document.querySelector('#room-music audio');
     return audio && !audio.paused && audio.currentTime>time+0.4;
-  },before[1].time,{timeout:5000});
+  },before[1].time,{timeout:5000,polling:100}).catch(reportTimeout);
   const muted=await Promise.all([listener,other].map(state));
   for(const [i,reading] of muted.entries()){
     assert.equal(reading.listening,i===1,label);
@@ -48,8 +52,8 @@ export async function assertRadioShortcut(listener,other,press,label) {
   await listener.waitForFunction(src=>{
     const panel=document.querySelector('#room-music'), audio=panel?.querySelector('audio');
     return panel?.querySelector('[data-listen]').getAttribute('aria-pressed')==='true' &&
-      audio?.currentSrc===src && !audio.paused && audio.currentTime>0.15;
-  },before[0].source,{timeout:8000});
+      audio?.currentSrc===src && !audio.paused && audio.currentTime>0.3;
+  },before[0].source,{timeout:8000,polling:100}).catch(reportTimeout);
   const resumed=await state(other);
   assert.ok(resumed.playing && resumed.source===before[1].source && resumed.time>=muted[1].time,label);
   console.log('Atajo de radio local verificado',label);

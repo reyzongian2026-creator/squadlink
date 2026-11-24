@@ -148,6 +148,7 @@ function open(key,code){
 }
 function gameStatus(){send({type:'squadlink:game',enabled:Boolean(detectTimer),game:detected});}
 ipcMain.on('home',e=>{if(fromVoice(e))showHost();});
+ipcMain.on('radio-shortcut',e=>{if(isHome(e)||fromVoice(e))toggleRadio();});
 ipcMain.on('desk-state',async(e,m)=>{
  if(!fromVoice(e)||!m||typeof m!=='object')return;
  if(m.type==='desktop:radio-state'){

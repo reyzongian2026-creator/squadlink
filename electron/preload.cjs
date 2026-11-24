@@ -4,6 +4,13 @@ const subscribe=(channel,callback)=>{
   ipcRenderer.on(channel,wrapped);
   return ()=>ipcRenderer.removeListener(channel,wrapped);
 };
+// Focused Chromium key events can reach the document directly (including during
+// virtual keyboard input), while physical global events are handled by Electron.
+window.addEventListener('keydown',event=>{
+  if(!event.isTrusted || event.repeat || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.code!=='KeyR')return;
+  event.preventDefault();
+  ipcRenderer.send('radio-shortcut');
+},true);
 if(location.hostname==='home'){
   contextBridge.exposeInMainWorld('squad',{
     state:()=>ipcRenderer.invoke('snapshot'), open:(key)=>ipcRenderer.invoke('open',key),
