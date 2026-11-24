@@ -1,3 +1,4 @@
+import {normalizeAvatar} from '../public/character-model.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -61,5 +62,5 @@ test('PostgreSQL real: concurrencia entre pools, rollback, ranking y perfil HTTP
   assert.equal(saved.data.scope,'global');
   const restored = await (await reconnect()).hit('progress/profile',{});
   assert.equal(restored.status,200);
-  assert.deepEqual(restored.data.profile.avatar, avatar);
+  assert.deepEqual(restored.data.profile.avatar, normalizeAvatar(avatar));
 });

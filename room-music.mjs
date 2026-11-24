@@ -16,6 +16,8 @@ const stations = new Map([
   ['power-181','Power 181 · Top 40'],
   ['italo-80','80s80s · Italo Disco'],
   ['groove-salad','SomaFM · Groove Salad'],
+  ['tech-house','Tech House · laut.fm'],
+  ['sunshine-edm','SUNSHINE LIVE · EDM'],
   ['seven-soul','SomaFM · Seven Inch Soul'],
 ]);
 

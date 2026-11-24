@@ -1,3 +1,4 @@
+import {normalizeAvatar} from '../public/character-model.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp,readFile,rm,writeFile } from 'node:fs/promises';
@@ -41,7 +42,7 @@ test('identidad, avatar persistente, cambios concurrentes y restauración tras r
   assert.equal((await a.hit('progress/avatar',{skin:8,outfit:0,headgear:1})).status,400);
   const avatar={skin:4,outfit:2,headgear:3};
   const [saved]=await Promise.all([s.api(a,'avatar',avatar),s.api(b,'avatar',{skin:1,outfit:1,headgear:1})]);
-  assert.deepEqual(saved.profile.avatar,avatar);
+  assert.deepEqual(saved.profile.avatar,normalizeAvatar(avatar));
   const resumed=await s.a(s.fixtureWith());
   const fresh=await s.api(resumed,'profile');
   assert.deepEqual(fresh.profile,saved.profile);
@@ -132,4 +133,50 @@ test('un archivo ilegible no se sobreescribe con un ranking vacío',async t=>{
   await writeFile(s.file,'{incompleto');
   assert.equal((await a.hit('progress/profile',{})).status,503);
   assert.equal(await readFile(s.file,'utf8'),'{incompleto');
+});
+
+test('la evolución conserva XP y récords anteriores y el nivel de clasificación llega hasta 50', async t => {
+  const s = await setup(t), player = await s.a();
+  const fresh = (await s.api(player,'profile')).profile;
+  assert.equal(fresh.characterCreated,false);
+  // Simulate the exact on-disk profile shape from the previous release.
+  const oldAvatar = {skin:4, outfit:3, headgear:2};
+  const saved = {id:fresh.id,nick:fresh.nick,xp:4899,best:{reflex:250,sequence:0},avatar:oldAvatar,revision:22,awards:[]};
+  await writeFile(s.file, JSON.stringify({[fresh.id]:saved}));
+  const restarted = await s.a(s.fixtureWith());
+  const before = (await s.api(restarted,'profile')).profile;
+  assert.equal(before.level,49);
+  assert.equal(before.levelXp,99);
+  assert.equal(before.evolution.aura,'violet');
+  assert.deepEqual(before.avatar,normalizeAvatar(oldAvatar));
+  assert.equal(before.characterCreated,false);
+  const run = await s.api(restarted,'start',{game:'reflex'});
+  s.advance(run.delayMs+300);
+  const after = (await s.api(restarted,'finish',{runId:run.runId})).profile;
+  assert.ok(after.xp>4900);
+  assert.equal(after.level,50);
+  assert.equal(after.nextLevelXp,0);
+  assert.equal(after.nextEvolution,null);
+  assert.equal(after.evolution.aura,'prism');
+  const ranking = (await s.api(restarted,'ranking',{game:'xp'})).players;
+  assert.equal(ranking[0].level,50);
+  assert.equal(ranking[0].best.reflex,250);
+});
+
+test('el editor conserva combinaciones libres entre versiones y solo completa la creación con todos los rasgos', async t => {
+  const s = await setup(t), player = await s.a();
+  const original = {skin:0,outfit:0,headgear:0};
+  const aspect = {...original,species:3,gender:0,build:1,facialHair:1};
+  for (const key of ['species','gender','build','facialHair'])
+    assert.equal((await player.hit('progress/avatar',{...aspect,[key]:99})).status,400);
+  assert.equal((await s.api(player,'avatar',original)).profile.characterCreated,false);
+  const configured = (await s.api(player,'avatar',aspect)).profile;
+  assert.deepEqual(configured.avatar,aspect);
+  assert.equal(configured.characterCreated,true);
+  assert.equal((await s.api(player,'avatar',aspect)).profile.revision,configured.revision);
+  const recolored = (await s.api(player,'avatar',{...original,skin:3})).profile;
+  assert.deepEqual(recolored.avatar,{...aspect,skin:3});
+  assert.equal(recolored.characterCreated,true);
+  const restored = await s.a(s.fixtureWith());
+  assert.deepEqual((await s.api(restored,'profile')).profile,recolored);
 });

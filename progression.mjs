@@ -1,10 +1,12 @@
+import { avatarOptions, defaultAvatar, normalizeAvatar, progressForXp, validAvatarOption } from './public/character-model.js';
 import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 const maximumRound = 12;
 const runLifetime = 120_000;
-const avatarDefault = {skin:0,outfit:0,headgear:0};
+const originalAvatarFields = ['skin','outfit','headgear'];
+const characterFields = ['species','gender','build','facialHair'];
 const gameNames = new Set(['reflex','sequence']);
 const boards = ['xp','reflex','sequence'];
 const redisPrefix = '{squadlink}:v1:';
@@ -23,11 +25,11 @@ if #ids == 0 then return {} end
 return redis.call('HMGET', KEYS[2], unpack(ids))`;
 
 function initial(id,nick) {
-  return {id,nick,xp:0,avatar:{...avatarDefault},best:{reflex:null,sequence:0},revision:0,awards:[]};
+  return {id,nick,xp:0,avatar:{...defaultAvatar},characterCreated:false,best:{reflex:null,sequence:0},revision:0,awards:[]};
 }
 function display(row) {
   const {id,nick,xp,avatar,best} = row;
-  return {id,nick,xp,level:1+Math.floor(xp/100),avatar,best,revision:row.revision};
+  return {id,nick,xp,...progressForXp(xp),avatar:normalizeAvatar(avatar),characterCreated:row.characterCreated === true,best,revision:row.revision};
 }
 
 function redisStore(url,token) {
@@ -167,14 +169,21 @@ export function createProgression({reject,throttle,now=Date.now,env=process.env,
       }
       if (action === 'profile') return payload(await change(row=>row,restore(data.receipt,device)));
       if (action === 'avatar') {
-        const avatar = {};
-        for (const [key,max] of [['skin',5],['outfit',5],['headgear',3]]) {
-          if (!Number.isInteger(data[key]) || data[key] < 0 || data[key] > max)
-            reject(400,'El aspecto elegido es inválido.');
-          avatar[key] = data[key];
-        }
-        return payload(await change(row=>Object.keys(avatar).every(k=>avatar[k]===row.avatar[k]) ? row :
-          {...row,avatar,revision:row.revision+1}));
+        // Older clients only send the original palette. Merge inside the transaction
+        // so editing those colors on another device preserves the newer features.
+        const fields = Object.keys(avatarOptions).filter(key => Object.hasOwn(data,key));
+        if (!originalAvatarFields.every(key => fields.includes(key)) ||
+            !fields.every(key => validAvatarOption(key,data[key])))
+          reject(400,'El aspecto elegido es inválido.');
+        const configured = characterFields.every(key => fields.includes(key));
+        return payload(await change(row => {
+          const previous = normalizeAvatar(row.avatar);
+          if (fields.every(key => data[key] === previous[key]) && (!configured || row.characterCreated))
+            return row;
+          const avatar = {...previous};
+          for (const key of fields) avatar[key] = data[key];
+          return {...row,avatar,characterCreated:row.characterCreated === true || configured,revision:row.revision+1};
+        }));
       }
       if (action === 'ranking') {
         const board = data.game ?? 'xp';
