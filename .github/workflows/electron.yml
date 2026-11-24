@@ -44,6 +44,7 @@ jobs:
           if ($remove.ExitCode -or (Test-Path (Join-Path $target 'Squadlink.exe'))) {throw 'Falló la desinstalación'}
           (Get-FileHash $setup).Hash+'  Squadlink-Moderno-Setup-x64.exe' | Set-Content artifacts/electron/SHA256.txt
       - name: Instalar el EXE personal autocontenido con cartuchos de diagnóstico
+        if: ${{ !cancelled() && hashFiles('artifacts/electron/Squadlink-Moderno-Setup-x64.exe') != '' }}
         run: |
           $package=New-Item -ItemType Directory (Join-Path $env:RUNNER_TEMP 'Paquete personal')
           $cartridges=New-Item -ItemType Directory (Join-Path $package.FullName 'cartridges')
