@@ -25,15 +25,21 @@ class VoiceCleaner extends AudioWorkletProcessor {
     if (!input?.length) { output.fill(0); return true; }
 
     let energy = 0, peak = 0, crossings = 0;
+    const highPass = this.highPass;
+    let previousInput = this.previousInput, previousOutput = this.previousOutput;
     for (let i = 0; i < input.length; i++) {
-      const value = this.highPass * (this.previousOutput + input[i] - this.previousInput);
-      if ((value > 0) !== (this.previousOutput > 0)) crossings++;
-      this.previousInput = input[i];
-      this.previousOutput = value;
+      const sample = input[i];
+      const value = highPass * (previousOutput + sample - previousInput);
+      if ((value > 0) !== (previousOutput > 0)) crossings++;
+      previousInput = sample;
+      previousOutput = value;
       output[i] = value;
       energy += value * value;
       peak = Math.max(peak, Math.abs(value));
     }
+
+    this.previousInput = previousInput;
+    this.previousOutput = previousOutput;
 
     const seconds = input.length / sampleRate;
     const rms = Math.sqrt(energy / input.length);
@@ -60,6 +66,15 @@ class VoiceCleaner extends AudioWorkletProcessor {
     const boostedPeak = peak * Math.max(previousGain, this.micGain);
     const ceiling = boostedPeak > 0.75 ? 0.75 / boostedPeak : 1;
     this.peakGain = Math.min(ceiling, 1 + (this.peakGain - 1) * Math.exp(-seconds / 0.12));
+    // Sustained speech and background noise often have constant gain across
+    // the block. The high-pass samples are already in the output buffer.
+    if (this.openGain === from && this.micGain === previousGain) {
+      const gain = from * previousGain * this.peakGain;
+      if (gain !== 1) {
+        for (let i = 0; i < input.length; i++) output[i] *= gain;
+      }
+      return true;
+    }
     for (let i = 0; i < input.length; i++) {
       const gain = from + (this.openGain - from) * (i + 1) / input.length;
       const microphoneGain = previousGain + (this.micGain - previousGain) * (i + 1) / input.length;
