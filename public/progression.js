@@ -56,7 +56,10 @@ export function mountLoadout({api, getSelf, tell}) {
       if (color) {
         button.className = 'kit-swatch'; button.style.setProperty('--sample', color);
       } else button.textContent = label;
-      button.onclick = () => { draft[key] = index; dirty = true; render(); };
+      button.onclick = () => {
+        draft[key] = index; dirty = true; render();
+        $('kit-status').textContent = 'Cambios sin guardar.';
+      };
       group.append(button);
       return button;
     });
@@ -70,8 +73,8 @@ export function mountLoadout({api, getSelf, tell}) {
     $('kit-xp-label').textContent = (nextLevelXp ? levelXp + ' / 100 XP' : 'Nivel máximo') + ' · ' + xp + ' XP totales';
     $('kit-xp').value = levelXp;
     const guest = !getSelf();
-    $('kit-save').textContent = guest ? 'Elegir apodo' : 'Guardar apariencia';
-    $('kit-save').disabled = !guest && (saving || !profile || !dirty);
+    $('kit-save').textContent = guest ? 'Elegir apodo' : profile && !profile.characterCreated ? 'Crear mi personaje' : 'Guardar apariencia';
+    $('kit-save').disabled = !guest && (saving || !profile || (!dirty && profile.characterCreated));
     $('kit-rank-refresh').textContent = guest ? 'Elegir apodo' : 'Actualizar';
     const key = JSON.stringify([draft, evolution.aura]);
     if (stageVisible && key !== lastArt) {
