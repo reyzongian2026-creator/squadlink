@@ -374,8 +374,11 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    home=await navigate(home,'Ajustes','home');
    const preference=home.getByRole('checkbox',{name:/Usar menos memoria con el lobby visible/});
    assert.equal(await preference.isChecked(),false);
-   await preference.check();
-   await home.waitForFunction(async()=>(await window.squad.state()).integratedLobby);
+   // This controlled checkbox reflects the snapshot sent after main has saved
+   // the preference. Wait for both the visible control and the native setting.
+   await preference.click();
+   await home.waitForFunction(async()=>document.querySelector('.lobby-memory-choice input')?.checked &&
+    (await window.squad.state()).integratedLobby,null,{polling:100,timeout:5000});
    assert.equal(JSON.parse(fs.readFileSync(path.join(profile,'desktop.json'),'utf8')).integratedLobby,true);
    integrated=true;
    home=await openCallHome(home);
