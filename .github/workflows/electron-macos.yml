@@ -38,7 +38,11 @@ jobs:
           kill "$fixture_pid"
           wait "$fixture_pid" || true
           trap - EXIT
-          node electron/smoke.cjs "$RUNNER_TEMP/preview/Squadlink Moderno.app/Contents/MacOS/Electron"
+          round=0
+          for variant in control size size control; do
+            round=$((round+1))
+            SQUADLINK_LAB_VARIANT="$variant" SQUADLINK_LAB_ORDER="$round" node electron/smoke.cjs "$RUNNER_TEMP/preview/Squadlink Moderno.app/Contents/MacOS/Electron"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: Squadlink-Moderno-macOS-arm64

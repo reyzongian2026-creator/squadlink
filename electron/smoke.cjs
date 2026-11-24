@@ -75,16 +75,24 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await home.getByText('Todavía no hay salas públicas.').waitFor();
  await home.screenshot({path:path.join(capture,'Inicio-Moderno.png')});
  async function memory(label){
-  // Electron reports working-set KiB per process. Keep timing and sample size
-  // identical to the .22 benchmark, including all native helper processes.
-  const samples=[];
-  for(let i=0;i<5;i++){
-   const values=await app.evaluate(({app})=>app.getAppMetrics().map(m=>m.memory.workingSetSize));
-   samples.push(values.reduce((a,b)=>a+b,0)/1024);
-   if(i<4)await delay(180);
-  }
-  const sorted=[...samples].sort((a,b)=>a-b);
-  console.log('RAM '+label+' MiB: '+samples[0].toFixed(1)+'; mínima '+sorted[0].toFixed(1)+'; mediana '+sorted[2].toFixed(1));
+  const sample=()=>app.evaluate(({app})=>({
+   time:performance.now(), flags:app.commandLine.getSwitchValue('js-flags'),
+   values:app.getAppMetrics().map(m=>({pid:m.pid,kind:m.type,rss:m.memory.workingSetSize/1024,
+    privateMiB:m.memory.privateBytes===undefined?null:m.memory.privateBytes/1024,cpu:m.cpu.cumulativeCPUUsage}))
+  }));
+  const snapshots=[];
+  for(let i=0;i<7;i++){if(i)await delay(400);snapshots.push(await sample());}
+  assert.equal(snapshots[0].flags||'',process.env.SQUADLINK_LAB_VARIANT==='size'?'--optimize-for-size':'');
+  const median=values=>values.sort((a,b)=>a-b)[3];
+  const privateMiB=snapshots.every(s=>s.values.every(m=>m.privateMiB!=null)) ?
+   median(snapshots.map(s=>s.values.reduce((n,m)=>n+m.privateMiB,0))) : null;
+  const rss=median(snapshots.map(s=>s.values.reduce((n,m)=>n+m.rss,0)));
+  const first=snapshots[0],last=snapshots.at(-1);
+  const same=first.values.length===last.values.length&&last.values.every(m=>first.values.some(old=>old.pid===m.pid));
+  const cpu=same&&last.values.every(m=>Number.isFinite(m.cpu)&&Number.isFinite(first.values.find(old=>old.pid===m.pid).cpu))?
+   100000*last.values.reduce((n,m)=>n+m.cpu-first.values.find(old=>old.pid===m.pid).cpu,0)/(last.time-first.time):null;
+  console.log('V8BENCH '+JSON.stringify({os:process.platform,order:Number(process.env.SQUADLINK_LAB_ORDER),label,
+   variant:process.env.SQUADLINK_LAB_VARIANT,rss,privateMiB,cpu,pids:last.values.length}));
  }
  await memory('inicio');console.log('Inicio React correcto');
  // Only GitHub requests are intercepted, in the isolated packaged app's main process.

@@ -29,6 +29,7 @@ function activateDesktop(){
 app.on('second-instance',activateDesktop);
 if(mac)app.on('activate',activateDesktop);
 protocol.registerSchemesAsPrivileged([{scheme:'squad',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true,allowServiceWorkers:false}}]);
+if (process.env.SQUADLINK_LAB_VARIANT === 'size') app.commandLine.appendSwitch('js-flags', '--optimize-for-size');
 app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
 const options={contextIsolation:true,nodeIntegration:false,sandbox:true,preload:path.join(__dirname,'preload.cjs'),partition:'persist:squadlink-modern'};
 function reveal(w){if(w&&!w.isDestroyed()){if(w.isMinimized())w.restore();w.show();w.focus();}}
