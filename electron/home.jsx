@@ -15,11 +15,10 @@ const shapes={
   plus:<path d="M12 5v14M5 12h14"/>,code:<path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 20"/>,arrow:<path d="m9 5 7 7-7 7"/>,exit:<path d="M10 3H5v18h5m-1-9h12m-5-5 5 5-5 5"/>
 };
 function Icon({id}){return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{shapes[id]}</svg>}
-const params=new URLSearchParams(location.search);
 function App(){
  const [state,update]=useState(null),[error,setError]=useState(''),[serverFeedback,setServerFeedback]=useState(''),[updateFeedback,setUpdateFeedback]=useState(''),[address,setAddress]=useState(''),[checking,setChecking]=useState(false);
  const [rooms,setRooms]=useState([]),[directoryStatus,setDirectoryStatus]=useState('Buscando salas…');
- const prefs=params.get('page')==='preferences';
+ const prefs=state?.hostSection==='preferences';
  useEffect(()=>{const off=api.listen(update);api.state().then(update).catch(e=>setError(e.message));return off},[]);
  const server=state?.server;
  useEffect(()=>{if(!server)return;setAddress(server);if(prefs)return;let alive=true;const controller=new AbortController();
