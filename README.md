@@ -49,6 +49,8 @@ La identidad de invitado y los contactos se recuperan desde el mismo perfil del 
 
 Para uso permanente quedan por definir el alojamiento continuo del relay y la continuidad de PostgreSQL antes del **22 de diciembre de 2026**, cuando vence la base gratuita del piloto. Falta medir CPU, RAM, FPS y calidad de voz en partidas reales desde Perú, Chile y Argentina en PCs de gama baja. La [corrección del micrófono al cambiar de entrada](https://github.com/reyzongian2026-creator/squadlink/pull/1) se sigue por separado.
 
+Al elegir una emisora, verás su consumo aproximado por hora. Tech House y Power 181 rondan los 58 MB por hora. SUNSHINE LIVE EDM ronda los 29 MB. Estas cifras corresponden al audio de la radio y dependen de la tasa que envía la emisora.
+
 ## Si algo falla
 
 | Síntoma | Qué revisar |

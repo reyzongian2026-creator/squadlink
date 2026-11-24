@@ -119,3 +119,9 @@ La aplicación restaura una descarga completa en el mismo perfil, comprueba su c
 [Validación en Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45360114357) · [Validación en macOS](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45360114172)
 
 La integración de voz en Chromium agotó dos veces el tiempo de espera del mensaje de micrófono silenciado. La repetición con trazas, con el mismo código de la aplicación y las mismas comprobaciones de pistas y presencia, pasó. [Ejecución con trazas](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45361087004)
+
+## Pruebas locales de audio en 0.5.0-preview.22
+
+El recorrido reproduce dos tonos sin abrir el micrófono y prueba una grabación local con entrada sintética y escucha al 200 %. Comprueba la reproducción y la liberación de las pistas, los reproductores y los contextos de audio. En una prueba de dos segundos con el filtro existente, a 44,1 y 48 kHz, el nivel RMS del siseo sintético en la segunda mitad cayó 24,1 dB y la señal suave de dos tonos cayó 0,34 dB. La prueba mide señales digitales en el filtro. Para localizar un ruido físico hace falta escuchar una muestra tomada con el micrófono afectado.
+
+[Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45367368732) · [macOS](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45367368643)
