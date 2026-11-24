@@ -1,7 +1,26 @@
 import assert from 'node:assert/strict';
+import { createServer, request } from 'node:http';
+import { once } from 'node:events';
 
 // Isolate the local audio test from real rooms, contacts and other browser clients.
-export async function micSampleBrowser(browser,origin) {
+export async function micSampleBrowser(browser, upstreamOrigin) {
+  // The service worker runs in a separate Chromium target. Give its origin a
+  // switchable transport so connection loss also applies to worker fetches.
+  let online = true;
+  const gateway = createServer((incoming, outgoing) => {
+    if (!online) { incoming.socket.destroy(); return; }
+    const upstream = request(new URL(incoming.url, upstreamOrigin),
+      {method: incoming.method, headers: incoming.headers}, response => {
+        outgoing.writeHead(response.statusCode, response.headers);
+        response.pipe(outgoing);
+      });
+    upstream.on('error', () => outgoing.destroy());
+    outgoing.on('close', () => upstream.destroy());
+    incoming.pipe(upstream);
+  });
+  gateway.listen(0, '127.0.0.1');
+  await once(gateway,'listening');
+  const origin = 'http://127.0.0.1:' + gateway.address().port;
   const context=await browser.newContext({permissions:['microphone']});
   try {
     const page=await context.newPage();
@@ -23,6 +42,8 @@ export async function micSampleBrowser(browser,origin) {
     const restore=panel.getByRole('button',{name:/Restablecer|Restaurar/});
     await restore.click();
     await page.waitForFunction(()=>JSON.parse(localStorage.getItem('squadlink.audio.v1')).listenVolume===0.7);
+    online = false;
+    gateway.closeAllConnections();
     await context.setOffline(true);
     const pcm=await page.evaluate(async()=>{
       // Use the same Blob, output element and gain curve used by the actual mic test.
@@ -105,5 +126,11 @@ export async function micSampleBrowser(browser,origin) {
     assert.equal(await page.title(),'Squadlink · Sin conexión');
     await page.getByText('No se pudo conectar al servidor de voz.').waitFor();
     console.log('Prueba local sin red, permiso tardío, valores recomendados y RMS de reproducción al 100/200 %:',JSON.stringify(pcm));
-  } finally {await context.close();}
+  } finally {
+    await context.close();
+    const closed = once(gateway,'close');
+    gateway.close();
+    gateway.closeAllConnections();
+    await closed;
+  }
 }

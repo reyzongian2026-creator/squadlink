@@ -56,7 +56,7 @@ export function createMusic({mount, api, notify}) {
         </fieldset>
         <fieldset class="music-picker genre-picker" data-radio><legend>Género</legend><div class="genre-options"></div></fieldset>
         <fieldset class="music-picker station-picker" data-radio><legend>Emisora</legend><div class="station-options"></div></fieldset>
-        <p class="music-turn" data-radio>Turnos de 30 min en la sala.</p>
+        <p class="music-turn" data-radio>Turnos de 30 min en la sala. <span data-usage></span></p>
         <label data-file hidden>Archivo de audio (hasta 20 MiB)<input type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.webm" disabled></label>
         <div class="music-submit"><button type="button" class="secondary" data-personal data-radio>Escuchar solo aquí</button> <button class="primary" type="submit">Añadir a la sala</button></div>
       </form></details>
@@ -99,6 +99,14 @@ export function createMusic({mount, api, notify}) {
     return label;
   }
   el(".genre-options").replaceChildren(...["", ...genres].map(value => choice("genre",value,value || "Todos",!value)));
+  function showRadioUsage() {
+    const station = stationById(activeChoice("station")?.value);
+    // Decimal MB per hour of encoded audio, excluding transport overhead.
+    const mbPerHour = station?.kbps * 3600 / 8000;
+    el("[data-usage]").textContent = mbPerHour
+      ? "Esta emisora consume aproximadamente " + Math.round(mbPerHour) + " MB por hora."
+      : "";
+  }
   function listStations() {
     const previous = activeChoice("station")?.value;
     const matches = stationsForGenre(activeChoice("genre")?.value || "");
@@ -111,7 +119,9 @@ export function createMusic({mount, api, notify}) {
       row.lastChild.append(genre);
       return row;
     }));
+    showRadioUsage();
   }
+  el(".station-options").onchange = showRadioUsage;
   listStations();
   el(".genre-options").onchange = listStations;
   let room = null, track = null, clockOffset = 0, optedIn = false;
