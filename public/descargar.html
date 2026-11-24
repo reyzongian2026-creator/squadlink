@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17151d">
+  <title>Descargar Squadlink</title>
+  <link rel="icon" href="/icon-192.png">
+  <style>
+    * { box-sizing: border-box; }
+    :root { color-scheme: dark; font: 100%/1.5 system-ui, sans-serif; background: #17151d; color: #f8f7fa; }
+    body { margin: 0; min-height: 100vh; min-height: 100svh; display: grid; place-items: center; padding: 24px; }
+    main { width: min(100%, 36rem); }
+    img { width: 56px; height: 56px; border-radius: 14px; }
+    h1 { font-size: clamp(2rem, 7vw, 3rem); line-height: 1.1; letter-spacing: -.04em; margin: 1.25rem 0 .4rem; }
+    p { color: #c4bfcb; margin: 0 0 2rem; }
+    nav { display: grid; gap: 12px; }
+    a { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 18px 20px; background: #26232e; color: inherit; text-decoration: none; border: 1px solid #47414f; border-radius: 14px; }
+    a:hover, a:focus-visible { background: #302b38; border-color: #bcf54a; }
+    a:focus-visible { outline: 2px solid #bcf54a; outline-offset: 3px; }
+    strong, small { display: block; }
+    small { color: #c4bfcb; margin-top: 2px; }
+    .arrow { color: #bcf54a; font-size: 1.45rem; }
+  </style>
+  <script type="module" src="/descargas.js"></script>
+</head>
+<body>
+  <main>
+    <img src="/icon-192.png" width="56" height="56" alt="">
+    <h1>Descargar Squadlink</h1>
+    <p>Versión <span id="version">0.5.0-preview.7</span></p>
+    <nav aria-label="Descargas por sistema">
+      <a id="windows" href="https://github.com/reyzongian2026-creator/squadlink/releases/download/moderno-v0.5.0-preview.7/Squadlink-Moderno-Setup-x64.exe">
+        <span><strong>Windows x64</strong><small>Instalador · EXE</small></span><span class="arrow" aria-hidden="true">↓</span>
+      </a>
+      <a id="mac" href="https://github.com/reyzongian2026-creator/squadlink/releases/download/moderno-v0.5.0-preview.7/Squadlink-Moderno-macOS-arm64.zip">
+        <span><strong>Mac con Apple Silicon</strong><small>Aplicación · ZIP</small></span><span class="arrow" aria-hidden="true">↓</span>
+      </a>
+    </nav>
+  </main>
+</body>
+</html>

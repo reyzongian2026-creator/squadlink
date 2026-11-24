@@ -2,7 +2,7 @@
 import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 
-const files = ['index.html', 'app.js', 'style.css'];
+const files = ['index.html', 'app.js', 'style.css', 'descargar.html', 'descargas.js'];
 const expected = await Promise.all(files.map(file => readFile(new URL('../../public/' + file, import.meta.url), 'utf8')));
 async function matches(file, index) {
   const url = new URL('/' + file, 'https://squadlink-lobby.onrender.com');

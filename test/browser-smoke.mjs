@@ -260,17 +260,28 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     }
     const a = await client();
     const b = await client();
-    const downloads = a.getByRole('group', { name: 'Descargar Squadlink Moderno' });
+    const entry = a.locator('footer').getByRole('link', { name: 'Descargar Squadlink', exact: true });
+    assert.equal(await entry.count(), 1);
+    assert.equal(await entry.getAttribute('href'), '/descargar.html');
+    const downloads = await a.context().newPage();
+    await downloads.goto(new URL('/descargar.html', origin).href);
+    await downloads.getByRole('heading', { name: 'Descargar Squadlink' }).waitFor();
+    await downloads.waitForFunction(() => document.documentElement.dataset.releaseReady === 'true');
+    let releasePath;
     for (const [label, suffix] of [['Windows x64', '.exe'], ['Mac con Apple Silicon', '.zip']]) {
       const link = downloads.getByRole('link', { name: label });
       const href = await link.getAttribute('href');
       assert.ok(href.startsWith('https://github.com/reyzongian2026-creator/squadlink/releases/download/') && href.endsWith(suffix));
+      const tagPath = new URL(href).pathname.split('/').slice(0, -1).join('/');
+      if (releasePath) assert.equal(tagPath, releasePath, 'ambas descargas pertenecen a la misma versión');
+      releasePath = tagPath;
       if (sharedOrigin) {
         const response = await a.request.head(href);
         assert.equal(response.status(), 200, 'descarga pública de ' + label);
         assert.ok(Number(response.headers()['content-length']) > 1_000_000);
       }
     }
+    await downloads.close();
     for (const width of [360, 390, 1440]) {
       await a.setViewportSize({ width, height: 900 });
       await footerLayout(a);
