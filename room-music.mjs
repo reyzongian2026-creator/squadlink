@@ -13,6 +13,10 @@ const stations = new Map([
   ['rock-es','Rock en Español'],
   ['rock-80','Rock Antenne · 80er Rock'],
   ['oldschool','bigFM · Oldschool Rap'],
+  ['power-181','Power 181 · Top 40'],
+  ['italo-80','80s80s · Italo Disco'],
+  ['groove-salad','SomaFM · Groove Salad'],
+  ['seven-soul','SomaFM · Seven Inch Soul'],
 ]);
 
 function audioType(header) {
