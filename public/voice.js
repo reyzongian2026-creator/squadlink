@@ -191,17 +191,17 @@ export class VoiceRoom {
       this.releaseCapture(next);
       return false;
     }
+    const track = next.getAudioTracks()[0];
+    if (!track || track.readyState === 'ended') {
+      this.releaseCapture(next);
+      throw new Error('El micrófono se desconectó al activarlo. Comprueba la entrada de audio.');
+    }
     this.stream = next;
     if (!filtered && (globalThis.AudioWorkletNode || this.settings.micGainDb > 0)) {
       this.onStatus(this.settings.micGainDb > 0 ? 'La ganancia manual del micrófono no está disponible en este dispositivo.' :
         'Se usan los filtros de voz del dispositivo.');
     }
-    const track = next.getAudioTracks()[0];
     track.onended = () => this.handleMicrophoneEnded(next);
-    if (track.readyState === 'ended') {
-      this.handleMicrophoneEnded(next);
-      return false;
-    }
     try { await this.replaceSenders(this.outgoingTrack(next), request); }
     catch (err) {
       if (request === this.captureRequest && !this.closed) {

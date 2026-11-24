@@ -48,3 +48,34 @@ test('creación opt-in, validación atómica, orden de salas y traspaso de propi
   assert.equal((await friend.hit('leave',{})).status,200);
   assert.deepEqual((await visitor.hit('directory')).data.rooms.map(x=>x.code),[newer.code]);
 });
+
+test('actualizar conserva todas las páginas abiertas, incluso cuando cambia el orden o falla una página', async () => {
+  const { loadDirectoryPages } = await import('../public/directory.js');
+  const room = code => ({ code, name: 'Sala ' + code });
+  let published = ['A', 'B', 'C', 'D', 'E'];
+  let failSecond = false;
+  const calls = [];
+  async function api(path) {
+    const offset = Number(new URL(path, 'http://localhost').searchParams.get('offset') || 0);
+    calls.push(offset);
+    if (failSecond && offset === 2) throw Error('Sin conexión');
+    const rooms = published.slice(offset, offset + 2).map(room);
+    return { rooms, nextOffset: offset + 2 < published.length ? offset + 2 : null };
+  }
+  let listing = await loadDirectoryPages(api, {rooms: [], pages: 0, nextOffset: null});
+  listing = await loadDirectoryPages(api, listing, true);
+  assert.deepEqual(calls.splice(0), [0, 2]);
+  assert.deepEqual(listing, {rooms: ['A', 'B', 'C', 'D'].map(room), pages: 2, nextOffset: 4});
+  published = ['F', 'A', 'C', 'D', 'E'];
+  failSecond = true;
+  await assert.rejects(loadDirectoryPages(api, listing), /Sin conexión/);
+  assert.deepEqual(listing.rooms, ['A', 'B', 'C', 'D'].map(room));
+  failSecond = false;
+  listing = await loadDirectoryPages(api, listing);
+  assert.deepEqual(listing.rooms, ['F', 'A', 'C', 'D'].map(room));
+  const last = await loadDirectoryPages(api, listing, true);
+  assert.deepEqual(last.rooms, ['F','A','C','D','E'].map(room));
+  assert.equal(await loadDirectoryPages(api, last, true), last);
+  published = ['C'];
+  assert.deepEqual(await loadDirectoryPages(api, last), {rooms: [room('C')], pages: 1, nextOffset: null});
+});

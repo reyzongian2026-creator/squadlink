@@ -94,6 +94,15 @@ export function createMusic({mount, api, notify}) {
   const listen = el("[data-listen]"), current = el(".music-current"), next = el("[data-next]");
   const player = el("[data-player]"), title = el("[data-title]"), notice = el(".music-notice");
   const volume = el('input[type="range"]'), volumeLabel = el(".music-volume");
+  const volumeKey = "squadlink.music.volume";
+  try {
+    const saved = localStorage.getItem(volumeKey);
+    if (saved !== null && /^(?:100|[1-9]?\d)$/.test(saved)) volume.value = saved;
+  } catch {}
+  el("output").textContent = volume.value + " %";
+  volume.onchange = () => {
+    try { localStorage.setItem(volumeKey, volume.value); } catch {}
+  };
   const queueDetails = el(".music-queue"), queueList = el("ol");
   const form = el("form"), add = el('[type="submit"]'), file = el('[type="file"]');
   const link = el("[data-link] input"), name = el("[data-name] input");
@@ -244,16 +253,19 @@ export function createMusic({mount, api, notify}) {
     audio.preload = "auto";
     audio.volume = Number(volume.value) / 100;
     const src = live ? station.url : "/api/music/file?" + new URLSearchParams({room: code, id: item.id});
-    let reconnect = false, stallTimer;
+    let reconnect = false, stallTimer, retryTimer;
+    let hasPlayed = false, recoveryUsed = false;
     function awaitRadio() {
-      if (!live || !active()) return;
-      clearTimeout(stallTimer);
+      if (!live || !active() || stallTimer || retryTimer) return;
       feedback("Conectando con la emisora…");
       stallTimer = setTimeout(unavailable, 15000);
     }
     function playing() {
       if (!active()) return;
       clearTimeout(stallTimer);
+      clearTimeout(retryTimer);
+      stallTimer = retryTimer = undefined;
+      hasPlayed = true;
       reconnect = false;
       retry.hidden = true;
       feedback("");
@@ -261,6 +273,19 @@ export function createMusic({mount, api, notify}) {
     function unavailable() {
       if (!active()) return;
       clearTimeout(stallTimer);
+      stallTimer = undefined;
+      if (live && retryTimer) return;
+      if (live && hasPlayed && !recoveryUsed) {
+        recoveryUsed = true;
+        feedback("Se cortó la radio. Reconectando…");
+        retryTimer = setTimeout(() => {
+          retryTimer = undefined;
+          if (!active()) return;
+          audio.load();
+          void play();
+        }, 1000);
+        return;
+      }
       reconnect = true;
       retry.textContent = "Reintentar";
       retry.hidden = false;
@@ -303,6 +328,7 @@ export function createMusic({mount, api, notify}) {
     audio.src = src;
     setPlayerVolume = () => { audio.volume = Number(volume.value) / 100; };
     release = () => {
+      clearTimeout(retryTimer);
       clearTimeout(stallTimer);
       audio.onwaiting = audio.onplaying = audio.onended = audio.onloadedmetadata = audio.onerror = null;
       audio.pause();

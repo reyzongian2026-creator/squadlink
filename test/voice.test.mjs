@@ -124,6 +124,26 @@ test('failed input selection keeps existing microphone and saved setting', async
   room.close();
 });
 
+test('an input unplugged during startup preserves the working microphone and saved device', async t => {
+  const original = fakeTrack();
+  const unplugged = fakeTrack();
+  unplugged.stop();
+  installMedia(t, async ({audio}) => fakeStream(audio.deviceId ? unplugged : original));
+  const room = createRoom();
+  t.after(() => room.close());
+  const sent = [];
+  room.peers.set('A', {incoming: Promise.resolve(), pc: {close() {}}, audio: {pause() {}},
+    transceiver: {sender: {replaceTrack: async track => sent.push(track)}}});
+  await room.setMicrophone(true);
+  await assert.rejects(room.configureAudio({inputId:'usb'}), /micrófono/i);
+  assert.deepEqual(sent,[original]);
+  assert.equal(room.outgoingTrack(),original);
+  assert.equal(original.readyState,'live');
+  assert.equal(room.wantsMicrophone,true);
+  assert.equal(room.settings.inputId,'');
+  assert.equal(room.captures.size,1);
+});
+
 test('muted input selection stores preference without opening the microphone', async t => {
   installMedia(t, () => assert.fail('unexpected capture'));
   const room = createRoom();
