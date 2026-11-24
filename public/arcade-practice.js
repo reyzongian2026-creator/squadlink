@@ -1,3 +1,5 @@
+import { mountDuckNes } from './duck-nes.js';
+
 // Local adaptations of Web Aim Trainer and 2048. Upstream notices are at the end.
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -302,7 +304,7 @@ function doom(mount, status) {
 }
 
 export function openPractice(id, mount) {
-  if (!['flick','precision','merge','three','ducks','doom'].includes(id)) throw Error('Juego desconocido');
+  if (!['flick','precision','merge','three','ducks','duck-nes','doom'].includes(id)) throw Error('Juego desconocido');
   if (!document.querySelector('link[data-practice-style]')) {
     const style = document.createElement('link');
     style.rel = 'stylesheet';
@@ -317,6 +319,7 @@ export function openPractice(id, mount) {
   if (id === 'merge') dispose = puzzle(mount, status);
   else if (id === 'three') three(mount, status);
   else if (id === 'ducks') dispose = ducks(mount, status);
+  else if (id === 'duck-nes') dispose = mountDuckNes(mount, status);
   else if (id === 'doom') dispose = doom(mount, status);
   else aim(id, mount, status);
   return () => { dispose?.(); mount.replaceChildren(); };

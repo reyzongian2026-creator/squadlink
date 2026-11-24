@@ -8,17 +8,21 @@ function parseServer(value) {
 }
 async function relay(request, origin, cookies) {
   const path = new URL(request.url);
-  if (!path.pathname.startsWith('/api/') || !['GET','POST'].includes(request.method))
+  if (!path.pathname.startsWith('/api/') || !['GET','HEAD','POST'].includes(request.method))
     return new Response(null,{status:403});
   const headers = {Origin:origin, Accept:request.headers.get('accept') || 'application/json'};
   const [session] = await cookies.get({url:origin, name:'squad_session'});
   if (session) headers.Cookie = 'squad_session=' + session.value;
-  if (request.method === 'POST') headers['Content-Type']='application/json';
+  const uploading = path.pathname === '/api/music/upload' && request.method === 'POST';
+  if (request.method === 'POST') headers['Content-Type']=uploading ? 'application/octet-stream' : 'application/json';
+  if (path.pathname === '/api/music/file' && request.headers.has('range'))
+    headers.Range=request.headers.get('range');
   let upstream;
   try {
     upstream = await fetch(origin + path.pathname + path.search, {
       method:request.method, headers, redirect:'error', signal:request.signal,
-      body:request.method === 'POST' ? await request.text() : undefined
+      body:uploading ? request.body : request.method === 'POST' ? await request.text() : undefined,
+      ...(uploading && {duplex:'half'})
     });
     for (const header of upstream.headers.getSetCookie()) {
       const match = /^squad_session=([^;]*);/i.exec(header);
@@ -31,7 +35,13 @@ async function relay(request, origin, cookies) {
   } catch {
     return Response.json({error:'No se pudo conectar con el servidor.'},{status:503});
   }
-  return new Response(upstream.body,{status:upstream.status,headers:{
+  const mediaHeaders={};
+  if (path.pathname === '/api/music/file') {
+    for (const name of ['content-range','accept-ranges','content-length']) {
+      if (upstream.headers.has(name)) mediaHeaders[name]=upstream.headers.get(name);
+    }
+  }
+  return new Response(upstream.body,{status:upstream.status,headers:{...mediaHeaders,
     'Content-Type':upstream.headers.get('content-type') || 'application/json','Cache-Control':'no-store',
     'X-Content-Type-Options':'nosniff'
   }});

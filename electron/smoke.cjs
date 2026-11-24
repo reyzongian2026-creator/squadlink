@@ -61,6 +61,10 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  const sample=p=>p.evaluate(async()=>{for(const pc of window.testPeers){for(const stat of (await pc.getStats()).values()){if(stat.type==='inbound-rtp'&&stat.kind==='audio')return stat.totalAudioEnergy||0;}}return 0;});
  async function audio(previous){let values;for(let i=0;i<100;i++){values=await Promise.all([sample(space),sample(peer)]);if(values.every((v,j)=>v>previous[j]))return values;await delay(250);}throw Error('Falta voz bidireccional '+JSON.stringify(values));}
  const first=await audio([0,0]);await memory('voz');
+ await home.getByRole('button',{name:'Mi sala',exact:true}).click();
+ const {musicSmoke}=await import('../test/support/music-browser.mjs');
+ await musicSmoke(space,peer);
+ await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();
  await home.getByRole('button',{name:'Arcade',exact:true}).click();await space.getByRole('button',{name:/Reflejos/}).waitFor();
  for(const id of ['flick','precision','merge','three','ducks','doom']){
   await space.locator('[data-game="'+id+'"]').click();

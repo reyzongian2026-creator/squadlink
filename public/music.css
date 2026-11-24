@@ -1,0 +1,45 @@
+.music-panel {
+  margin-block-start: 1rem;
+  padding: 1rem;
+  border: 1px solid #43424f;
+  border-radius: 12px;
+  background: #25252e;
+  color: #f4f3f9;
+  min-width: 0;
+}
+.music-panel [hidden], .youtube-widget [hidden] { display: none !important; }
+.music-panel .music-header, .music-current, .music-volume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem 1rem;
+}
+.music-panel .music-header, .music-current { justify-content: space-between; }
+.music-panel .music-header { position: static; padding: 0; background: transparent; border: 0; }
+.music-panel h3, .music-panel p { margin: 0; }
+.music-panel h3 { font-size: 1.05rem; }
+.music-current { margin-top: .65rem; }
+.music-current strong { min-width: 0; overflow-wrap: anywhere; }
+.music-panel .music-notice, .music-panel .music-empty, .music-volume { font-size: .86rem; color: #d0cfda; }
+.music-panel .music-notice:not(:empty), .music-panel .music-empty, .music-volume:not([hidden]), .music-panel details { margin-top: .65rem; }
+.music-volume input { width: 7rem; max-width: 100%; padding: 0; accent-color: #b8a8ff; }
+.music-volume output { font-variant-numeric: tabular-nums; }
+.music-panel summary { cursor: pointer; color: #dbd2ff; font-weight: 600; width: fit-content; }
+.music-queue ol { padding-inline-start: 1.6rem; margin: .5rem 0 0; overflow-wrap: anywhere; }
+.music-panel form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .65rem; margin-top: .75rem; align-items: end; }
+.music-panel form label { display: grid; gap: .3rem; min-width: 0; font-size: .84rem; color: #dfdde9; }
+.music-panel form input, .music-panel form select { width: 100%; min-width: 0; box-sizing: border-box; }
+.music-panel form button { justify-self: start; }
+.music-panel [data-player] iframe {
+  display: block;
+  width: min(100%, 576px);
+  min-height: 200px;
+  aspect-ratio: 16 / 9;
+  margin-block-start: .65rem;
+  border: 0;
+  background: #101014;
+}
+.music-panel :focus-visible { outline: 2px solid #c6baff; outline-offset: 2px; }
+.youtube-widget { margin: 0; height: 100vh; background: #101014; color: #f4f3f9; font: 14px system-ui; }
+.youtube-widget #video { display: block; width: 100%; height: 100%; border: 0; }
+.youtube-widget #video-status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; pointer-events: none; }

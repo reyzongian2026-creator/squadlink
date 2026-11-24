@@ -367,10 +367,14 @@ h1 span {
 }
 .games {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 185px), 1fr));
   gap: 12px;
 }
 .game-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
   color: var(--ink);
   text-align: left;
   overflow: hidden;
@@ -379,96 +383,23 @@ h1 span {
   background: var(--panel);
   border-radius: 10px;
 }
-.art {
-  position: relative;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  height: 100px;
-}
-.art:before,
-.art:after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.art:before {
-  background-image:
-    linear-gradient(#ffffff09 1px, transparent 1px),
-    linear-gradient(90deg, #ffffff09 1px, transparent 1px);
-  background-size: 18px 18px;
-}
-.art-target {
-  background: radial-gradient(
-    ellipse at 50% 80%,
-    #6d3995,
-    #432959 65%,
-    #32233f
-  );
-}
-.scope {
-  width: 57px;
-  height: 57px;
-  border: 3px solid #ead0ff;
-  border-radius: 50%;
-  position: relative;
-  transform: rotate(-8deg);
-  box-shadow:
-    0 0 0 7px #c390fc2a,
-    0 0 0 16px #e2bdff15;
-}
-.scope:before,
-.scope:after {
-  content: "";
-  position: absolute;
-  background: #f1d8ff;
-  inset: calc(50% - 1px) -13px;
-  height: 2px;
-}
-.scope:after {
-  inset: -13px calc(50% - 1px);
-  height: auto;
-  width: 2px;
-}
-.scope b {
-  position: absolute;
-  inset: 13px;
-  border-radius: 50%;
-  background: #d8a6ff;
-  border: 4px solid #572c77;
-  z-index: 1;
-  box-shadow: 0 0 0 2px #eccfff;
-}
-.art-memory {
-  background: radial-gradient(
-    ellipse at 53% 65%,
-    #33796b,
-    #234b45 65%,
-    #1b3837
-  );
-}
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(2, 24px);
-  gap: 4px;
-  transform: rotate(-19deg) skew(3deg);
-  filter: drop-shadow(4px 7px 0 #153e34);
-}
-.tiles b {
+/* Nine equal-height panels in arcade-covers.svg, top to bottom. */
+.game-card .art {
   display: block;
-  height: 24px;
-  background: #83eac6;
-  border: 2px solid #b9ffe6;
-  border-radius: 4px;
+  width: 100%;
+  aspect-ratio: 8 / 3;
+  background: #292a34 url("/arcade-covers.svg") center var(--cover-row) / 100% 900% no-repeat;
 }
-.tiles b:nth-child(2) {
-  background: #4a9983;
-  transform: translate(2px, -5px);
-}
-.tiles b:nth-child(3) {
-  background: #5cb89b;
-}
+.game-card .art > * { display: none; }
+.game-card[data-game="flick"] { --cover-row: 0%; }
+.game-card[data-game="precision"] { --cover-row: 12.5%; }
+.game-card[data-game="ducks"] { --cover-row: 25%; }
+.game-card[data-game="duck-nes"] { --cover-row: 37.5%; }
+.game-card[data-game="doom"] { --cover-row: 50%; }
+.game-card[data-game="merge"] { --cover-row: 62.5%; }
+.game-card[data-game="three"] { --cover-row: 75%; }
+.game-card[data-game="reflex"] { --cover-row: 87.5%; }
+.game-card[data-game="sequence"] { --cover-row: 100%; }
 .game-body {
   display: flex;
   position: relative;
@@ -484,6 +415,8 @@ h1 span {
   color: #9bcfbc;
 }
 .game-body strong {
+  padding-inline-end: 2rem;
+  overflow-wrap: anywhere;
   font-size: 22px;
   line-height: 1.4;
 }
@@ -803,6 +736,7 @@ dialog input {
   .game-body {
     padding: 11px;
   }
+  .game-body strong { padding-inline-end: 0; }
   .game-body i[data-icon] {
     display: none;
   }
@@ -1611,9 +1545,3 @@ body.desktop-shell #social .section-head { position: absolute; width: 1px; heigh
 }
 
 .arcade-category { margin: 1rem 0 .55rem; font-size: 1rem; }
-.art-flick,.art-precision,.art-merge { color:#fff; font:700 1.65rem system-ui; letter-spacing:.12em; }
-.art-flick { background:linear-gradient(120deg,#233953,#414775); }
-.art-precision { background:linear-gradient(120deg,#214244,#285d52); }
-.art-merge { background:linear-gradient(120deg,#4b3356,#724865); }
-
-.art-ducks {background:linear-gradient(160deg,#779faa,#475d44);color:#eff5d8}.art-doom {background:linear-gradient(145deg,#5b252c,#30262b);color:#ffbd79}.art-doom b {font:900 1.7rem/1 system-ui;letter-spacing:.08em}

@@ -20,6 +20,7 @@
     <link rel="icon" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/music.css" />
     <script type="module" src="/app.js"></script>
     <script type="module" src="/install.js"></script>
   </head>
@@ -123,6 +124,7 @@
           ><button class="secondary danger" id="leave">Salir de la sala</button>
         </div>
         <p class="status" id="voice-status" role="status"></p>
+        <div id="room-music"></div>
         <details id="audio-panel" class="settings">
           <summary>Ajustes de audio</summary>
           <div id="audio-settings"></div>
@@ -288,6 +290,10 @@
             <button class="game-card" data-game="ducks" data-practice>
               <span class="art art-ducks" aria-hidden="true"><b>🦆</b></span>
               <span class="game-body"><strong>Mata patos</strong><span>Acierta a los diez patos antes de que crucen la laguna.</span><i data-icon="play"></i></span>
+            </button>
+            <button class="game-card" data-game="duck-nes" data-practice>
+              <span class="art art-ducks" aria-hidden="true"><b>NES</b></span>
+              <span class="game-body"><strong>Duck Hunt · NES</strong><span>Juega el cartucho original con tu ROM .nes y el Zapper virtual.</span><i data-icon="play"></i></span>
             </button>
             <button class="game-card" data-game="doom" data-practice>
               <span class="art art-doom" aria-hidden="true"><b>DOOM</b></span>

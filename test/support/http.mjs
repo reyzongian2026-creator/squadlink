@@ -26,7 +26,7 @@ export function fixture(t, options) {
   function player() {
     let cookie = '';
     function request(path, body, extra = {}) {
-      const data = body === undefined ? undefined : JSON.stringify(body);
+      const data = Buffer.isBuffer(body) ? body : body === undefined ? undefined : JSON.stringify(body);
       return new Promise((resolve, reject) => {
         const req = http.request({
           host: 'localhost', agent, path, method: data === undefined ? 'GET' : 'POST',

@@ -1,0 +1,11 @@
+#game-dialog:has(.duck-nes) { width: min(660px, calc(100% - 20px)); }
+.duck-nes { display: grid; gap: 10px; }
+.duck-nes label { display: grid; gap: 5px; margin: 0; }
+.duck-nes input { max-width: 100%; }
+.duck-nes p { font-size: .85rem; color: var(--muted); }
+.duck-nes canvas {
+  display: block; aspect-ratio: 256 / 240; width: min(100%, 58vh, 512px); height: auto;
+  margin-inline: auto; background: #111; image-rendering: pixelated;
+  touch-action: none; cursor: crosshair;
+}
+.duck-nes-controls { display: flex; flex-wrap: wrap; gap: 8px; }
