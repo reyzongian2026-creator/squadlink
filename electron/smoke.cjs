@@ -74,18 +74,36 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    await game.getByRole('button',{name:'Jugar',exact:true}).click({timeout:120000});
    const canvas=game.getByLabel('Partida de Freedoom');
    await game.locator('#boot[hidden]').waitFor({state:'attached'});
+   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].focus());
    await canvas.click();
-   const captured=await canvas.evaluate(el=>document.pointerLockElement===el);
-   assert.ok(captured,'El ratón debe quedar capturado dentro del juego');
+   // Exercise windowed aiming too, including systems that decline pointer capture.
+   await canvas.evaluate(async el=>{
+    if(document.pointerLockElement===el) {
+     const unlocked=new Promise(resolve=>document.addEventListener('pointerlockchange',resolve,{once:true}));
+     document.exitPointerLock();await unlocked;
+    }
+    const delivered=new Promise((resolve,reject)=>{
+     const timer=setTimeout(()=>reject(Error('Sin giro de ratón en ventana')),1000);
+     el.addEventListener('keydown',event=>{clearTimeout(timer);resolve(event.code);},{once:true});
+    });
+    el.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,movementX:32}));
+    if(await delivered!=='ArrowRight')throw Error('Giro de ratón incorrecto');
+   });
    await space.keyboard.down('w');await delay(170);await space.keyboard.up('w');
    await space.keyboard.press('Space');
    await space.mouse.move(60,0,{steps:4});
    await space.mouse.down();await delay(110);await space.mouse.up();
    const cfg=await canvas.evaluate(()=>window.Module.FS.readFile('/squad.cfg',{encoding:'utf8'}));
    assert.match(cfg,/key_up 17/);assert.match(cfg,/key_use 57/);assert.match(cfg,/mouseb_fire 0/);
-   await canvas.evaluate(()=>document.exitPointerLock());
+   const gameAudio=await canvas.evaluate(()=>window.Module.SDL2.audioContext?.state);
+   assert.ok(['running','suspended'].includes(gameAudio),'El juego debe tener su propio contexto de audio');
    await checkWindow(true);
-   await game.getByRole('button',{name:'Salir del juego'}).click();
+   const closedSound=await game.getByRole('button',{name:'Salir del juego'}).evaluate(button=>{
+    const sdl=window.Module.SDL2;
+    button.click();
+    return sdl.audioContext.state==='closed' && !sdl.audio.scriptProcessorNode.onaudioprocess;
+   });
+   assert.ok(closedSound,'Salir debe desconectar el procesador y cerrar el audio de DOOM');
    await space.locator('.doom-player').waitFor({state:'detached'});
    continue;
   }else{
