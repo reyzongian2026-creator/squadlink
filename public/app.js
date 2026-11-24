@@ -458,6 +458,7 @@ async function enterRoom(snapshot, restoring = false) {
   resetRoom();
   const attempt = generation;
   $("room").hidden = false;
+  window.dispatchEvent(new window.Event('squadlink:audio-state'));
   $("home").hidden = true;
   setConnection("Conectando", false);
   updateRoom(snapshot);
@@ -614,6 +615,7 @@ function resetRoom() {
   $("listen").hidden = true;
   $("voice-status").textContent = "";
   $("room").hidden = true;
+  window.dispatchEvent(new window.Event('squadlink:audio-state'));
   $("home").hidden = false;
   document.body.classList.remove("in-match");
   $("compact").textContent = "Modo partida";
@@ -798,6 +800,7 @@ function setupWebChannels() {
       : enclosingPanel?.dataset.channelPanel.split(" ")[0] || (fragment.startsWith("kit-") ? "loadout" : "main");
     if (channel !== "main" && body.classList.contains("in-match")) $("compact").click();
     if (channel !== "arcade") closeGame();
+    if (channel !== "main") $("audio-panel").open = false;
     body.dataset.channel = channel;
     if (channel === "directory") directory.reload();
     for (const panel of panels) {

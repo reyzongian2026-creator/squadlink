@@ -53,6 +53,9 @@ Para uso permanente quedan por definir el alojamiento continuo del relay y la co
 
 | Síntoma | Qué revisar |
 | --- | --- |
+| Quiero comprobar si el ruido viene de mi equipo | Antes de entrar a una sala, abre **Ajustes de audio** y pulsa **Grabar prueba de 4 segundos**. Deja un segundo de silencio y luego habla como en una llamada. Pulsa **Escuchar mi prueba** para oír la muestra local con tu volumen de escucha. |
+| No sé por dónde sale el sonido | En los mismos ajustes, selecciona una salida y pulsa **Probar altavoz**. Oirás dos tonos en ese dispositivo. |
+| Oigo cortes solo con un compañero | En la sala, pulsa **Medir conexión de voz** mientras habla. Revisa la pérdida de paquetes, la variación del tiempo de llegada (*jitter*) y el tiempo de ida y vuelta junto a su apodo. Repite la medición cuando oigas el corte. |
 | El código de sala no funciona | Comprueba que ambos estén en el mismo servidor, que quede un cupo y que el anfitrión siga en la sala o haya otro miembro conectado. Tras un reinicio hay que crear una sala nueva. |
 | Todos tienen el volumen al máximo y la voz llega baja | En **Ajustes → Dispositivos de audio**, sube **Volumen de las voces que escucho** a 150 % y ajusta hasta 200 % según necesites. Si tus compañeros te oyen bajo, sube **Ganancia de mi micrófono** desde 0 dB a +6 dB y comprueba el resultado en la llamada. |
 | Se oye un siseo entre frases o las voces llegan muy fuertes | Ambos jugadores pueden abrir **Ajustes → Dispositivos de audio → Restablecer volumen y filtros de voz**. Esto deja la reducción de ruido activa, la ganancia automática desactivada y el volumen de escucha al 70 %. Cada uno conserva el micrófono y la salida elegidos. |
