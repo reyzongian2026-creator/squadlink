@@ -36,6 +36,24 @@ export async function musicSmoke(host,guest) {
   for(const page of [host,guest]) await panel(page).getByRole('button',{name:'Dejar de escuchar'}).click();
   await panel(host).getByRole('button',{name:'Siguiente'}).click();
   await panel(guest).locator('[data-title]').filter({hasText:'Video de prueba'}).waitFor();
+  // Production and the desktop app identify the official YouTube widget over HTTPS.
+  if (/^(https:|squad:)/.test(host.url())) {
+    await host.evaluate(()=>{
+      window.musicProviderEvents=[];
+      window.addEventListener('message',event=>{
+        if(event.data?.channel==='squadlink:music' && event.source===document.querySelector('#room-music iframe')?.contentWindow)
+          window.musicProviderEvents.push(event.data.action);
+      });
+    });
+    await panel(host).getByRole('button',{name:'Escuchar',exact:true}).click();
+    const frame=panel(host).locator('iframe');
+    await frame.scrollIntoViewIfNeeded();
+    await host.frameLocator('#room-music iframe').locator('iframe[src*="youtube.com/embed/"]').waitFor({timeout:35000});
+    const result=await host.waitForFunction(()=>window.musicProviderEvents.find(event=>['playing','unavailable','blocked'].includes(event)),null,{timeout:20000})
+      .then(value=>value.jsonValue()).catch(()=> 'sin confirmación de reproducción');
+    console.log('Reproductor oficial de YouTube ('+new URL(host.url()).protocol+'): '+result);
+    await panel(host).getByRole('button',{name:'Dejar de escuchar'}).click();
+  }
   await panel(guest).getByRole('button',{name:'Siguiente'}).click();
   for(const page of [host,guest]) await page.locator('#members [data-music-bot]').waitFor({state:'detached'});
 }

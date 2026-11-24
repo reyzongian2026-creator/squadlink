@@ -1,5 +1,6 @@
 // Requires Playwright on the test machine only. A single process owns this isolated server.
 import assert from 'node:assert/strict';
+import { duckNesBrowser } from './duck-nes-browser.mjs';
 import {musicSmoke} from './support/music-browser.mjs';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
@@ -324,6 +325,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     for(let i=1;i<=10;i++) await a.getByRole('button',{name:'Pato '+i,exact:true}).press('Enter');
     await a.getByText(/10 de 10 patos/).waitFor();
     await a.getByRole('button',{name:'Cerrar minijuego'}).click();
+    await duckNesBrowser(a);
     let doomRequests=0;
     await a.route('**/doom-player.html', route => {
       doomRequests++;

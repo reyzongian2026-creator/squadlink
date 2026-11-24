@@ -66,6 +66,8 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await musicSmoke(space,peer);
  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();
  await home.getByRole('button',{name:'Arcade',exact:true}).click();await space.getByRole('button',{name:/Reflejos/}).waitFor();
+ const {duckNesBrowser}=await import('../test/duck-nes-browser.mjs');
+ await duckNesBrowser(space);
  for(const id of ['flick','precision','merge','three','ducks','doom']){
   await space.locator('[data-game="'+id+'"]').click();
   await space.locator('#game-mount .practice-status').waitFor();
