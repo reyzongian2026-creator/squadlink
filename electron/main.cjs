@@ -1,4 +1,4 @@
-const {app,BaseWindow,BrowserWindow,WebContentsView,protocol,session,ipcMain,dialog,Menu,globalShortcut,systemPreferences,safeStorage}=require('electron');
+const {app,BaseWindow,WebContentsView,protocol,session,ipcMain,dialog,Menu,globalShortcut,systemPreferences,safeStorage}=require('electron');
 const fs=require('node:fs'),path=require('node:path');
 const {relay,parseServer}=require('./gateway.cjs');
 const {detect}=require('./detection.cjs');
@@ -33,7 +33,7 @@ app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
 const options={contextIsolation:true,nodeIntegration:false,sandbox:true,preload:path.join(__dirname,'preload.cjs'),partition:'persist:squadlink-modern'};
 function reveal(w){if(w&&!w.isDestroyed()){if(w.isMinimized())w.restore();w.show();w.focus();}}
 function snapshot(){return {...state,...prefs,radioState,hostSection:action?'workspace':hostSection,version:app.getVersion(),update:updater.snapshot()};}
-function hostContents(){return mac ? hostView?.webContents : home?.webContents;}
+function hostContents(){return hostView?.webContents;}
 function publish(){
  const wc=hostContents();
  if(wc&&!wc.isDestroyed())wc.send('snapshot',snapshot());
@@ -70,6 +70,7 @@ function fromVoice(e){return view&&e.sender===view.webContents&&e.senderFrame===
 function hostPage(event){if(!isHome(event))throw Error('Acceso no disponible.');}
 function send(data){if(view&&!view.webContents.isDestroyed())view.webContents.send('desk-message',data);}
 function dispatch(key,code){send({type:'desktop:action',action:key,code,visit,low:prefs.low});}
+function canSuspendLobby(){return prefs.low && state.joined && !action && hostSection==='home';}
 function showHost(section='home'){
  if(action){
   home.contentView.removeChildView(view);
@@ -78,7 +79,8 @@ function showHost(section='home'){
   if(ready)dispatch('background');
  }
  hostSection=section;
- if(mac)mountHost();
+ if(home.isMinimized() && canSuspendLobby())releaseHost();
+ else mountHost();
  publish();
  hostContents()?.focus();
 }
@@ -115,11 +117,14 @@ function releaseHost(){
 }
 function createHome(){
  const frame={title:'Squadlink',width:1080,height:700,minWidth:700,minHeight:520,backgroundColor:'#0d1217',icon:path.join(__dirname,'Squadlink.ico'),autoHideMenuBar:true};
- const w=mac ? new BaseWindow(frame) : new BrowserWindow({...frame,webPreferences:options});
- if(!mac){
-  guard(w.webContents);
-  w.loadURL('squad://home/');
- }
+ const w=new BaseWindow(frame);
+ w.on('minimize',()=>{
+  // Keep the call and any unsaved settings alive while the lobby is off screen.
+  if(canSuspendLobby())releaseHost();
+ });
+ w.on('restore',()=>{
+  if(!closing && !action && !hostView){mountHost();hostContents()?.focus();}
+ });
  w.on('resize',contentBounds);
  w.on('close',()=>{closing=true;disposeVoice();releaseHost();});
  return w;
@@ -142,7 +147,7 @@ function open(key,code){
  if(!action)home.contentView.addChildView(view);
  visit++;
  action={key,code};
- if(mac&&prefs.low&&state.joined)releaseHost();
+ if(prefs.low&&state.joined)releaseHost();
  publish();
  contentBounds();
  view.webContents.focus();
@@ -295,7 +300,7 @@ async function start(){
  if(mac)Menu.setApplicationMenu(Menu.buildFromTemplate([{role:'appMenu'},{role:'editMenu'},{role:'windowMenu'}]));
  else Menu.setApplicationMenu(null);
  home=createHome();
- if(mac){mountHost();reveal(home);}
+ mountHost();reveal(home);
  // A saved player can authenticate again after the room session cookie expires.
  const returning=prefs.hasPlayer||(await ses.cookies.get({url:prefs.server,name:'squad_session'})).length>0;
  if(returning)ensureView();

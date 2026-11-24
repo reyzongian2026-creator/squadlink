@@ -397,71 +397,103 @@ export async function enterFromWindows(data) {
   await enterRoom(result.room);
 }
 
+let roomClock;
+function roomTime(value) {
+  roomClock ??= new Intl.DateTimeFormat("es-PE", {hour:"2-digit", minute:"2-digit"});
+  const time = new Date(value);
+  return Number.isFinite(time.getTime()) ? roomClock.format(time) : time.toString();
+}
+
+const rosterRows = new Map();
+function createMemberRow(id, isSelf) {
+  const li = document.createElement("li");
+  const nick = document.createElement("strong");
+  const info = document.createElement("small");
+  const activity = document.createElement("small");
+  li.append(nick, info);
+  let slider;
+  if (!isSelf) {
+    slider = document.createElement("input");
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "100";
+    slider.value = String(volumes.get(id) ?? 100);
+    slider.oninput = () => {
+      volumes.set(id, Number(slider.value));
+      voice?.setVolume(id, Number(slider.value) / 100);
+    };
+    slider.onchange = () => saveMemberVolume(id, Number(slider.value));
+    li.append(slider);
+  }
+  return {li, nick, info, activity, slider, isSelf};
+}
 function renderMembers() {
-  const fragment = document.createDocumentFragment();
-  for (const member of room.members) {
-    const li = document.createElement("li");
-    const nick = document.createElement("strong");
-    nick.textContent = member.nick + (member.id === self.id ? " (tú)" : "");
-    if (window.squadBridge) {
-      li.dataset.initials = member.nick.trim().split(/\s+/).slice(0,2).map(word=>[...word][0] || '').join('').toLocaleUpperCase('es');
-      li.dataset.muted = String(member.muted);
+  const list = $("members");
+  const desktop = Boolean(window.squadBridge);
+  for (const [id, row] of rosterRows) {
+    if (!room.members.some(member => member.id === id)) {
+      row.li.remove();
+      rosterRows.delete(id);
     }
-    const info = document.createElement("small");
+  }
+  for (const [index, member] of room.members.entries()) {
+    const isSelf = member.id === self.id;
+    let row = rosterRows.get(member.id);
+    if (!row || row.isSelf !== isSelf) {
+      row?.li.remove();
+      row = createMemberRow(member.id, isSelf);
+      rosterRows.set(member.id, row);
+    }
+    const previous = row.member;
+    const {li, nick, info, activity, slider} = row;
+    if (previous?.nick !== member.nick) {
+      nick.textContent = member.nick + (isSelf ? " (tú)" : "");
+      if (slider) slider.setAttribute("aria-label", "Volumen de " + member.nick);
+      if (desktop) li.dataset.initials = member.nick.trim().split(/\s+/).slice(0,2).map(word=>[...word][0] || '').join('').toLocaleUpperCase('es');
+    }
     const state = peerStates.get(member.id);
-    const suffix =
-      state === "connected"
-        ? " · Conectado"
-        : ["disconnected", "failed"].includes(state)
-          ? " · Sin conexión"
-          : "";
-    info.textContent =
-      (member.muted ? "Micro apagado" : "Micro activo") + suffix;
-    li.append(nick, info);
-    if (member.joinedAt || member.game) {
-      const activity = document.createElement("small");
-      const clock = (time) =>
-        new Date(time).toLocaleTimeString("es-PE", {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-      activity.textContent = [
-        member.id === room.ownerId && "Anfitrión",
-        !window.squadBridge && member.joinedAt && "En sala desde " + clock(member.joinedAt),
-        member.game &&
-          member.game + (member.since ? " desde " + clock(member.since) : ""),
-      ]
-        .filter(Boolean)
-        .join(" · ");
-      if (member.joinedAt) li.title = "En sala desde " + clock(member.joinedAt);
-      if (activity.textContent) li.append(activity);
+    if (!previous || previous.muted !== member.muted || row.state !== state) {
+      const suffix = state === "connected" ? " · Conectado"
+        : ["disconnected","failed"].includes(state) ? " · Sin conexión" : "";
+      info.textContent = (member.muted ? "Micro apagado" : "Micro activo") + suffix;
+      if (desktop && previous?.muted !== member.muted) li.dataset.muted = String(member.muted);
     }
-    if (member.id !== self.id) {
-      const slider = document.createElement("input");
-      slider.type = "range";
-      slider.min = "0";
-      slider.max = "100";
-      slider.value = String(volumes.get(member.id) ?? 100);
-      slider.setAttribute("aria-label", "Volumen de " + member.nick);
-      slider.oninput = () => {
-        volumes.set(member.id, Number(slider.value));
-        voice?.setVolume(member.id, Number(slider.value) / 100);
-      };
-      slider.onchange = () => saveMemberVolume(member.id, Number(slider.value));
-      li.append(slider);
+    const owner = member.id === room.ownerId;
+    if (!previous || previous.joinedAt !== member.joinedAt || previous.game !== member.game ||
+        previous.since !== member.since || owner !== row.owner) {
+      const joined = member.joinedAt ? "En sala desde " + roomTime(member.joinedAt) : "";
+      if (joined) li.title = joined;
+      else li.removeAttribute("title");
+      const details = (joined || member.game) && [
+        owner && "Anfitrión", !desktop && joined,
+        member.game && member.game + (member.since ? " desde " + roomTime(member.since) : ""),
+      ].filter(Boolean).join(" · ");
+      if (details) {
+        activity.textContent = details;
+        if (!activity.parentNode) li.insertBefore(activity, slider ?? null);
+      } else activity.remove();
     }
-    fragment.append(li);
+    row.member = member;
+    row.state = state;
+    row.owner = owner;
+    if (list.children[index] !== li) list.insertBefore(li, list.children[index] ?? null);
   }
-  if (!window.squadBridge && room.music?.queue?.length) {
-    const bot = document.createElement('li');
-    const name = document.createElement('strong'), playing = document.createElement('small');
-    name.textContent = '♫ DJ Squadlink';
-    playing.textContent = 'Bot de música · ' + room.music.queue[0].title;
+  const playing = !desktop && room.music?.queue?.[0];
+  let bot = list.querySelector('[data-music-bot]');
+  if (!playing) {
+    bot?.remove();
+    return;
+  }
+  if (!bot) {
+    bot = document.createElement('li');
     bot.dataset.musicBot = '';
-    bot.append(name,playing);
-    fragment.append(bot);
+    const name = document.createElement('strong');
+    name.textContent = '♫ DJ Squadlink';
+    bot.append(name, document.createElement('small'));
+    list.append(bot);
   }
-  $("members").replaceChildren(fragment);
+  const title = 'Bot de música · ' + playing.title;
+  if (bot.lastChild.textContent !== title) bot.lastChild.textContent = title;
 }
 let roomMusicUI;
 let leavingRoom = false;
@@ -514,10 +546,7 @@ function updateRoom(snapshot) {
   if (previousCode !== room.code) directory.draw();
   $("room-age").textContent = room.createdAt
     ? "Creada a las " +
-      new Date(room.createdAt).toLocaleTimeString("es-PE", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+      roomTime(room.createdAt)
     : "";
   social?.roomChanged();
   $("room-code").textContent = room.code;
@@ -689,6 +718,8 @@ function resetRoom() {
   social?.roomChanged();
   microphone = false;
   $("voice-measurements").replaceChildren();
+  rosterRows.clear();
+  $("members").replaceChildren();
   peerStates.clear();
   volumes = readMemberVolumes();
   $("mic").textContent = "Activar micrófono";

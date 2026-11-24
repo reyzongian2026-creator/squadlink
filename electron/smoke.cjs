@@ -25,13 +25,36 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    return accepted;
   };
  });
- async function surface(host) {
-  for(let i=0;i<200;i++){
-   const page=app.context().pages().find(p=>!p.isClosed()&&p.url().startsWith('squad://'+host+'/'));
-   if(page)return page;
+ async function windowState(){
+  return app.evaluate(({BaseWindow,webContents,app})=>{
+   const windows=BaseWindow.getAllWindows();
+   const front=windows[0]?.contentView.children.at(-1)?.webContents;
+   const views=webContents.getAllWebContents().filter(w=>w.getURL().startsWith('squad://'))
+    .map(w=>({id:w.id,host:new URL(w.getURL()).hostname,pid:w.getOSProcessId()}));
+   return {ids:windows.map(w=>w.id),front:front?.id,views,
+    rendererPids:app.getAppMetrics().filter(m=>m.type==='Tab').map(m=>m.pid)};
+  });
+ }
+ async function surface(host){
+  for(let i=0;i<160;i++){
+   const native=await windowState();
+   if(native.views.some(v=>v.id===native.front && v.host===host)){
+    const page=app.context().pages().find(p=>!p.isClosed()&&p.url().startsWith('squad://'+host+'/'));
+    if(page)return page;
+   }
    await delay(100);
   }
-  throw Error('No apareció la vista '+host);
+  throw Error('No apareció la vista '+host+': '+JSON.stringify(await windowState()));
+ }
+ // Native navigation may tear down the caller before the pointer event is acknowledged.
+ // Accept only that specific error, and require the requested destination to become visible.
+ async function navigate(page,button,host){
+  try{await page.getByRole('button',{name:button,exact:true}).click();}
+  catch(error){
+   if(!/Target (?:page, context or browser has been closed|closed)|Session closed|Page closed/i.test(error.message))throw error;
+   if(!page.isClosed())await page.waitForEvent('close',{timeout:1500});
+  }
+  return surface(host);
  }
  const fixture=fs.readFileSync(path.join(__dirname,'../test/windows/audio-fixture.js'),'utf8');
  const audioSetup="if(location.hostname==='app' && navigator.mediaDevices && !window.testPeers){"+fixtureSetup(500)+fixture+"\n}";
@@ -43,8 +66,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await onboarding.getByLabel('Tu apodo').fill('Prueba Electron');
  await onboarding.locator('#submit-entry').click();
  await onboarding.getByText('Apariencia guardada.',{exact:true}).waitFor();
- await onboarding.getByRole('button',{name:'Lobby de voz',exact:true}).click();
- let home=await surface('home');console.log('Ventana principal',home.url());
+ let home=await navigate(onboarding,'Lobby de voz','home');console.log('Ventana principal',home.url());
  const diagnostics=page=>{page.on('pageerror',err=>console.log('RENDER',err.message));page.on('console',m=>{if(m.type()==='error')console.log('RENDER',m.text())});};
  diagnostics(home);app.context().on('page',diagnostics);
  const capture=path.resolve(__dirname,'../artifacts/capturas');fs.mkdirSync(capture,{recursive:true});
@@ -52,7 +74,18 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  assert.equal((await home.evaluate(()=>window.squad.state())).server,'http://127.0.0.1:4179');
  await home.getByText('Todavía no hay salas públicas.').waitFor();
  await home.screenshot({path:path.join(capture,'Inicio-Moderno.png')});
- async function memory(label){const values=await app.evaluate(({app})=>app.getAppMetrics().map(m=>m.memory.workingSetSize));console.log('RAM '+label+' MiB: '+(values.reduce((a,b)=>a+b,0)/1024).toFixed(1));}
+ async function memory(label){
+  // Electron reports working-set KiB per process. Keep timing and sample size
+  // identical to the .22 benchmark, including all native helper processes.
+  const samples=[];
+  for(let i=0;i<5;i++){
+   const values=await app.evaluate(({app})=>app.getAppMetrics().map(m=>m.memory.workingSetSize));
+   samples.push(values.reduce((a,b)=>a+b,0)/1024);
+   if(i<4)await delay(180);
+  }
+  const sorted=[...samples].sort((a,b)=>a-b);
+  console.log('RAM '+label+' MiB: '+samples[0].toFixed(1)+'; mínima '+sorted[0].toFixed(1)+'; mediana '+sorted[2].toFixed(1));
+ }
  await memory('inicio');console.log('Inicio React correcto');
  // Only GitHub requests are intercepted, in the isolated packaged app's main process.
  const asset=process.platform==='darwin'?'Squadlink-Moderno-macOS-arm64.zip':'Squadlink-Moderno-Setup-x64.exe';
@@ -83,12 +116,21 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await home.getByRole('button',{name:'Ajustes',exact:true}).click();
  const mainId=await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].id);
  async function checkWindow(featureVisible){
-  const observed=await app.evaluate(({BaseWindow},id)=>{
-   const windows=BaseWindow.getAllWindows();
-   const main=windows.find(w=>w.id===id);
-   return {ids:windows.map(w=>w.id),feature:main?.contentView.children.some(child=>child.webContents?.getURL().startsWith('squad://app/'))};
-  },mainId);
-  assert.deepEqual(observed,{ids:[mainId],feature:featureVisible});
+  const observed=await windowState(), expected=featureVisible?'app':'home';
+  assert.deepEqual(observed.ids,[mainId]);
+  assert.equal(observed.views.find(v=>v.id===observed.front)?.host,expected,JSON.stringify(observed));
+ }
+ async function onlyCallRenderer(expected){
+  let observed;
+  for(let i=0;i<60;i++){
+   observed=await windowState();
+   const only=observed.views[0];
+   if(observed.ids.length===1 && observed.ids[0]===mainId && observed.views.length===1 &&
+      only.id===expected.id && only.pid===expected.pid && only.host==='app' &&
+      observed.rendererPids.length===1 && observed.rendererPids[0]===only.pid)return;
+   await delay(100);
+  }
+  throw Error('La llamada debe mantener únicamente su proceso de renderizado: '+JSON.stringify(observed));
  }
  await home.getByRole('heading',{name:'Ajustes',exact:true}).waitFor();
  await home.getByRole('button',{name:'Descargar actualización'}).click();
@@ -109,16 +151,12 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  assert.equal((await home.evaluate(()=>window.squad.state())).low,false);
  await home.getByRole('button',{name:'Bajo consumo'}).click();
  await checkWindow(false);
- await home.getByRole('button',{name:'Dispositivos de audio',exact:true}).click();
- const audioSettings=await surface('app');
+ const audioSettings=await navigate(home,'Dispositivos de audio','app');
  const {localAudioBrowser}=await import('../test/support/local-audio-browser.mjs');
  await localAudioBrowser(audioSettings);
- await audioSettings.getByRole('button',{name:'Lobby de voz',exact:true}).click();
- home=await surface('home');
- await home.getByRole('button',{name:'Crear sala',exact:true}).click();
- let space;
- for(let i=0;i<120&&!space;i++){space=app.context().pages().find(p=>p.url().startsWith('squad://app/'));if(!space)await delay(100);}
- console.log("Motor de sala",space?.url());assert.ok(space,'El motor debe cargar dentro de la ventana principal.');
+ home=await navigate(audioSettings,'Lobby de voz','home');
+ let space=await navigate(home,'Crear sala','app');
+ console.log('Motor de sala',space.url());
  await space.locator('#entry[open]').waitFor();assert.ok(await space.locator('#nickname').isHidden());await space.locator('#name').fill('Escuadra Lima');
  await space.screenshot({path:path.join(capture,'Crear-sala-Moderna.png')});await space.locator('#submit-entry').click();
  await space.locator('#room-name').waitFor({state:'visible'});
@@ -126,14 +164,13 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await space.getByText('Detalles de sala',{exact:true}).click();
  await space.waitForFunction(()=>/^[A-Z0-9]{6}$/.test(document.querySelector('#room-code')?.textContent));
  async function openCurrentRoom(){
-  // On macOS the click can release the low-memory home renderer before Playwright returns.
-  try { await home.getByRole('button',{name:'Mi sala',exact:true}).click(); }
-  catch(error){ if(process.platform!=='darwin'||!home.isClosed())throw error; }
+  const roomPage=await navigate(home,'Mi sala','app');
+  assert.equal(roomPage,space,'La llamada debe conservar su vista al navegar');
   await space.locator('#room-name').waitFor({state:'visible'});
   await checkWindow(true);
  }
  const code=await space.locator('#room-code').innerText();assert.match(code,/^[A-Z0-9]{6}$/);
- await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
+ home=await navigate(space,'Lobby de voz','home');
  await checkWindow(false);
  await home.getByRole('button',{name:/Escuadra Lima.*Tu sala/}).waitFor();
  await home.getByRole('button',{name:'Activar micrófono',exact:true}).click();
@@ -144,8 +181,12 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await peer.locator('#directory-list [data-room-code="'+code+'"]').click();await peer.locator('#nickname').fill('Amigo');await peer.locator('#code').fill(code);await peer.locator('#submit-entry').click();await peer.locator('#mic').click();
  const sample=p=>p.evaluate(async()=>{for(const pc of window.testPeers){for(const stat of (await pc.getStats()).values()){if(stat.type==='inbound-rtp'&&stat.kind==='audio')return stat.totalAudioEnergy||0;}}return 0;});
  async function audio(previous){let values;for(let i=0;i<100;i++){values=await Promise.all([sample(space),sample(peer)]);if(values.every((v,j)=>v>previous[j]))return values;await delay(250);}throw Error('Falta voz bidireccional '+JSON.stringify(values));}
- const first=await audio([0,0]);await memory('voz');
+ const first=await audio([0,0]);await checkWindow(false);await memory('voz');
+ const callView=(await windowState()).views.find(v=>v.host==='app');
+ assert.ok(callView?.pid>0);
  await openCurrentRoom();
+ await memory('voz con sala visible');
+ await onlyCallRenderer(callView);
  await testVoiceQuality(space,peer);
  const {musicSmoke,assertRadioShortcut}=await import('../test/support/music-browser.mjs');
  async function radioAndVoice() {
@@ -204,11 +245,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   },hostname);
   assert.deepEqual(input,{code:'KeyR',alt:true,shift:true},hostname+' recibió un acorde incorrecto');
  }
- await musicSmoke(space,peer,async()=>{
-  try{
-   await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
-   await waitMinimized(true);
-   await requireProgress(await radioAndVoice(),'Radio y voz con la ventana minimizada');
+ async function backgroundShortcut(label){
    const registered=await app.evaluate(({globalShortcut})=>globalShortcut.isRegistered('Alt+Shift+R'));
    if(registered){
     const windows=process.platform==='win32';
@@ -218,17 +255,41 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
        if(!globalThis.qaGlobalRadio)throw Error('Falta el callback del atajo registrado.');
        globalThis.qaGlobalRadio();
       });
-    await assertRadioShortcut(space,peer,sendGlobal,windows?'teclas del sistema Windows, ventana minimizada':
-      'callback global registrado en macOS, ventana minimizada');
+    await assertRadioShortcut(space,peer,sendGlobal,(windows?'teclas del sistema Windows, ':'callback global registrado en macOS, ')+label);
    }else console.log('El sistema reservó Alt+Shift+R; se comprobarán las teclas con foco.');
+ }
+ await musicSmoke(space,peer,async()=>{
+  try{
+   await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
+   await waitMinimized(true);
+   await requireProgress(await radioAndVoice(),'Radio y voz con la ventana minimizada');
+   await memory('voz y radio con sala minimizada');
+   await onlyCallRenderer(callView);
+   await backgroundShortcut('sala minimizada');
   }finally{
    await app.evaluate(({BaseWindow})=>{const win=BaseWindow.getAllWindows()[0];win.restore();win.show();win.focus();});
    await waitMinimized(false);
   }
   await requireProgress(await radioAndVoice(),'Radio y voz al restaurar la ventana');
-  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
+  home=await navigate(space,'Lobby de voz','home');
   await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   await requireProgress(await radioAndVoice(),'Radio y voz en el lobby');
+  const previousHome=home;
+  await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].minimize());
+  try{
+   await waitMinimized(true);
+   await requireProgress(await radioAndVoice(),'Radio y voz con el lobby minimizado');
+   await memory('voz y radio con lobby minimizado');
+   await onlyCallRenderer(callView);
+   await backgroundShortcut('lobby minimizado');
+  }finally{
+   await app.evaluate(({BaseWindow})=>{const win=BaseWindow.getAllWindows()[0];win.restore();win.show();win.focus();});
+   await waitMinimized(false);
+  }
+  home=await surface('home');
+  assert.notEqual(home,previousHome,'Restaurar el lobby debe recrear su vista');
+  await requireProgress(await radioAndVoice(),'Radio y voz al restaurar el lobby');
+  await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   await assertRadioShortcut(space,peer,()=>home.keyboard.press('Alt+Shift+KeyR'),'teclado Chromium en el lobby de escritorio');
   const lobbyRadio=()=>home.getByRole('button',{name:/^(Silenciar mi radio|Reanudar mi radio)$/});
   let stop=true;
@@ -237,15 +298,15 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    await lobbyRadio().click();
    stop=!stop;
   },'botón de radio del lobby');
-  await home.getByRole('button',{name:'Arcade',exact:true}).click();
+  await navigate(home,'Arcade','app');
   await space.locator('[data-game="reflex"]').waitFor();
   await assertRadioShortcut(space,peer,()=>focusedRadioShortcut('app'),'teclas en Arcade');
-  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
+  home=await navigate(space,'Lobby de voz','home');
   await openCurrentRoom();
   await space.locator('#room-music [data-listen][aria-pressed="true"]').waitFor();
  });
- await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
- await home.getByRole('button',{name:'Arcade',exact:true}).click();await space.locator('[data-game="reflex"]').waitFor();
+ home=await navigate(space,'Lobby de voz','home');
+ await navigate(home,'Arcade','app');await space.locator('[data-game="reflex"]').waitFor();
  const {duckNesBrowser}=await import('../test/duck-nes-browser.mjs');
  // Packaged Electron serves squad: from disk. Exercise that same handler on the
  // temporary CI installation with generated diagnostic cartridges only.
@@ -319,19 +380,19 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    assert.ok(await space.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   }
  }
- await space.getByRole('button',{name:'Ajustes',exact:true}).click();home=await surface('home');
+ home=await navigate(space,'Ajustes','home');
  await home.getByRole('heading',{name:'Ajustes',exact:true}).waitFor();
  await checkWindow(false);
- await home.getByRole('button',{name:'Dispositivos de audio'}).click();await space.getByText('Ganancia automática del micrófono').waitFor();
+ await navigate(home,'Dispositivos de audio','app');await space.getByText('Ganancia automática del micrófono').waitFor();
  await testManualGain(space,peer);
  await testListenBoost(space,peer);
- await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
+ home=await navigate(space,'Lobby de voz','home');
  await openCurrentRoom();await space.locator('#room-name').waitFor({state:'visible'});
  await space.screenshot({path:path.join(capture,'Sala-Moderna.png')});
  console.log('Voz bidireccional durante la navegación',first,await audio(first));
- await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');
- await home.getByRole('button',{name:'Salir de sala'}).click();await home.getByRole('button',{name:'Unirme con código'}).click();
- space=await surface('app');await space.locator('#code').fill(code);await space.locator('#submit-entry').click();await space.locator('#room-name').waitFor({state:'visible'});await checkWindow(true);
+ home=await navigate(space,'Lobby de voz','home');
+ await home.getByRole('button',{name:'Salir de sala'}).click();space=await navigate(home,'Unirme con código','app');
+ await space.locator('#code').fill(code);await space.locator('#submit-entry').click();await space.locator('#room-name').waitFor({state:'visible'});await checkWindow(true);
  console.log('Instalación, ajustes, sala, entrada por código y continuidad de voz verificados.');
  }finally{await browser?.close();await app?.close();backend.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

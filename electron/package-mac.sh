@@ -23,7 +23,7 @@ p=sys.argv[1]
 with open(p,'rb') as f: info=plistlib.load(f)
 info.update(CFBundleName='Squadlink Moderno', CFBundleDisplayName='Squadlink Moderno',
             CFBundleIdentifier='com.squadlink.moderno.preview', CFBundleIconFile='Squadlink.icns',
-            CFBundleShortVersionString='0.5.0', CFBundleVersion='22',
+            CFBundleShortVersionString='0.5.0', CFBundleVersion='23',
             NSMicrophoneUsageDescription='Squadlink usa el micrófono cuando lo activas para hablar en una sala o probar tu audio.')
 with open(p,'wb') as f: plistlib.dump(info,f)
 PY

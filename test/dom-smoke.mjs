@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fixture } from './support/http.mjs';
+import { exerciseRoomRoster } from './support/room-roster.mjs';
 import { audioLevelPreview } from './support/audio-level-preview.mjs';
 
 // A DOM emulator validates event handlers and state changes, not layout or media.
@@ -75,7 +76,9 @@ export async function domSmoke(Window) {
     el('entry-form').requestSubmit();
     await until(() => !el('mic').disabled && !el('room').hidden && !el('entry').open);
     const code = el('room-code').textContent;
-    const initialVisit = (await player.hit('session')).data.room.members[0].visitId;
+    const initialRoom = (await player.hit('session')).data.room;
+    const initialVisit = initialRoom.members[0].visitId;
+    exerciseRoomRoster(win,roomEvents,initialRoom);
     assert.match(code, /^[A-Z0-9]{6}$/);
     assert.equal(el('room-name').textContent, 'Sala QA');
     assert.match(el('privacy').textContent, /clave/);
