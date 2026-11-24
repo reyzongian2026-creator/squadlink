@@ -93,3 +93,32 @@ test('the answering participant never starts a competing recovery offer', async 
   await advance(120000);
   assert.equal(sent.length, 0);
 });
+
+test('una renegociación conserva la reproducción y descarta solicitudes antiguas', async t => {
+  const {room, peer} = setup(t, 'B');
+  globalThis.MediaStream = class {
+    constructor(tracks) { this.tracks = tracks; }
+    getAudioTracks() { return this.tracks; }
+  };
+  t.after(() => { delete globalThis.MediaStream; });
+  const plays = [];
+  peer.audio.play = async () => { plays.push(peer.audio.srcObject); };
+  const first = {kind:'audio'}, replacement = {kind:'audio'};
+  peer.pc.ontrack({track:first});
+  const originalStream = peer.audio.srcObject;
+  await Promise.resolve();
+  peer.pc.ontrack({track:first});
+  assert.equal(peer.audio.srcObject, originalStream);
+  await Promise.resolve();
+  assert.deepEqual(plays, [originalStream]);
+  peer.pc.ontrack({track:{kind:'audio'}});
+  peer.pc.ontrack({track:replacement});
+  const latestStream = peer.audio.srcObject;
+  await Promise.resolve();
+  assert.deepEqual(plays, [originalStream, latestStream]);
+  assert.equal(latestStream.getAudioTracks()[0], replacement);
+  peer.pc.ontrack({track:{kind:'audio'}});
+  room.close();
+  await Promise.resolve();
+  assert.equal(plays.length, 2);
+});

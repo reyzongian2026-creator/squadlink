@@ -1,6 +1,7 @@
 const { _electron,chromium }=require('playwright-core');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const {spawn}=require('node:child_process');
+const {fixtureSetup,testVoiceQuality}=require('../test/support/voice-quality.cjs');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 (async()=>{
  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'squadlink-e2e-'));
@@ -22,7 +23,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   throw Error('No apareció la vista '+host);
  }
  const fixture=fs.readFileSync(path.join(__dirname,'../test/windows/audio-fixture.js'),'utf8');
- const audioSetup="if(location.hostname==='app' && navigator.mediaDevices && !window.testPeers){"+fixture+"\n}";
+ const audioSetup="if(location.hostname==='app' && navigator.mediaDevices && !window.testPeers){"+fixtureSetup(500)+fixture+"\n}";
  await app.context().addInitScript({content:audioSetup});
  const onboarding=await surface('app');
  await onboarding.evaluate(audioSetup);
@@ -75,13 +76,14 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  await home.getByRole('button',{name:'Activar micrófono',exact:true}).click();
  await home.getByRole('button',{name:'Silenciar',exact:true}).waitFor();
  browser=await chromium.launch({channel:process.platform==='darwin'?'chrome':'msedge',headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required']});
- const peer=await browser.newPage();peer.setDefaultTimeout(15000);await peer.addInitScript({content:fixture});await peer.goto('http://127.0.0.1:4179');
+ const peer=await browser.newPage();peer.setDefaultTimeout(15000);await peer.addInitScript({content:fixtureSetup(900)+fixture});await peer.goto('http://127.0.0.1:4179');
  await peer.locator('#channel-list a[href="#directory"]').click();
  await peer.locator('#directory-list [data-room-code="'+code+'"]').click();await peer.locator('#nickname').fill('Amigo');await peer.locator('#code').fill(code);await peer.locator('#submit-entry').click();await peer.locator('#mic').click();
  const sample=p=>p.evaluate(async()=>{for(const pc of window.testPeers){for(const stat of (await pc.getStats()).values()){if(stat.type==='inbound-rtp'&&stat.kind==='audio')return stat.totalAudioEnergy||0;}}return 0;});
  async function audio(previous){let values;for(let i=0;i<100;i++){values=await Promise.all([sample(space),sample(peer)]);if(values.every((v,j)=>v>previous[j]))return values;await delay(250);}throw Error('Falta voz bidireccional '+JSON.stringify(values));}
  const first=await audio([0,0]);await memory('voz');
  await home.getByRole('button',{name:'Mi sala',exact:true}).click();
+ await testVoiceQuality(space,peer);
  const {musicSmoke}=await import('../test/support/music-browser.mjs');
  await musicSmoke(space,peer);
  await space.getByRole('button',{name:'Lobby de voz',exact:true}).click();home=await surface('home');

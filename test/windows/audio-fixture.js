@@ -8,13 +8,14 @@ function installAudioFixture() {
   };
   navigator.mediaDevices.getUserMedia = async () => {
     const track = new MediaStreamTrackGenerator({kind:'audio'});
+    if (window.qaReference) window.qaRawTrack = track;
     const writer = track.writable.getWriter();
     const block = Float32Array.from({length:960},(_,i)=>0.15*Math.sin(2*Math.PI*500*i/48000));
     let time=0, busy=false;
     const timer = setInterval(async () => {
       if (busy || track.readyState === 'ended') return;
       busy = true;
-      const chunk = new AudioData({format:'f32',sampleRate:48000,numberOfFrames:960,numberOfChannels:1,timestamp:time,data:block});
+      const chunk = new AudioData({format:'f32',sampleRate:48000,numberOfFrames:960,numberOfChannels:1,timestamp:time,data:window.qaReference ? window.qaReference(window.qaSignalMode) : block});
       time+=20000;
       try { await writer.write(chunk); } catch { clearInterval(timer); }
       finally { chunk.close(); busy=false; }

@@ -1,3 +1,4 @@
+import { prepareVoiceCapture } from './voice-capture.js';
 // A short local sample. Only the player's explicit clicks can start capture or playback.
 export function mountMicTest(container, constraints, preferences) {
   const button = document.createElement('button');
@@ -7,7 +8,7 @@ export function mountMicTest(container, constraints, preferences) {
   status.setAttribute('role', 'status');
   container.replaceChildren(button, status);
   const record = 'Grabar prueba de 4 segundos', listen = 'Escuchar mi prueba';
-  let version = 0, timer, stream, recorder, url, player;
+  let version = 0, timer, stream, capture, recorder, url, player;
   function stopInput() {
     clearTimeout(timer);
     if (recorder) {
@@ -15,6 +16,8 @@ export function mountMicTest(container, constraints, preferences) {
       if (recorder.state !== 'inactive') recorder.stop();
       recorder = null;
     }
+    capture?.close();
+    capture = null;
     stream?.getTracks().forEach(track => track.stop());
     stream = null;
   }
@@ -58,7 +61,10 @@ export function mountMicTest(container, constraints, preferences) {
       const input = await navigator.mediaDevices.getUserMedia({audio: constraints(), video: false});
       if (id !== version) { input.getTracks().forEach(track => track.stop()); return; }
       stream = input;
-      recorder = new MediaRecorder(input);
+      capture = prepareVoiceCapture(input, preferences());
+      await capture.ready;
+      if (id !== version) return;
+      recorder = new MediaRecorder(capture.stream);
       const parts = [];
       recorder.ondataavailable = event => { if (id === version && event.data.size) parts.push(event.data); };
       recorder.onerror = () => fail('No se pudo grabar la muestra.');
