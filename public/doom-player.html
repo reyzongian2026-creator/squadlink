@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-3PA8VYvSVTg6pqTxRmdpdPlnzeINFj6uPEjAha0H9EI=' 'wasm-unsafe-eval' https://danborden1.github.io/doom-web/websockets-doom.js; connect-src https://danborden1.github.io/doom-web/; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Freedoom · Squadlink</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:#13141a;color:#f3f2fa;font:15px system-ui}body{display:flex;flex-direction:column}
+main{position:relative;min-height:0;flex:1;background:#08090b}canvas{display:block;width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+#boot{position:absolute;inset:0;display:grid;align-content:center;justify-items:center;gap:.6rem;text-align:center;padding:1rem;background:#151620}#boot p{margin:0}
+button{background:#44405c;color:white;border:1px solid #827b9f;border-radius:6px;padding:.55rem .85rem;font:inherit;cursor:pointer}button:focus-visible{outline:2px solid white}
+[hidden]{display:none!important}footer{display:flex;align-items:center;gap:.7rem;justify-content:space-between;padding:.35rem .55rem}#hint{font-size:.82rem}#pad{display:none}
+@media(pointer:coarse){#pad{display:flex;justify-content:center;flex-wrap:wrap;gap:3px}#pad button{touch-action:none;min-width:42px}}
+</style>
+</head>
+<body>
+<main>
+  <canvas id="canvas" tabindex="0" aria-label="Partida de Freedoom"></canvas>
+  <section id="boot"><strong>Freedoom · Phase 1</strong><p id="progress" role="status">Descargando el motor y la campaña…</p><button id="play" hidden>Jugar</button></section>
+</main>
+<div id="pad" hidden aria-label="Controles táctiles"></div>
+<footer><span id="hint">WASD · Ratón para girar · Clic para disparar · Espacio para usar</span><button id="leave">Salir del juego</button></footer>
+<script>
+'use strict';
+const base = 'https://danborden1.github.io/doom-web/';
+const canvas = document.getElementById('canvas');
+const boot = document.getElementById('boot');
+const play = document.getElementById('play');
+const progress = document.getElementById('progress');
+const pad = document.getElementById('pad');
+let stopped = false;
+let playing = false;
+function stop() {
+  if (stopped) return;
+  stopped = true;
+  if (document.pointerLockElement === canvas) document.exitPointerLock();
+  const audio = window.Module?.SDL2?.audio;
+  if (audio?.scriptProcessorNode) {
+    audio.scriptProcessorNode.disconnect();
+    audio.scriptProcessorNode.onaudioprocess = null;
+  }
+  const context = window.Module?.SDL2?.audioContext;
+  if (context && context.state !== 'closed') context.close().catch(() => {});
+  if (playing) window.Module.pauseMainLoop?.();
+}
+function leave() {
+  stop();
+  parent.postMessage('squadlink:doom:closed', '*');
+}
+window.addEventListener('pagehide', stop);
+document.addEventListener('visibilitychange', () => { if (document.hidden) leave(); });
+document.getElementById('leave').onclick = leave;
+function failed() {
+  if (stopped) return;
+  play.hidden = true;
+  boot.hidden = false;
+  progress.textContent = 'No se pudo cargar la campaña. Cierra el juego y vuelve a intentarlo.';
+}
+const config = [
+  'key_up 17','key_down 31','key_strafeleft 30','key_straferight 32',
+  'key_left 75','key_right 77','key_use 57','key_fire 29','key_speed 42',
+  'use_mouse 1','mouseb_fire 0','mouseb_strafe -1','mouseb_forward -1',
+  'mouse_sensitivity 6','sfx_volume 8','music_volume 0','screenblocks 10'
+].join('\n') + '\n';
+window.Module = {
+  canvas, noInitialRun:true, noExitRuntime:true,
+  locateFile: name => base + name,
+  preRun() {
+    const fs = window.Module.FS;
+    fs.writeFile('/squad.cfg', config);
+    fs.writeFile('/squad-extra.cfg', 'grabmouse 1\nnovert 1\nfullscreen 0\n');
+    fs.createPreloadedFile('/', 'freedoom1.wad', base + 'freedoom1.wad', true, false, undefined, failed);
+  },
+  onRuntimeInitialized() {
+    if (stopped) return;
+    progress.textContent = 'Campaña lista.';
+    play.hidden = false;
+  },
+  onAbort:failed,
+  onExit:leave
+};
+function captureMouse() {
+  if (!matchMedia('(pointer:fine)').matches || document.pointerLockElement === canvas) return;
+  try { canvas.requestPointerLock?.()?.catch(() => {}); } catch { /* Esc or platform settings may decline capture. */ }
+}
+play.onclick = () => {
+  if (stopped || playing) return;
+  playing = true;
+  boot.hidden = true;
+  pad.hidden = false;
+  canvas.focus();
+  captureMouse();
+  try {
+    callMain(['-iwad','freedoom1.wad','-config','squad.cfg','-extraconfig','squad-extra.cfg','-window','-nogui','-nomusic','-skill','2','-warp','1','1']);
+  } catch (error) {
+    if (error !== 'unwind') failed();
+  }
+};
+canvas.addEventListener('click', captureMouse);
+canvas.addEventListener('contextmenu', event => event.preventDefault());
+for (const [label, key, code, keyCode] of [
+  ['←','ArrowLeft','ArrowLeft',37],['W','w','KeyW',87],['→','ArrowRight','ArrowRight',39],
+  ['A','a','KeyA',65],['S','s','KeyS',83],['D','d','KeyD',68],
+  ['Disparar','Control','ControlLeft',17],['Usar',' ','Space',32]
+]) {
+  const control = document.createElement('button');
+  control.textContent = label;
+  function send(type) { canvas.dispatchEvent(new KeyboardEvent(type,{bubbles:true,cancelable:true,key,code,keyCode,which:keyCode})); }
+  control.onpointerdown = event => { event.preventDefault(); control.setPointerCapture(event.pointerId); send('keydown'); };
+  control.onlostpointercapture = () => send('keyup');
+  pad.append(control);
+}
+const loader = document.createElement('script');
+loader.src = base + 'websockets-doom.js';
+loader.crossOrigin = 'anonymous';
+loader.integrity = 'sha384-n1eyH16zS54fXknxRYXs4+h4I5OMCVA9KxFAl38aumsoPbT7hJtReDncU29MN2rh';
+loader.onerror = failed;
+document.head.append(loader);
+</script>
+</body>
+</html>

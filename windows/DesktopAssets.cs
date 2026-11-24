@@ -5,7 +5,7 @@ internal sealed class DesktopAssets
     private readonly string root = Path.Combine(AppContext.BaseDirectory, "Client");
     private readonly Dictionary<string, string> files;
     private const string Headers = "Cache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n";
-    private const string Policy = "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; frame-src https://danborden1.github.io/doom-web/; object-src 'none'; base-uri 'none'; form-action 'self'\r\n";
+    private const string Policy = "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'\r\n";
 
     public DesktopAssets()
     {
@@ -38,6 +38,6 @@ internal sealed class DesktopAssets
             body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(html));
         }
         else body = File.OpenRead(file);
-        e.Response = core.Environment.CreateWebResourceResponse(body, 200, "OK", Headers + Policy + "Content-Type: " + mime + "\r\n");
+        e.Response = core.Environment.CreateWebResourceResponse(body, 200, "OK", Headers + (path == "/doom-player.html" ? "" : Policy) + "Content-Type: " + mime + "\r\n");
     }
 }

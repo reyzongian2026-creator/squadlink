@@ -250,7 +250,7 @@ function openEntry(next, preset = {}) {
 $("create").onclick = () => openEntry("create");
 $("join").onclick = () => openEntry("join");
 document.querySelectorAll("[data-dismiss]").forEach((button) => {
-  button.onclick = () => $(button.dataset.dismiss).close();
+  button.onclick = () => button.dataset.dismiss === "game-dialog" ? closeGame() : $(button.dataset.dismiss).close();
 });
 $("entry-form").onsubmit = async (event) => {
   event.preventDefault();
@@ -586,12 +586,27 @@ for (const button of document.querySelectorAll("[data-game]")) {
     }
   };
 }
-$("game-dialog").onclose = () => {
+const gameDialog = $("game-dialog");
+function clearGame() {
   gameRequest++;
   cleanupGame?.();
   cleanupGame = null;
   $("game-mount").replaceChildren();
-};
+}
+function closeGame() {
+  if (!gameDialog.open) return;
+  clearGame();
+  gameDialog.close();
+}
+gameDialog.addEventListener('cancel', event => { event.preventDefault(); closeGame(); });
+// A hidden Electron view can defer the native close event until its next paint.
+new window.MutationObserver(() => {
+  if (!gameDialog.open && $("game-mount").firstChild) clearGame();
+}).observe(gameDialog, {attributes:true, attributeFilter:['open']});
+window.addEventListener('pagehide', closeGame);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && $("game-mount").querySelector('.doom-player')) closeGame();
+});
 function setupWebChannels() {
   const body = document.body;
   const toggle = $("channels-toggle");
@@ -611,6 +626,7 @@ function setupWebChannels() {
     const channel = titles.has(fragment) ? fragment
       : enclosingPanel?.dataset.channelPanel.split(" ")[0] || (fragment.startsWith("kit-") ? "loadout" : "main");
     if (channel !== "main" && body.classList.contains("in-match")) $("compact").click();
+    if (channel !== "arcade") closeGame();
     body.dataset.channel = channel;
     if (channel === "directory") directory.reload();
     for (const panel of panels) {

@@ -334,7 +334,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     await a.getByText(/10 de 10 patos/).waitFor();
     await a.getByRole('button',{name:'Cerrar minijuego'}).click();
     let doomRequests=0;
-    await a.route('https://danborden1.github.io/doom-web/', route => {
+    await a.route('**/doom-player.html', route => {
       doomRequests++;
       return route.fulfill({contentType:'text/html',body:'<title>Jugador de prueba</title>'});
     });
