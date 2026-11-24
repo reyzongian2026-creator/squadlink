@@ -152,3 +152,24 @@ Ejecuciones comparables de Windows [antes](https://github.com/reyzongian2026-cre
 Se comparó el filtro anterior con el nuevo en un Mac con Apple Silicon. Cada una de las 11 parejas alternó el orden de las versiones, en procesos independientes del motor V8 de Electron. Para cuatro minutos de habla, ruido y silencios a 48 kHz (bloques de 128 muestras), el tiempo mediano de CPU dedicado al filtro pasó de 54,8 a 38,3 ms. El ahorro equivale aproximadamente a 0,007 puntos porcentuales de un núcleo durante la llamada. Esta prueba mide únicamente el cálculo del filtro.
 
 En 24 combinaciones de frecuencia de muestreo, tamaño de bloque y señal, las 12.246.400 muestras de salida coincidieron bit a bit. Los casos incluyen silencio, picos, ganancia manual y cambios de la reducción de ruido.
+
+## Memoria con el lobby integrado en 0.5.0-preview.24
+
+Se repitió el recorrido de escritorio con dos participantes y audio sintético bidireccional. Se sumó la memoria residente de los procesos de Squadlink y se tomó la mediana de cinco muestras por escenario. Las ejecuciones de .23 y .24 usaron máquinas de prueba distintas del mismo tipo.
+
+| Sistema | Escenario | .23 (MiB) | .24 (MiB) |
+|---|---|---:|---:|
+| Windows | Inicio | 437,4 | 453,3 |
+| Windows | Lobby visible con llamada | 687,7 | 570,6 |
+| Windows | Sala visible con llamada | 561,8 | 566,3 |
+| Windows | Voz y radio con sala minimizada | 684,2 | 581,9 |
+| Windows | Voz y radio con lobby minimizado | 555,6 | 561,4 |
+| macOS | Inicio | 557,1 | 559,2 |
+| macOS | Lobby visible con llamada | 686,0 | 690,0 |
+| macOS | Sala visible con llamada | 570,3 | 576,4 |
+| macOS | Voz y radio con sala minimizada | 591,3 | 536,3 |
+| macOS | Voz y radio con lobby minimizado | 532,6 | 535,9 |
+
+[Prueba de Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45379710929) · [Prueba de macOS](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45379711145)
+
+En esta compilación de macOS, el lobby minimizado con la radio activa marcó 535,9 MiB con la opción predeterminada y 553,9 MiB con el integrado opcional.
