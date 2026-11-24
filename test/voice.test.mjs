@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { VoiceRoom } from '../public/voice.js';
+import { microphoneConstraints, readAudioSettings, saveAudioSettings } from '../public/audio-settings.js';
 
 function createRoom() {
   return new VoiceRoom({ selfId: 'B', sendSignal: async () => {} });
@@ -105,7 +106,7 @@ test('changing input and suppression during a call replaces the sender track and
   assert.equal(second.readyState, 'ended');
   assert.equal(requested.at(-1).noiseSuppression, false);
   const nextRoom = createRoom();
-  assert.deepEqual(nextRoom.settings, { inputId: 'usb-microphone', outputId: '', noiseSuppression: false });
+  assert.deepEqual(nextRoom.settings, { inputId: 'usb-microphone', outputId: '', noiseSuppression: false, autoGainControl: false, listenVolume: 0.7 });
 });
 
 test('failed input selection keeps existing microphone and saved setting', async t => {
@@ -184,3 +185,62 @@ for (const action of ['mute', 'leave']) {
     }
   });
 }
+
+test('gain and noise adjustments reuse the live microphone, and an error preserves the settings', async t => {
+  const track = fakeTrack();
+  const observed = [];
+  let opens = 0;
+  track.applyConstraints = async constraints => {
+    observed.push(constraints);
+    if (constraints.noiseSuppression === false) throw new Error('unsupported combination');
+  };
+  installMedia(t, async () => { opens++; return fakeStream(track); });
+  const room = createRoom();
+  t.after(() => room.close());
+  await room.setMicrophone(true);
+  await room.configureAudio({autoGainControl: true});
+  assert.equal(opens, 1);
+  assert.equal(observed[0].autoGainControl, true);
+  assert.equal(observed[0].echoCancellation, true);
+  await assert.rejects(room.configureAudio({noiseSuppression: false}), /unsupported/);
+  assert.equal(room.settings.noiseSuppression, true);
+  assert.equal(room.stream.getAudioTracks()[0], track);
+  assert.equal(track.readyState, 'live');
+});
+
+test('master listening volume preserves individual levels and applies to new peers', async t => {
+  globalThis.RTCPeerConnection = class { close() {} };
+  globalThis.document = { createElement: () => ({ pause() {} }) };
+  t.after(() => { delete globalThis.RTCPeerConnection; delete globalThis.document; });
+  const room = new VoiceRoom({selfId: 'Z'});
+  t.after(() => room.close());
+  room.setVolume('A', 0.5);
+  await room.configureAudio({listenVolume: 0.8});
+  room.syncMembers(['A','B']);
+  assert.equal(room.peers.get('A').audio.volume, 0.4);
+  assert.equal(room.peers.get('B').audio.volume, 0.8);
+  await room.configureAudio({listenVolume: 0});
+  assert.equal(room.peers.get('A').audio.volume, 0);
+  await room.configureAudio({listenVolume: 1});
+  assert.equal(room.peers.get('A').audio.volume, 0.5);
+  assert.equal(room.stream, null);
+});
+
+test('las preferencias nuevas y parciales usan los valores recomendados y las guardadas conservan su valor', t => {
+  const storage = new Map();
+  globalThis.window = { localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) } };
+  t.after(() => delete globalThis.window);
+  const defaults = {inputId:'',outputId:'',noiseSuppression:true,autoGainControl:false,listenVolume:0.7};
+  assert.deepEqual(readAudioSettings(),defaults);
+  assert.deepEqual(microphoneConstraints(defaults),{
+    channelCount:{ideal:1},sampleRate:{ideal:48000},echoCancellation:true,noiseSuppression:true,autoGainControl:false
+  });
+  for (const listenVolume of [0,1]) {
+    const legacy = {inputId:'mic',outputId:'usb',noiseSuppression:false,autoGainControl:true,listenVolume};
+    saveAudioSettings(legacy);
+    assert.deepEqual(readAudioSettings(),legacy);
+    assert.deepEqual(microphoneConstraints(readAudioSettings()).deviceId,{exact:'mic'});
+  }
+  saveAudioSettings({inputId:'mic',listenVolume:0.35});
+  assert.deepEqual(readAudioSettings(),{...defaults,inputId:'mic',listenVolume:0.35});
+});

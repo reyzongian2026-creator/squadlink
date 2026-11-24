@@ -435,6 +435,13 @@ async function enterRoom(snapshot, restoring = false) {
         $("voice-status").textContent = text;
         $("listen").hidden = false;
       },
+      onMicrophoneEnded: () => {
+        if (generation !== attempt) return;
+        $("voice-status").textContent = "El micrófono se desconectó. Elige otra entrada y vuelve a activarlo.";
+        updateMicrophone(false).catch(error => {
+          if (generation === attempt) tell(error.message);
+        });
+      },
       onPeerState: (id, state) => {
         if (room) {
           peerStates.set(id, state);
@@ -442,6 +449,7 @@ async function enterRoom(snapshot, restoring = false) {
         }
       },
     });
+    for (const [id, percent] of volumes) voice.setVolume(id, percent / 100);
     voice.syncMembers(snapshot.members.map((member) => member.id));
   } catch (error) {
     if (generation !== attempt) return;
@@ -516,6 +524,12 @@ function resetRoom() {
   $("leave").textContent = "Salir de la sala";
   setConnection("Sin sala", false);
 }
+async function updateMicrophone(enabled) {
+  microphone = enabled;
+  $("mic").textContent = enabled ? "Silenciar micrófono" : "Activar micrófono";
+  $("mic").setAttribute("aria-pressed", String(enabled));
+  await api("member", { muted: !enabled });
+}
 $("mic").onclick = async () => {
   const current = voice;
   if (!current) return;
@@ -523,13 +537,8 @@ $("mic").onclick = async () => {
   try {
     const enabled = await current.setMicrophone(!microphone);
     if (voice !== current) return;
-    microphone = enabled;
-    $("mic").textContent = microphone
-      ? "Silenciar micrófono"
-      : "Activar micrófono";
-    $("mic").setAttribute("aria-pressed", String(microphone));
     $("voice-status").textContent = "";
-    await api("member", { muted: !microphone });
+    await updateMicrophone(enabled);
   } catch (error) {
     if (voice === current) $("voice-status").textContent = error.message;
   } finally {
