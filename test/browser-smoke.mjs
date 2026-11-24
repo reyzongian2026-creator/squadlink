@@ -1,6 +1,7 @@
 // Requires Playwright on the test machine only. A single process owns this isolated server.
 import assert from 'node:assert/strict';
 import { duckNesBrowser } from './duck-nes-browser.mjs';
+import {micSampleBrowser} from './support/mic-sample-browser.mjs';
 import {microphonePresenceSmoke} from './support/microphone-presence-browser.mjs';
 import {musicSmoke,leaveFailureSmoke} from './support/music-browser.mjs';
 import voiceQuality from './support/voice-quality.cjs';
@@ -212,7 +213,7 @@ async function boostDuringCall(page) {
   if (!await panel.evaluate(el => el.open)) await panel.locator('summary').click();
   const mic = panel.getByRole('slider', {name:'Ganancia de mi micrófono',exact:true});
   const listen = panel.getByRole('slider', {name:'Volumen de las voces que escucho',exact:true});
-  await mic.and(panel.locator('[aria-valuetext="0 dB"]')).waitFor();
+  await mic.and(panel.locator(':enabled[aria-valuetext="0 dB"]')).waitFor();
   const initial = await page.evaluate(() => window.qaTracks.filter(t => t.readyState === 'live').map(t => t.id));
   assert.ok(initial.length > 0);
   await mic.evaluate(el => { el.value='7'; el.dispatchEvent(new Event('input',{bubbles:true})); });
@@ -271,8 +272,9 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     }
     const origin = sharedOrigin || 'http://127.0.0.1:' + server.address().port;
     browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
+    if (!sharedOrigin) await micSampleBrowser(browser,origin);
     const errors = [];
-    async function client(frequency = 500) {
+    async function client(frequency = 500, fragment = '') {
       const ctx = await browser.newContext({ permissions: ['microphone'] });
       await ctx.addInitScript({content:voiceQuality.fixtureSetup(frequency)});
       await ctx.addInitScript(() => {
@@ -292,7 +294,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
       });
       const page = await ctx.newPage();
       page.on('pageerror', error => errors.push(error.message));
-      await page.goto(origin);
+      await page.goto(origin + fragment);
       return page;
     }
     const a = await client();
@@ -345,7 +347,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     assert.ok(!eagerResources.includes('/arcade-practice.js') && !eagerResources.includes('/arcade-practice.css'));
     assert.ok(!eagerResources.includes('/arcade.js'), 'el arcade solo se descarga cuando se abre');
     const {localAudioBrowser}=await import('./support/local-audio-browser.mjs');
-    const audioClient=await client();
+    const audioClient=await client(500, '/#main');
     try { await localAudioBrowser(audioClient); }
     finally { await audioClient.context().close(); }
     await a.getByRole('button', { name: 'Crear sala', exact: true }).first().click();
@@ -406,7 +408,7 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     await voiceQuality.testListenBoost(a,b);
     await musicSmoke(a,b);
     await a.getByRole('button', { name: 'Medir conexión de voz' }).click();
-    await a.locator('#voice-measurements').getByText(/Ana.*(Directa|Por retransmisor)/).waitFor();
+    await a.locator('#voice-measurements').getByText(/Ana.*(Directa|Por retransmisor).*Último jitter .*ms.*Pérdida en la muestra .*%/).waitFor();
     await openChannel(a, 'arcade');
     for (const [game, goal] of [['flick',12],['precision',16]]) {
       await a.locator('[data-game="'+game+'"]').click();

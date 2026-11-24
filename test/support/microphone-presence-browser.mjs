@@ -24,10 +24,6 @@ export async function microphonePresenceSmoke(page) {
       await route.continue();
     }
   };
-  // Voice setup and ICE recovery are exercised before this test. Give their
-  // negotiation a chance to finish before injecting a presence failure.
-  await page.waitForFunction(() => window.qaPeers.some(pc =>
-    pc.connectionState === 'connected' && pc.signalingState === 'stable'));
   const notices = await page.evaluateHandle(() => {
     const node = document.querySelector('#voice-status');
     const messages = [];
@@ -75,7 +71,10 @@ export async function microphonePresenceSmoke(page) {
     const details = await page.evaluate(() => ({
       status:document.querySelector('#voice-status').textContent,
       button:document.querySelector('#mic').getAttribute('aria-pressed'),
-      capture:window.qaTracks.map(t=>t.readyState),peers:window.qaPeers.map(pc=>pc.connectionState),
+      capture:window.qaTracks.map(t=>t.readyState),peers:window.qaPeers.map(pc=>({
+        state:pc.connectionState,signaling:pc.signalingState,ice:pc.iceConnectionState,
+        local:pc.localDescription?.type,remote:pc.remoteDescription?.type
+      })),
       serviceWorker:Boolean(navigator.serviceWorker?.controller)
     }));
     throw new Error('No se confirmó el estado del micrófono. '+JSON.stringify({

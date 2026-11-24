@@ -53,18 +53,23 @@ export function mountAudioSettings(container, getVoice, onStatus) {
       value.textContent = text;
       slider.setAttribute('aria-valuetext', text);
     };
-    slider.oninput = updateLabel;
-    return {slider, element, updateLabel};
+    let previewing = false;
+    slider.oninput = () => { previewing = true; updateLabel(); };
+    function sync(next, settled) {
+      if (settled) previewing = false;
+      if (previewing) return;
+      slider.value = String(next);
+      updateLabel();
+    }
+    return {slider, element, sync};
   };
   const inputLevel = levelControl('Ganancia de mi micrófono', 18, db => (db > 0 ? '+' : '') + db + ' dB');
   const listenLevel = levelControl('Volumen de las voces que escucho', 200, percent => percent + ' %');
   const micGain = inputLevel.slider;
   const volume = listenLevel.slider;
-  function syncLevels(settings) {
-    micGain.value = String(settings.micGainDb);
-    inputLevel.updateLabel();
-    volume.value = String(Math.round(settings.listenVolume * 100));
-    listenLevel.updateLabel();
+  function syncLevels(settings, settled = {}) {
+    inputLevel.sync(settings.micGainDb, Object.hasOwn(settled,'micGainDb'));
+    listenLevel.sync(Math.round(settings.listenVolume * 100), Object.hasOwn(settled,'listenVolume'));
   }
   syncLevels(getVoice()?.settings ?? readAudioSettings());
   const testArea = document.createElement('div');
@@ -157,6 +162,8 @@ export function mountAudioSettings(container, getVoice, onStatus) {
       onStatus?.(err.message);
     } finally {
       saving = false;
+      // An unrelated device refresh must not commit or discard a slider draft.
+      syncLevels(getVoice()?.settings ?? readAudioSettings(), patch);
       const levelsOnly = Object.keys(patch).every(key => key === 'micGainDb' || key === 'listenVolume');
       await render(!levelsOnly);
       status.textContent = message;
