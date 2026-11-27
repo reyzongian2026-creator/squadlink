@@ -18,12 +18,14 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$icons" -o "$resources/Squadlink.icns"
 python3 - "$bundle/Contents/Info.plist" <<'PY'
-import plistlib,sys
+import json,plistlib,sys
 p=sys.argv[1]
+with open('stage/package.json') as f: version=json.load(f)['version']
+short,_,build=version.partition('-preview.')
 with open(p,'rb') as f: info=plistlib.load(f)
 info.update(CFBundleName='Squadlink Moderno', CFBundleDisplayName='Squadlink Moderno',
             CFBundleIdentifier='com.squadlink.moderno.preview', CFBundleIconFile='Squadlink.icns',
-            CFBundleShortVersionString='0.5.0', CFBundleVersion='27',
+            CFBundleShortVersionString=short, CFBundleVersion=build or '1',
             NSMicrophoneUsageDescription='Squadlink usa el micrófono cuando lo activas para hablar en una sala o probar tu audio.')
 with open(p,'wb') as f: plistlib.dump(info,f)
 PY
