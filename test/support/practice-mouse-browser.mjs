@@ -28,9 +28,15 @@ export async function practiceMouseBrowser(page) {
       target.style.left = (sight.left + sight.width/2 - board.left - 1)+'px';
       target.style.top = (sight.top + sight.height/2 - board.top - 1)+'px';
     });
+    const hit = await page.evaluate(() => {
+      const sight = document.querySelector('.practice-sight').getBoundingClientRect();
+      const el = document.elementFromPoint(sight.left+sight.width/2,sight.top+sight.height/2);
+      return el?.className;
+    });
+    assert.equal(hit,'aim-target');
     await page.mouse.down();
     await page.mouse.up();
-    await page.waitForFunction(() => document.querySelector('.practice-status').textContent.includes('1 aciertos'));
+    assert.match(await page.locator('.practice-status').textContent(),/1 de 16 intentos · 1 aciertos/);
     await page.evaluate(() => document.exitPointerLock());
     await page.waitForFunction(() => document.querySelector('.practice-sight').hidden);
     await page.locator('.aim-target').focus();

@@ -109,14 +109,27 @@ export function mountPracticeMouse(mount, game) {
     point.y=Math.max(0,Math.min(rect.height-1,point.y+event.movementY*scale));
     paint(rect);
   },{capture:true});
-  listen(arena,'click',event=>{
-    if (!point || !locked() || !event.isTrusted || event.detail===0 || game==='duck-nes') return;
-    event.stopImmediatePropagation(); event.preventDefault();
-    const rect=arena.getBoundingClientRect();
-    const hit=doc.elementFromPoint(rect.left+point.x,rect.top+point.y)?.closest('button');
-    (hit && arena.contains(hit) ? hit : arena).click();
-    if (arena.hidden && locked()) doc.exitPointerLock();
-  },{capture:true});
+  if (game !== 'duck-nes') {
+    listen(doc,'pointerdown',event => {
+      if (!locked() || !point || event.button !== 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const board = arena.getBoundingClientRect();
+      const x = board.left + point.x;
+      const y = board.top + point.y;
+      const target = [...arena.querySelectorAll('button')].find(button => {
+        const bounds = button.getBoundingClientRect();
+        return x >= bounds.left && x < bounds.right && y >= bounds.top && y < bounds.bottom;
+      });
+      (target ?? arena).click();
+    },{capture:true});
+    listen(doc,'click',event => {
+      if (locked() && event.isTrusted && event.detail > 0) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    },{capture:true});
+  }
   return () => {
     closed=true; visibility.disconnect(); controller.abort(); sights.delete(arena);
     if (locked()) doc.exitPointerLock();
