@@ -172,6 +172,17 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   console.log('RAM '+label+summary);
   if(modeLabel)console.log('Perfil de memoria '+modeLabel+summary);
  }
+ // Measure CPU time of Squadlink's own processes only, excluding the simulated peer.
+ async function cpuSample(label){
+  const read=()=>app.evaluate(({app})=>app.getAppMetrics().map(m=>[m.pid,m.cpu.cumulativeCPUUsage]));
+  const start=new Map(await read());
+  const time=performance.now();
+  await delay(4000);
+  const finish=await read();
+  if(finish.length!==start.size || finish.some(([pid,seconds])=>!start.has(pid) || !Number.isFinite(seconds)))return;
+  const seconds=finish.reduce((sum,[pid,value])=>sum+value-start.get(pid),0);
+  console.log('CPU '+label+': '+(100000*seconds/(performance.now()-time)).toFixed(1)+' % de un núcleo');
+ }
  await memory('inicio');console.log('Inicio React correcto');
  // Only GitHub requests are intercepted, in the isolated packaged app's main process.
  const asset=process.platform==='darwin'?'Squadlink-Moderno-macOS-arm64.zip':'Squadlink-Moderno-Setup-x64.exe';
@@ -419,6 +430,8 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   try {
    assert.equal(await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0]?.isVisible()),false);
    await requireProgress(await radioAndVoice(),'Cerrar la ventana mantiene la voz y la radio');
+   await cpuSample('voz y radio en segundo plano');
+   await memory('voz y radio en segundo plano');
   } finally {
    await app.evaluate(({app})=>app.emit('second-instance'));
   }
