@@ -1,3 +1,4 @@
+import { nesMousePoint } from './practice-mouse.js';
 import { accessCartridge } from './cartridge-store.js';
 const WIDTH = 256;
 const HEIGHT = 240;
@@ -24,6 +25,7 @@ export function readCartridge(bytes) {
 }
 
 export function zapperPoint(event, rect) {
+  event = nesMousePoint(event, rect);
   return [
     Math.min(WIDTH - 1, Math.max(0, Math.floor((event.clientX - rect.left) * WIDTH / rect.width))),
     Math.min(HEIGHT - 1, Math.max(0, Math.floor((event.clientY - rect.top) * HEIGHT / rect.height))),
@@ -417,7 +419,7 @@ export function mountDuckNes(mount, status, loadCore = () => import('./duck-nes-
     if (mario || !running || pointer !== null || event.button !== 0) return;
     event.preventDefault();
     pointer = event.pointerId;
-    canvas.setPointerCapture?.(pointer);
+    if (doc.pointerLockElement !== canvas) canvas.setPointerCapture?.(pointer);
     setAim(...zapperPoint(event, canvas.getBoundingClientRect()),false);
     triggerUntil = frame + 3;
     nes.zapperFireDown();

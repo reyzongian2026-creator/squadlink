@@ -288,6 +288,13 @@ export async function browserSmoke(chromium, sharedOrigin = process.env.SQUADLIN
     const eagerResources = await a.evaluate(() => performance.getEntriesByType('resource').map(e => new URL(e.name).pathname));
     assert.ok(!eagerResources.includes('/arcade-practice.js') && !eagerResources.includes('/arcade-practice.css'));
     assert.ok(!eagerResources.includes('/arcade.js'), 'el arcade solo se descarga cuando se abre');
+    if (!sharedOrigin) {
+      const mouseClient = await client('/#main');
+      try {
+        const {practiceMouseBrowser} = await import('./support/practice-mouse-browser.mjs');
+        await practiceMouseBrowser(mouseClient);
+      } finally { await mouseClient.context().close(); }
+    }
     const {localAudioBrowser}=await import('./support/local-audio-browser.mjs');
     const audioClient=await client('/#main');
     try { await localAudioBrowser(audioClient); }
