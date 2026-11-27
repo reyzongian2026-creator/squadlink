@@ -16,6 +16,9 @@ class VoiceCleaner extends AudioWorkletProcessor {
     this.peakGain = 1;
     this.micGain = 1;
     this.hold = 0;
+    this.blockSize = 0;
+    this.requestedDb = 0;
+    this.requestedGain = 1;
   }
 
   process(inputs, outputs, parameters) {
@@ -42,30 +45,41 @@ class VoiceCleaner extends AudioWorkletProcessor {
     this.previousOutput = previousOutput;
 
     const seconds = input.length / sampleRate;
+    if (this.blockSize !== input.length) {
+      this.blockSize = input.length;
+      this.openDecay = Math.exp(-seconds / 0.002);
+      this.closeDecay = Math.exp(-seconds / 0.045);
+      this.gainDecay = Math.exp(-seconds / 0.015);
+      this.peakDecay = Math.exp(-seconds / 0.12);
+    }
     const rms = Math.sqrt(energy / input.length);
     // Sustained broadband hiss crosses zero frequently. A short hold keeps consonants
-    // attached to voiced syllables. Strong signals always pass the noise detector.
+    // attached to voiced syllables even when they resemble noise.
     const hiss = crossings / seconds > 8500;
-    const threshold = hiss ? 0.037 : 0.0035;
-    const speech = rms >= threshold;
+    const threshold = 0.0035;
+    const speech = !hiss && rms >= threshold;
     this.hold = speech ? 0.16 : Math.max(0, this.hold - seconds);
     const target = !parameters.reduceNoise[0] || this.hold > 0 ? 1 :
-      Math.max(0.063, Math.min(1, (rms / threshold) ** 3));
+      hiss ? 0.063 : Math.max(0.063, Math.min(1, (rms / threshold) ** 3));
     const from = this.openGain;
-    this.openGain = target + (from - target) * Math.exp(-seconds / (target > from ? 0.002 : 0.045));
+    this.openGain = target + (from - target) * (target > from ? this.openDecay : this.closeDecay);
 
     // Only turn peaks down. Apply attenuation before the first sample in this block
     // to leave headroom for the codec without clipping the waveform.
     // Change gain smoothly after detecting speech so raising a quiet voice cannot
     // open the noise gate. Keep the residual noise at its original gain in pauses.
     const previousGain = this.micGain;
-    const requestedGain = 10 ** ((parameters.micGainDb?.[0] ?? 0) / 20);
+    const db = parameters.micGainDb?.[0] ?? 0;
+    if (db !== this.requestedDb) {
+      this.requestedDb = db;
+      this.requestedGain = 10 ** (db / 20);
+    }
     const blend = Math.max(0, (this.openGain - 0.063) / (1 - 0.063));
-    const desiredGain = 1 + (requestedGain - 1) * blend;
-    this.micGain = desiredGain + (previousGain - desiredGain) * Math.exp(-seconds / 0.015);
+    const desiredGain = 1 + (this.requestedGain - 1) * blend;
+    this.micGain = desiredGain + (previousGain - desiredGain) * this.gainDecay;
     const boostedPeak = peak * Math.max(previousGain, this.micGain);
     const ceiling = boostedPeak > 0.75 ? 0.75 / boostedPeak : 1;
-    this.peakGain = Math.min(ceiling, 1 + (this.peakGain - 1) * Math.exp(-seconds / 0.12));
+    this.peakGain = Math.min(ceiling, 1 + (this.peakGain - 1) * this.peakDecay);
     // Sustained speech and background noise often have constant gain across
     // the block. The high-pass samples are already in the output buffer.
     if (this.openGain === from && this.micGain === previousGain) {

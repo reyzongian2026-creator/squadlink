@@ -30,6 +30,12 @@ for (const rate of [44100, 48000]) {
     const voice = t => .023*Math.sin(2*Math.PI*220*t)+.012*Math.sin(2*Math.PI*440*t);
     assert.ok(measure(voice).ratio > .86);
     assert.ok(measure(()=>.023*random()).ratio < .12);
+    // A hot microphone can put steady hiss above the previous speech threshold.
+    const loudHiss = () => .12 * random();
+    const quiet = measure(loudHiss, true, 0);
+    const amplified = measure(loudHiss, true, 18);
+    assert.ok(amplified.ratio < .09);
+    assert.ok(amplified.ratio < quiet.ratio * 1.10);
     const neutral = measure(voice).ratio;
     for (const gain of [6, 12]) {
       const boosted = measure(voice, true, gain);
