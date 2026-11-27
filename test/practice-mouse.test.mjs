@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {mouseScale, readMouseProfile} from '../public/practice-mouse.js';
 
 test('el perfil de práctica conserva el DPI físico y recupera campos corruptos', t => {
@@ -20,3 +22,10 @@ test('el perfil de práctica conserva el DPI físico y recupera campos corruptos
 });
 
 class StorageStub { getItem() {} }
+
+test('la política de DOOM permite ejecutar la configuración de sensibilidad empaquetada', () => {
+  const page = readFileSync(new URL('../public/doom-player.html',import.meta.url),'utf8');
+  const [,script] = page.match(/<script>([\s\S]*?)<\/script>/);
+  const hash = createHash('sha256').update(script.replaceAll('\r\n','\n')).digest('base64');
+  assert.ok(page.includes("'sha256-"+hash+"'"));
+});
