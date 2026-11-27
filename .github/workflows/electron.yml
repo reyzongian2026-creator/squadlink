@@ -106,7 +106,16 @@ jobs:
             Start-Sleep -Milliseconds 200
             $process.Refresh()
           }
-          if (!($process.CloseMainWindow()) -or !($process.WaitForExit(15000))) {throw 'No se cerró la ventana de la aplicación de prueba'}
+          if (!$process.CloseMainWindow()) {throw 'No se pudo cerrar la ventana de prueba'}
+          $limit=[DateTime]::UtcNow.AddSeconds(10)
+          do {
+            Start-Sleep -Milliseconds 200
+            $process.Refresh()
+          } while (!$process.HasExited -and $process.MainWindowHandle -ne 0 -and [DateTime]::UtcNow -lt $limit)
+          if ($process.HasExited -or $process.MainWindowHandle -ne 0) {throw 'Cerrar la ventana debe mantener Squadlink en la bandeja'}
+          # The smoke test exercises graceful quit. Tear down this isolated installer fixture.
+          Stop-Process -Id $process.Id -ErrorAction Stop
+          if (!$process.WaitForExit(10000)) {throw 'No terminó la instancia de prueba'}
           $remove=Start-Process (Join-Path $target 'unins000.exe') -ArgumentList '/VERYSILENT /NORESTART' -Wait -PassThru
           if ($remove.ExitCode) {throw 'Falló la desinstalación con cartuchos'}
       - uses: actions/upload-artifact@v4
