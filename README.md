@@ -55,7 +55,9 @@ Para uso permanente quedan por definir el alojamiento continuo del relay y la co
 
 Al elegir una emisora, verás su consumo aproximado por hora. Tech House y Power 181 rondan los 58 MB por hora. SUNSHINE LIVE EDM ronda los 29 MB. Estas cifras corresponden al audio de la radio y dependen de la tasa que envía la emisora.
 
-Si usas la aplicación de Krisp en tu equipo, selecciona tu micrófono físico dentro de Krisp y activa allí la cancelación. En **Squadlink → Ajustes → Dispositivos de audio → Micrófono**, elige la entrada virtual de Krisp. Squadlink desactiva su segunda reducción de ruido para esa entrada y conserva tus preferencias para cuando vuelvas al micrófono físico.
+Para probar la cancelación durante siete días, activa la [prueba personal de Krisp](https://krisp.ai/pricing/) en el equipo que transmite el ruido. Después, selecciona tu micrófono físico dentro de Krisp y activa allí la cancelación. En **Squadlink → Ajustes → Dispositivos de audio → Micrófono**, elige la entrada virtual de Krisp. Squadlink desactiva su segunda reducción de ruido para esa entrada y conserva tus preferencias para cuando vuelvas al micrófono físico.
+
+En **Arcade → Flick o Precisión → Ajustes del ratón**, indica el DPI físico de tu ratón, el DPI que quieres simular y la sensibilidad. Por ejemplo, con 800 DPI físicos, 1600 de práctica y sensibilidad 0,5, la mira conserva su velocidad. Empieza la partida, pulsa **Usar mira de práctica** y usa **Esc** para recuperar el cursor. El perfil se conserva en ese equipo y también se usa en los juegos de patos y DOOM.
 
 ## Si algo falla
 

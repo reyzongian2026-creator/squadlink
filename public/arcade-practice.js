@@ -1,3 +1,4 @@
+import { mountPracticeMouse, readMouseProfile, mouseScale } from './practice-mouse.js';
 import { mountDuckNes } from './duck-nes.js';
 
 // Local adaptations of Web Aim Trainer and 2048. Upstream notices are at the end.
@@ -292,7 +293,8 @@ function doom(mount, status) {
     player.referrerPolicy = 'no-referrer';
     status.textContent = 'WASD para moverte, ratón para girar, clic izquierdo para disparar y Espacio para abrir puertas. Esc libera el cursor.';
     mount.append(player);
-    player.src = '/doom-player.html';
+    const scale = mouseScale(readMouseProfile());
+    player.src = scale === 1 ? '/doom-player.html' : '/doom-player.html?mouse=' + encodeURIComponent(scale);
   });
   status.textContent = 'Juega Freedoom: Phase 1 en el motor Chocolate Doom. La primera carga requiere internet y unos 35 MB.';
   mount.append(start);
@@ -322,7 +324,8 @@ export function openPractice(id, mount) {
   else if (id === 'duck-nes') dispose = mountDuckNes(mount, status);
   else if (id === 'doom') dispose = doom(mount, status);
   else aim(id, mount, status);
-  return () => { dispose?.(); mount.replaceChildren(); };
+  const releaseMouse = ['flick','precision','ducks','duck-nes','doom'].includes(id) ? mountPracticeMouse(mount,id) : null;
+  return () => { releaseMouse?.(); dispose?.(); mount.replaceChildren(); };
 }
 
 /*
