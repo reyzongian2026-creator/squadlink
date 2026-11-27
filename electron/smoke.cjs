@@ -415,6 +415,14 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    await space.getByRole('heading',{name:'Tus amigos'}).waitFor();
    await requireProgress(await radioAndVoice(),'Radio y voz al restaurar la ventana');
   }finally{await connection.dispose();}
+  await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0].close());
+  try {
+   assert.equal(await app.evaluate(({BaseWindow})=>BaseWindow.getAllWindows()[0]?.isVisible()),false);
+   await requireProgress(await radioAndVoice(),'Cerrar la ventana mantiene la voz y la radio');
+  } finally {
+   await app.evaluate(({app})=>app.emit('second-instance'));
+  }
+  await checkCallSurface(true);
   home=await openCallHome();
   await home.getByRole('button',{name:'Mi sala',exact:true}).waitFor();
   await requireProgress(await radioAndVoice(),'Radio y voz en el lobby');

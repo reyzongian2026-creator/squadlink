@@ -45,7 +45,7 @@ function App(){
      <h1>Ajustes</h1>
      <section aria-labelledby="performance-title">
        <h2 id="performance-title">Rendimiento</h2>
-       <p>En Bajo consumo, el lobby libera memoria mientras estás en la sala o juegas con el lobby minimizado. La voz y la radio siguen funcionando.</p>
+       <p>En Bajo consumo, el lobby libera memoria mientras estás en la sala o juegas con el lobby minimizado. La voz y la radio siguen funcionando. Cerrar la ventana deja Squadlink en segundo plano. Desde el icono de Squadlink en la barra puedes volver o salir de la aplicación.</p>
        <div className="choices" role="group" aria-labelledby="performance-title">
          {[[true,'Bajo consumo'],[false,'Experiencia completa']].map(([value,label])=>
            <button key={label} aria-pressed={state.low===value} onClick={()=>run(()=>api.prefs({low:value}))}>{label}</button>)}

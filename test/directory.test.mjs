@@ -79,3 +79,23 @@ test('actualizar conserva todas las páginas abiertas, incluso cuando cambia el 
   published = ['C'];
   assert.deepEqual(await loadDirectoryPages(api, last), {rooms: [room('C')], pages: 1, nextOffset: null});
 });
+
+test('al salir el anfitrión, el siguiente jugador conectado conserva el código y los permisos', async t => {
+  const f = fixture(t);
+  const owner = await guest(f, 'Pepe');
+  const offline = await guest(f, 'Alex');
+  const active = await guest(f, 'Sol');
+  const {code} = (await owner.hit('rooms', {name:'Grupo', directory:{published:true}})).data.room;
+  await offline.hit('join', {code});
+  await active.hit('join', {code});
+  const events = await active.request('/api/events');
+  try {
+    assert.equal((await owner.hit('leave', {})).status, 200);
+    const {room, self} = (await active.hit('session')).data;
+    assert.equal(room.code, code);
+    assert.equal(room.members.length, 2);
+    assert.equal(room.ownerId, self.id);
+    assert.equal((await offline.hit('directory', {description:'Cambio'})).status, 403);
+    assert.equal((await active.hit('directory', {published:true, description:'Seguimos jugando'})).status, 200);
+  } finally { events.destroy(); }
+});

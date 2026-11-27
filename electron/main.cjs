@@ -1,4 +1,4 @@
-const {app,BaseWindow,WebContentsView,protocol,session,ipcMain,dialog,Menu,globalShortcut,systemPreferences,safeStorage}=require('electron');
+const {app,BaseWindow,WebContentsView,protocol,session,ipcMain,dialog,Menu,Tray,nativeImage,globalShortcut,systemPreferences,safeStorage}=require('electron');
 const fs=require('node:fs'),path=require('node:path');
 const {relay,parseServer}=require('./gateway.cjs');
 const {detect}=require('./detection.cjs');
@@ -18,7 +18,7 @@ function savePrefs(value){
 }
 const blank=()=>({joined:false,name:'',nickname:'',code:'',mic:false,canMic:false,members:[]});
 let prefs={server:base,low:true,integratedLobby:!mac},state=blank(),home,view,hostSection='home',action,ready=false,visit=0,closing=false,microphone=false;
-let hostView, radioState='empty';
+let hostView, tray, radioState='empty';
 let detectTimer,scanning=false,generation=0,detected=null;
 const locked=app.requestSingleInstanceLock();
 if(!locked)app.quit();
@@ -32,13 +32,28 @@ protocol.registerSchemesAsPrivileged([{scheme:'squad',privileges:{standard:true,
 app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
 const options={contextIsolation:true,nodeIntegration:false,sandbox:true,preload:path.join(__dirname,'preload.cjs'),partition:'persist:squadlink-modern'};
 function reveal(w){if(w&&!w.isDestroyed()){if(w.isMinimized())w.restore();w.show();w.focus();}}
+function inBackground(){return home && (home.isMinimized() || !home.isVisible());}
+function createTray(){
+ const image=nativeImage.createFromPath(path.join(__dirname,'client','icon-192.png'));
+ const icon=new Tray(image.resize({width:mac?18:24,height:mac?18:24}));
+ icon.setToolTip('Squadlink');
+ icon.setContextMenu(Menu.buildFromTemplate([
+  {label:'Abrir Squadlink',click:activateDesktop},
+  {label:'Pasar a segundo plano',click:()=>home.hide()},
+  {type:'separator'},
+  {label:'Salir de Squadlink',click:()=>app.quit()}
+ ]));
+ if(!mac)icon.on('click',activateDesktop);
+ return icon;
+}
 function snapshot(){return {...state,...prefs,canChooseLobby:mac,radioState,hostSection:action?'workspace':hostSection,version:app.getVersion(),update:updater.snapshot()};}
 function hostContents(){return hostView?.webContents;}
 function callLobbyState(){return {...state,radioState,low:prefs.low};}
 function publish(){
  const wc=hostContents();
+ if(inBackground())return;
  if(wc&&!wc.isDestroyed())wc.send('snapshot',snapshot());
- if(action?.key==='call-home' && !home.isMinimized())send({type:'desktop:lobby-state',state:callLobbyState()});
+ if(action?.key==='call-home')send({type:'desktop:lobby-state',state:callLobbyState()});
 }
 const radioAccelerator='Alt+Shift+R';
 let lastRadioPress=-Infinity;
@@ -73,7 +88,7 @@ function hostPage(event){if(!isHome(event))throw Error('Acceso no disponible.');
 function send(data){if(view&&!view.webContents.isDestroyed())view.webContents.send('desk-message',data);}
 function dispatch(key,code){
  const message={type:'desktop:action',action:key,code,visit,low:prefs.low};
- if(key==='call-home'){message.state=callLobbyState();message.visible=!home.isMinimized();}
+ if(key==='call-home'){message.state=callLobbyState();message.visible=!inBackground();}
  send(message);
 }
 function canSuspendLobby(){return prefs.low && state.joined && !action && hostSection==='home';}
@@ -85,7 +100,7 @@ function showHost(section='home'){
   if(ready)dispatch('background');
  }
  hostSection=section;
- if(home.isMinimized() && canSuspendLobby())releaseHost();
+ if(inBackground() && canSuspendLobby())releaseHost();
  else mountHost();
  publish();
  hostContents()?.focus();
@@ -97,11 +112,11 @@ function contentBounds(){
   hostView?.setBounds(bounds);
   if(action)view?.setBounds(bounds);
 }
-function presentWorkspace(minimized=home.isMinimized()){
+function presentWorkspace(minimized=inBackground()){
  if(!view || !action)return;
  const parent=home.contentView;
  if(minimized && prefs.low && state.joined){
-  parent.removeChildView(view);
+  if(parent.children.includes(view))parent.removeChildView(view);
  }else{
   if(!parent.children.includes(view))parent.addChildView(view);
   contentBounds();
@@ -135,25 +150,34 @@ function releaseHost(){
 function createHome(){
  const frame={title:'Squadlink',width:1080,height:700,minWidth:700,minHeight:520,backgroundColor:'#0d1217',icon:path.join(__dirname,'Squadlink.ico'),autoHideMenuBar:true};
  const w=new BaseWindow(frame);
- w.on('minimize',()=>{
+ function suspend(){
+  if(closing || !home)return;
   // Keep the call and any unsaved settings alive while the lobby is off screen.
   if(action){
    if(action.key==='call-home')send({type:'desktop:lobby-visibility',visible:false});
    presentWorkspace(true);
   }else if(canSuspendLobby())releaseHost();
- });
- w.on('restore',()=>{
-  if(closing)return;
+ }
+ function resume(){
+  if(closing || !home || inBackground())return;
   if(action){
    presentWorkspace(false);
-   if(action.key==='call-home'){
-    send({type:'desktop:lobby-state',state:callLobbyState()});
-    send({type:'desktop:lobby-visibility',visible:true});
-   }
-  }else if(!hostView){mountHost();hostContents()?.focus();}
- });
+   if(action.key==='call-home')send({type:'desktop:lobby-visibility',visible:true});
+  }else{mountHost();hostContents()?.focus();}
+  publish();
+ }
+ w.on('minimize',suspend);
+ w.on('hide',suspend);
+ w.on('restore',resume);
+ w.on('show',resume);
  w.on('resize',contentBounds);
- w.on('close',()=>{closing=true;disposeVoice();releaseHost();});
+ w.on('session-end',()=>{closing=true;});
+ w.on('close',event=>{
+  if(!closing && tray){event.preventDefault();w.hide();return;}
+  closing=true;
+  disposeVoice();
+  releaseHost();
+ });
  return w;
 }
 function ensureView(){
@@ -342,6 +366,7 @@ async function start(){
  // A returning player's hidden workspace restores presence when the session opens.
  const returning=prefs.hasPlayer||(await ses.cookies.get({url:prefs.server,name:'squad_session'})).length>0;
  home=createHome();
+ tray=createTray();
  if(returning){
   mountHost();
   ensureView();
@@ -349,5 +374,6 @@ async function start(){
  reveal(home);
 }
 if(locked)app.whenReady().then(start);
-app.on('will-quit',()=>{if(app.isReady())syncRadioShortcut(false);});
+app.on('before-quit',()=>{closing=true;});
+app.on('will-quit',()=>{tray?.destroy();if(app.isReady())syncRadioShortcut(false);});
 app.on('window-all-closed',()=>app.quit());

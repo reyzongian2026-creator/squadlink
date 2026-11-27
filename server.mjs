@@ -205,7 +205,11 @@ export function createServer(options = {}) {
     if (!room) return;
     social.exiting(session, room);
     room.members.delete(session.id);
-    if (room.ownerId === session.id) room.ownerId = room.members.keys().next().value ?? null;
+    if (room.ownerId === session.id) {
+      const remaining = [...room.members.values()];
+      const successor = remaining.find(member => member.stream && !member.stream.destroyed) ?? remaining[0];
+      room.ownerId = successor?.id ?? null;
+    }
     session.room = null;
     session.visitId = null;
     session.pending = [];
