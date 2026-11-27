@@ -55,6 +55,8 @@ Para uso permanente quedan por definir el alojamiento continuo del relay y la co
 
 Al elegir una emisora, verás su consumo aproximado por hora. Tech House y Power 181 rondan los 58 MB por hora. SUNSHINE LIVE EDM ronda los 29 MB. Estas cifras corresponden al audio de la radio y dependen de la tasa que envía la emisora.
 
+Si usas la aplicación de Krisp en tu equipo, selecciona tu micrófono físico dentro de Krisp y activa allí la cancelación. En **Squadlink → Ajustes → Dispositivos de audio → Micrófono**, elige la entrada virtual de Krisp. Squadlink desactiva su segunda reducción de ruido para esa entrada y conserva tus preferencias para cuando vuelvas al micrófono físico.
+
 ## Si algo falla
 
 | Síntoma | Qué revisar |

@@ -1,15 +1,27 @@
+// Both Windows and macOS may prefix a virtual input with a localized default-device label.
+export function isKrispMicrophone(label) {
+  return /\bkrisp\b/i.test(label ?? '');
+}
+
 // The destination is a MediaStream for WebRTC or the local mic test. Never monitor
 // the microphone through the speakers.
 export function prepareVoiceCapture(input, settings) {
   let context, source, filter, destination, closed = false, timer, cancelSetup;
-  let noise = settings.noiseSuppression;
+  const track = input.getAudioTracks?.()[0];
+  const krisp = isKrispMicrophone(track?.label);
+  if (krisp && track.applyConstraints) {
+    // The device name may only become available after the first microphone permission.
+    const constraints = {...track.getConstraints?.(), noiseSuppression:false, autoGainControl:false};
+    void track.applyConstraints(constraints).catch(() => {});
+  }
+  let noise = !krisp && settings.noiseSuppression;
   let micGainDb = settings.micGainDb ?? 0;
   const capture = {
     stream: input,
     get audioContext() { return closed ? null : context; },
     setNoise(enabled) {
-      noise = enabled;
-      if (filter) filter.parameters.get('reduceNoise').value = enabled ? 1 : 0;
+      noise = !krisp && enabled;
+      if (filter) filter.parameters.get('reduceNoise').value = noise ? 1 : 0;
     },
     setMicGainDb(db) {
       micGainDb = db;

@@ -316,7 +316,7 @@ export class VoiceRoom {
       try {
         const liveTrack = this.stream?.getAudioTracks()[0];
         if (!deviceChanged && !this.pendingCapture && liveTrack?.readyState === 'live' && liveTrack.applyConstraints) {
-          await liveTrack.applyConstraints(microphoneConstraints(next));
+          await liveTrack.applyConstraints(microphoneConstraints(next, liveTrack.label));
           if (request === this.captureRequest) this.filters.get(this.stream)?.setNoise(next.noiseSuppression);
         } else {
           await this.startCapture(next, request);
