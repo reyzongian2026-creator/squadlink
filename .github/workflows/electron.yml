@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: ['preview/electron-escritorio']
-    paths: ['electron/**','public/**','windows/Desktop/**','.github/workflows/electron.yml']
+    paths: ['electron/**','public/**','windows/Desktop/**','.github/workflows/electron*.yml']
 permissions:
   contents: read
 jobs:
