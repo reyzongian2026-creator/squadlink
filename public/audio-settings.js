@@ -1,9 +1,11 @@
+import { isKrispMicrophone } from './voice-capture.js';
 import { mountSpeakerTest } from './speaker-test.js';
 import { mountMicTest } from './mic-test.js';
 
-export function microphoneConstraints(settings) {
+export function microphoneConstraints(settings, label) {
+  const krisp = isKrispMicrophone(label);
   const audio = { channelCount: { ideal: 1 }, sampleRate: { ideal: 48000 }, echoCancellation: true,
-    noiseSuppression: settings.noiseSuppression, autoGainControl: settings.autoGainControl };
+    noiseSuppression: !krisp && settings.noiseSuppression, autoGainControl: !krisp && settings.autoGainControl };
   if (settings.inputId) audio.deviceId = { exact: settings.inputId };
   return audio;
 }
@@ -79,7 +81,15 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   testArea.append(micArea, speakerArea);
   const help = document.createElement('p');
   help.textContent = 'Puedes probar el micrófono y el altavoz antes de entrar a la sala.';
-  const micTest = mountMicTest(micArea, () => microphoneConstraints(readAudioSettings()), readAudioSettings);
+  function selectedInputLabel(settings) {
+    const voice = getVoice();
+    return voice?.stream?.getAudioTracks()[0]?.label ||
+      devices.find(item => item.kind === 'audioinput' && item.deviceId === (settings.inputId || 'default'))?.label;
+  }
+  const micTest = mountMicTest(micArea, () => {
+    const settings = readAudioSettings();
+    return microphoneConstraints(settings, selectedInputLabel(settings));
+  }, readAudioSettings);
   const speakerTest = mountSpeakerTest(speakerArea, readAudioSettings);
   micArea.addEventListener('click', event => {
     if (event.target.closest('button')) speakerTest.cancel();
@@ -122,6 +132,14 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   let reading = 0;
   let saving = false;
   let devices = [];
+  function renderFilters(settings) {
+    const krisp = isKrispMicrophone(selectedInputLabel(settings));
+    krispNote.hidden = !krisp;
+    noise.checked = !krisp && settings.noiseSuppression;
+    gain.checked = !krisp && settings.autoGainControl;
+    gain.disabled = saving || krisp || !media?.getSupportedConstraints?.().autoGainControl;
+    noise.disabled = saving || krisp || !noiseSupported;
+  }
   async function render(refreshDevices = true) {
     if (refreshDevices) {
       const sequence = ++reading;
@@ -133,16 +151,13 @@ export function mountAudioSettings(container, getVoice, onStatus) {
     const settings = getVoice()?.settings ?? readAudioSettings();
     renderOptions(microphone, devices, settings.inputId, 'audioinput');
     renderOptions(speakers, devices, settings.outputId, 'audiooutput');
-    noise.checked = settings.noiseSuppression;
-    gain.checked = settings.autoGainControl;
+    renderFilters(settings);
     syncLevels(settings);
     micGain.disabled = saving;
-    gain.disabled = saving || !media?.getSupportedConstraints?.().autoGainControl;
     volume.disabled = saving;
     syncProcessing();
     microphone.disabled = saving || !media;
     speakers.disabled = saving || !outputSupported;
-    noise.disabled = saving || !noiseSupported;
     refresh.disabled = restore.disabled = saving;
   }
   async function change(patch, confirmation = 'Preferencia de audio actualizada.') {
@@ -186,11 +201,18 @@ export function mountAudioSettings(container, getVoice, onStatus) {
   note.textContent = outputSupported
     ? 'Activa el micrófono para que el navegador muestre los nombres de los dispositivos.'
     : 'La salida de audio se elige en los ajustes de sonido de tu sistema.';
-  container.replaceChildren(field('Micrófono', microphone), inputLevel.element, field('Salida de audio', speakers),
+  const krispNote = document.createElement('p');
+  krispNote.hidden = true;
+  krispNote.textContent = 'Entrada de Krisp seleccionada. Activa la cancelación en Krisp y ajusta aquí la ganancia manual si la necesitas.';
+  container.replaceChildren(field('Micrófono', microphone), krispNote, inputLevel.element, field('Salida de audio', speakers),
     listenLevel.element, field('Reducir ruido de fondo', noise),
     field('Ganancia automática del micrófono', gain), restore, testArea, help, refresh, note, status);
   media?.addEventListener?.('devicechange', render);
-  window.addEventListener('squadlink:audio-state', syncProcessing);
+  const audioChanged = () => {
+    renderFilters(getVoice()?.settings ?? readAudioSettings());
+    syncProcessing();
+  };
+  window.addEventListener('squadlink:audio-state', audioChanged);
   render();
-  return () => { ++reading; micTest.dispose(); speakerTest.dispose(); window.removeEventListener('squadlink:audio-state', syncProcessing); media?.removeEventListener?.('devicechange', render); };
+  return () => { ++reading; micTest.dispose(); speakerTest.dispose(); window.removeEventListener('squadlink:audio-state', audioChanged); media?.removeEventListener?.('devicechange', render); };
 }

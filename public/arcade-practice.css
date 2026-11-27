@@ -17,3 +17,11 @@
 @media (prefers-reduced-motion:reduce) {.flying-duck {animation:none;left:40%}}
 #game-dialog:has(.doom-player) {width:min(860px,calc(100% - 20px))}
 .doom-player {display:block;width:100%;height:clamp(230px,65dvh,660px);border:0;background:#111}
+
+.practice-mouse,.mouse-actions{margin-bottom:.6rem}
+.mouse-fields,.mouse-actions{display:flex;gap:.65rem;align-items:center;flex-wrap:wrap}
+.mouse-fields label{display:grid;gap:.25rem}
+.mouse-fields input{width:8em}
+.practice-sight-host{position:relative}
+.practice-sight{position:absolute;pointer-events:none;z-index:4;transform:translate(-50%,-50%);width:12px;height:12px;box-sizing:border-box;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #222}
+.practice-sight[hidden]{display:none}
