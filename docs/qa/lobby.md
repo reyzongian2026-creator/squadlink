@@ -191,3 +191,18 @@ En cada sistema, el mismo equipo ejecutó las versiones en orden .23, .24, .24 y
 [Prueba emparejada de Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45376487059) · [Prueba emparejada de macOS](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45379811538)
 
 Con el lobby minimizado, la RAM de Windows varió aproximadamente 1 MiB entre versiones. En Mac la nueva versión empleó 16 MiB más en promedio en ese recorrido. Al minimizar desde la propia sala, la prueba de escritorio registró reducciones de 102 MiB en Windows y de 55 MiB en Mac. La comparación se hizo entre versiones de Squadlink. Para contrastar con Discord se necesitaría medir las dos aplicaciones con el mismo equipo y las mismas condiciones de llamada.
+
+### Voz y radio en la bandeja, versión 0.5.0-preview.28
+
+Dos clientes mantuvieron una llamada bidireccional y reprodujeron radio de prueba. Se cerró la ventana principal y se comprobó en ambos clientes que avanzaban tanto el audio recibido por WebRTC como el reproductor de radio. Al volver a mostrar la ventana se recuperó la misma llamada.
+
+| Sistema de prueba | CPU durante 4 segundos (% de un núcleo) | RAM mediana de Squadlink |
+|---|---:|---:|
+| Windows x64 | 7,4 % | 571,8 MiB |
+| macOS con Apple Silicon | 16,0 % | 533,6 MiB |
+
+La RAM es la suma del conjunto de trabajo de los procesos de Squadlink en cinco lecturas. El segundo participante se ejecutó en otro proceso de navegador. Estas mediciones se hicieron en máquinas de GitHub Actions, sin un videojuego en ejecución.
+
+Con reducción de ruido y ganancia de +18 dB, el ensayo del filtro usa ruido de banda ancha reproducible después de una pausa. A 44,1 y 48 kHz, el nivel de salida queda por debajo del 9 % de la amplitud RMS de entrada. La regresión también comprueba la ganancia de una voz sintética suave y el límite de los picos.
+
+[Prueba de Windows](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45944730862) · [Prueba de macOS](https://github.com/reyzongian2026-creator/squadlink/actions/runs/45944730753)

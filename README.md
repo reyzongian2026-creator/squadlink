@@ -6,7 +6,7 @@ Sala de voz para tu grupo de hasta **cinco jugadores**. Elige un apodo, comparte
 
 **[Descargar Squadlink](https://squadlink-lobby.onrender.com/descargar.html)**
 
-Para jugar mientras hablas, usa **Ajustes → Rendimiento → Bajo consumo**. Está activo de forma predeterminada. En Windows, la sala y el lobby comparten un proceso durante la llamada. En Mac, el lobby se libera al minimizarlo. Si sueles mantener la ventana abierta, puedes marcar **Usar menos memoria con el lobby visible**. La llamada y la radio continúan al minimizar en ambos sistemas. Puedes restaurar la ventana y seguir en la misma llamada con la radio que elegiste.
+Para jugar mientras hablas, usa **Ajustes → Rendimiento → Bajo consumo**. Está activo de forma predeterminada. En Windows, la sala y el lobby comparten un proceso durante la llamada. En Mac, el lobby se libera al minimizarlo. Si sueles mantener la ventana abierta, puedes marcar **Usar menos memoria con el lobby visible**. La llamada y la radio continúan al minimizar en ambos sistemas. Si cierras la ventana, Squadlink sigue en la bandeja de Windows o en la barra de menús de Mac. Desde el icono, elige **Abrir Squadlink** para volver a la llamada o **Salir de Squadlink** para terminar la aplicación.
 
 Desde **0.5.0-preview.20**, abre **Ajustes → Actualizaciones**. Cuando haya una versión nueva, pulsa **Descargar actualización**. Puedes seguir en la llamada mientras se descarga. Sal de la sala y pulsa **Instalar y reiniciar** cuando estés listo. Squadlink vuelve a abrirse con tu perfil y conserva los cartuchos instalados. Si tienes la .19 o una versión anterior, instala esta primera actualización con la descarga de arriba.
 
